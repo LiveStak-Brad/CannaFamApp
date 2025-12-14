@@ -22,6 +22,13 @@ export function LoginForm() {
     null,
   );
 
+  const errorText =
+    result && !result.ok
+      ? (typeof result.message === "string" && result.message.trim()
+          ? result.message
+          : "Something went wrong sending the email. Check SMTP settings.")
+      : "";
+
   return (
     <form
       className="space-y-4"
@@ -53,9 +60,7 @@ export function LoginForm() {
           {mode === "magic" ? "Check your email for the sign-in link." : "Signed in."}
         </Notice>
       ) : null}
-      {result && !result.ok ? (
-        <Notice tone="error">{result.message}</Notice>
-      ) : null}
+      {result && !result.ok ? <Notice tone="error">{errorText}</Notice> : null}
 
       <div className="grid grid-cols-2 gap-2">
         <Button
