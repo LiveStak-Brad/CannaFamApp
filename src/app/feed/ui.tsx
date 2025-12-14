@@ -1,0 +1,1135 @@
+"use client";
+
+import { useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  addFeedComment,
+  createPostGiftCheckoutSession,
+  deleteFeedComment,
+  deleteFeedPost,
+  hideFeedComment,
+  logFeedPostShare,
+  updateFeedComment,
+  toggleCommentUpvote,
+  toggleLike,
+  updateFeedPost,
+} from "./actions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Notice } from "@/components/ui/notice";
+import { ShareModal } from "@/components/ui/share-modal";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  MiniProfileModal,
+  type MiniProfileAwardRow,
+  type MiniProfilePointsRow,
+  type MiniProfileSubject,
+} from "@/components/ui/mini-profile";
+
+export type FeedPost = {
+  id: string;
+  title: string | null;
+  content: string | null;
+  post_type: string | null;
+  created_at: string | null;
+  media_url: string | null;
+  media_type: string | null;
+};
+
+export type LikerProfile = {
+  user_id: string;
+  favorited_username: string;
+  photo_url: string | null;
+  bio?: string | null;
+};
+
+export type FeedComment = {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  created_at: string | null;
+  is_hidden: boolean | null;
+};
+
+export type MentionCandidate = {
+  user_id: string;
+  favorited_username: string;
+  photo_url: string | null;
+  bio?: string | null;
+};
+
+export type GiftTopGifter = {
+  favorited_username: string;
+  photo_url: string | null;
+  total_cents: number;
+};
+
+function formatUSD(cents: number) {
+  const n = Number(cents ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return "$0";
+  return `$${(n / 100).toFixed(2)}`;
+}
+
+function GiftModal({
+  open,
+  postId,
+  pending,
+  presets,
+  allowCustom,
+  minCents,
+  maxCents,
+  onClose,
+  onStartCheckout,
+}: {
+  open: boolean;
+  postId: string;
+  pending: boolean;
+  presets: number[];
+  allowCustom: boolean;
+  minCents: number;
+  maxCents: number;
+  onClose: () => void;
+  onStartCheckout: (amountCents: number) => void;
+}) {
+  const [custom, setCustom] = useState<string>("");
+
+  if (!open) return null;
+
+  const parsedCustom = Math.round(Number(custom) * 100);
+  const customValid =
+    allowCustom &&
+    Number.isFinite(parsedCustom) &&
+    parsedCustom >= minCents &&
+    parsedCustom <= maxCents;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70"
+        aria-label="Close gifting"
+        onClick={onClose}
+      />
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl px-4 pb-4">
+        <Card title="Send a gift">
+          <div className="space-y-3">
+            <div className="text-xs text-[color:var(--muted)]">Post: {postId}</div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {presets.map((c) => (
+                <Button
+                  key={c}
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => onStartCheckout(c)}
+                >
+                  {formatUSD(c)}
+                </Button>
+              ))}
+            </div>
+
+            {allowCustom ? (
+              <div className="space-y-2">
+                <Input
+                  label="Custom amount (USD)"
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  placeholder={(minCents / 100).toFixed(2)}
+                />
+                <Button
+                  type="button"
+                  disabled={pending || !customValid}
+                  onClick={() => onStartCheckout(parsedCustom)}
+                >
+                  Send Gift
+                </Button>
+                <div className="text-xs text-[color:var(--muted)]">
+                  Min {formatUSD(minCents)} • Max {formatUSD(maxCents)}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export function GiftSummary({
+  totalCents,
+  topGifters,
+}: {
+  totalCents: number;
+  topGifters: GiftTopGifter[];
+}) {
+  const total = Number(totalCents ?? 0);
+  const top = Array.isArray(topGifters) ? topGifters.slice(0, 3) : [];
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-xs text-[color:var(--muted)]">🎁 {formatUSD(total)} gifted</div>
+      {top.length ? (
+        <div className="flex items-center gap-1">
+          {top.map((g) => (
+            <div key={g.favorited_username} className="h-6 w-6 overflow-hidden rounded-full border border-[color:var(--border)]">
+              {g.photo_url ? (
+                <img
+                  src={g.photo_url}
+                  alt={g.favorited_username}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="h-full w-full bg-[rgba(255,255,255,0.06)]" />
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WhoLikedModal({
+  open,
+  count,
+  likers,
+  awards,
+  leaderboard,
+  onClose,
+}: {
+  open: boolean;
+  count: number;
+  likers: LikerProfile[];
+  awards: MiniProfileAwardRow[];
+  leaderboard: MiniProfilePointsRow[];
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const selected = useMemo(
+    () => likers.find((l) => l.user_id === selectedUserId) ?? null,
+    [likers, selectedUserId],
+  );
+
+  const selectedSubject: MiniProfileSubject | null = selected
+    ? {
+        user_id: selected.user_id,
+        favorited_username: selected.favorited_username,
+        photo_url: selected.photo_url,
+        bio: selected.bio ?? null,
+      }
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70"
+        aria-label="Close who liked"
+        onClick={onClose}
+      />
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl px-4 pb-4">
+        <Card title="Who liked this">
+          <div className="space-y-3">
+            <div className="text-xs text-[color:var(--muted)]">{count} like(s)</div>
+            {likers.length ? (
+              <div className="space-y-2">
+                {likers.map((p) => (
+                  <button
+                    key={p.user_id}
+                    type="button"
+                    className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                    onClick={() => setSelectedUserId(p.user_id)}
+                  >
+                    {p.photo_url ? (
+                      <img
+                        src={p.photo_url}
+                        alt={p.favorited_username}
+                        className="h-8 w-8 rounded-full border border-[color:var(--border)] object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
+                    )}
+                    <div className="text-sm font-semibold">{p.favorited_username}</div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-[color:var(--muted)]">Not available.</div>
+            )}
+
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <MiniProfileModal
+        open={!!selectedUserId}
+        subject={selectedSubject}
+        leaderboard={leaderboard}
+        awards={awards}
+        onClose={() => setSelectedUserId(null)}
+      />
+    </div>
+  );
+}
+
+function fmtTime(s: string | null) {
+  if (!s) return "";
+  try {
+    return new Date(s).toLocaleString();
+  } catch {
+    return "";
+  }
+}
+
+function CommentsModal({
+  open,
+  postId,
+  canComment,
+  isAdmin,
+  myUserId,
+  mentionCandidates,
+  comments,
+  commenterProfiles,
+  upvoteCountByComment,
+  upvotedByMe,
+  awards,
+  leaderboard,
+  onClose,
+}: {
+  open: boolean;
+  postId: string;
+  canComment: boolean;
+  isAdmin: boolean;
+  myUserId: string | null;
+  mentionCandidates: MentionCandidate[];
+  comments: FeedComment[];
+  commenterProfiles: Map<string, { favorited_username: string; photo_url: string | null; bio?: string | null }>;
+  upvoteCountByComment: Map<string, number>;
+  upvotedByMe: Set<string>;
+  awards: MiniProfileAwardRow[];
+  leaderboard: MiniProfilePointsRow[];
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [text, setText] = useState("");
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>("");
+
+  const selected = useMemo(() => {
+    if (!selectedUserId) return null;
+    const p = commenterProfiles.get(selectedUserId) ?? null;
+    if (!p) return null;
+    const subj: MiniProfileSubject = {
+      user_id: selectedUserId,
+      favorited_username: p.favorited_username,
+      photo_url: p.photo_url,
+      bio: p.bio ?? null,
+    };
+    return subj;
+  }, [commenterProfiles, selectedUserId]);
+
+  const visible = useMemo(
+    () => comments.filter((c) => !c.is_hidden || isAdmin),
+    [comments, isAdmin],
+  );
+
+  const mentionMatches = useMemo(() => {
+    const q = (mentionQuery ?? "").trim().toLowerCase();
+    if (!q) return [] as MentionCandidate[];
+    const matches = mentionCandidates
+      .filter((m) => (m.favorited_username ?? "").toLowerCase().startsWith(q))
+      .slice(0, 8);
+    return matches;
+  }, [mentionCandidates, mentionQuery]);
+
+  function updateMentionState(nextText: string) {
+    const el = composerRef.current;
+    const cursor = el?.selectionStart ?? nextText.length;
+    const before = nextText.slice(0, cursor);
+    const at = before.lastIndexOf("@");
+    if (at === -1) {
+      setMentionQuery(null);
+      setMentionStart(null);
+      return;
+    }
+    if (at > 0) {
+      const ch = before[at - 1];
+      if (ch && !/\s/.test(ch)) {
+        setMentionQuery(null);
+        setMentionStart(null);
+        return;
+      }
+    }
+    const q = before.slice(at + 1);
+    if (!q.length || /\s/.test(q)) {
+      setMentionQuery(null);
+      setMentionStart(null);
+      return;
+    }
+    setMentionQuery(q);
+    setMentionStart(at);
+  }
+
+  function insertMention(username: string) {
+    const el = composerRef.current;
+    const cursor = el?.selectionStart ?? text.length;
+    const start = mentionStart ?? text.lastIndexOf("@", cursor);
+    if (start < 0) return;
+    const before = text.slice(0, start);
+    const after = text.slice(cursor);
+    const next = `${before}@${username} ${after}`;
+    setText(next);
+    setMentionQuery(null);
+    setMentionStart(null);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      const pos = (before.length + 1 + username.length + 1);
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  const mentionByUsername = useMemo(() => {
+    const m = new Map<string, MentionCandidate>();
+    for (const c of mentionCandidates) {
+      const k = String(c.favorited_username ?? "").toLowerCase();
+      if (!k) continue;
+      m.set(k, c);
+    }
+    return m;
+  }, [mentionCandidates]);
+
+  function renderWithMentions(raw: string) {
+    const parts = raw.split(/(@[A-Za-z0-9_]+)/g);
+    return parts.map((part, idx) => {
+      if (!part.startsWith("@")) return <span key={idx}>{part}</span>;
+      const name = part.slice(1);
+      const cand = mentionByUsername.get(name.toLowerCase()) ?? null;
+      if (!cand) return <span key={idx}>{part}</span>;
+      return (
+        <button
+          key={idx}
+          type="button"
+          className="font-semibold underline underline-offset-4"
+          onClick={() => setSelectedUserId(cand.user_id)}
+        >
+          {part}
+        </button>
+      );
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70"
+        aria-label="Close comments"
+        onClick={onClose}
+      />
+
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl px-4 pb-4">
+        <Card title="Comments">
+          <div className="space-y-3">
+            {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+
+            <div className="text-xs text-[color:var(--muted)]">
+              {comments.length} comment(s)
+            </div>
+
+            {canComment ? (
+              <div className="space-y-2">
+                <label className="block">
+                  <div className="text-sm font-semibold text-[color:var(--foreground)]">
+                    Write a comment
+                  </div>
+                  <textarea
+                    ref={composerRef}
+                    className="mt-2 w-full min-h-28 rounded-xl bg-[color:var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
+                    value={text}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setText(next);
+                      updateMentionState(next);
+                    }}
+                    onSelect={(e) => {
+                      const next = (e.target as HTMLTextAreaElement).value;
+                      updateMentionState(next);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setMentionQuery(null);
+                        setMentionStart(null);
+                      }
+                    }}
+                    placeholder="Write something..."
+                  />
+                </label>
+
+                {mentionQuery && mentionMatches.length ? (
+                  <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-2">
+                    <div className="text-xs text-[color:var(--muted)] px-2 py-1">Tag a member</div>
+                    <div className="max-h-48 overflow-auto">
+                      {mentionMatches.map((m) => (
+                        <button
+                          key={m.user_id}
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
+                          onClick={() => insertMention(m.favorited_username)}
+                        >
+                          {m.photo_url ? (
+                            <img
+                              src={m.photo_url}
+                              alt={m.favorited_username}
+                              className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="h-6 w-6 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
+                          )}
+                          <div className="font-semibold">@{m.favorited_username}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={pending || !text.trim()}
+                    onClick={() => {
+                      setMsg(null);
+                      startTransition(async () => {
+                        try {
+                          const res = await addFeedComment(postId, text);
+                          setMsg({ tone: "success", text: res.message });
+                          setText("");
+                        } catch (e) {
+                          setMsg({
+                            tone: "error",
+                            text: e instanceof Error ? e.message : "Comment failed",
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    {pending ? "Posting..." : "Post"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-[color:var(--muted)]">
+                Log in and get approved to comment.
+              </div>
+            )}
+
+            <div className="max-h-[55vh] space-y-2 overflow-auto">
+              {visible.length ? (
+                visible.map((c) => {
+                  const p = commenterProfiles.get(c.user_id) ?? null;
+                  const name = p?.favorited_username || "Member";
+                  const photo = p?.photo_url ?? null;
+                  const bio = p?.bio ?? null;
+
+                  const upCount = upvoteCountByComment.get(c.id) ?? 0;
+                  const mine = upvotedByMe.has(c.id);
+                  const isOwner = !!myUserId && c.user_id === myUserId;
+                  const isEditing = editingId === c.id;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          className="flex min-w-0 items-start gap-3 text-left"
+                          onClick={() => setSelectedUserId(c.user_id)}
+                        >
+                          {photo ? (
+                            <img
+                              src={photo}
+                              alt={name}
+                              className="h-8 w-8 rounded-full border border-[color:var(--border)] object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold truncate">{name}</div>
+                            {bio ? (
+                              <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
+                            ) : null}
+                            <div className="mt-1 text-xs text-[color:var(--muted)]">{fmtTime(c.created_at)}</div>
+                          </div>
+                        </button>
+
+                        <div className="shrink-0 text-right">
+                          <button
+                            type="button"
+                            className={
+                              "rounded-lg border border-[color:var(--border)] px-2 py-1 text-xs font-semibold " +
+                              (mine
+                                ? "bg-[rgba(209,31,42,0.25)] text-[color:var(--foreground)]"
+                                : "bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)]")
+                            }
+                            onClick={() => {
+                              if (!canComment) return;
+                              setMsg(null);
+                              startTransition(async () => {
+                                try {
+                                  const res = await toggleCommentUpvote(c.id, mine);
+                                  setMsg({ tone: "success", text: res.message });
+                                } catch (e) {
+                                  setMsg({
+                                    tone: "error",
+                                    text: e instanceof Error ? e.message : "Upvote failed",
+                                  });
+                                }
+                              });
+                            }}
+                          >
+                            ⬆ {upCount}
+                          </button>
+
+                          {isOwner ? (
+                            <div className="mt-2 flex justify-end gap-2">
+                              {isEditing ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                    onClick={() => {
+                                      setEditingId(null);
+                                      setEditingText("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                    onClick={() => {
+                                      const next = editingText.trim();
+                                      if (!next) return;
+                                      setMsg(null);
+                                      startTransition(async () => {
+                                        try {
+                                          const res = await updateFeedComment(c.id, next);
+                                          setMsg({ tone: "success", text: res.message });
+                                          setEditingId(null);
+                                          setEditingText("");
+                                        } catch (e) {
+                                          setMsg({
+                                            tone: "error",
+                                            text: e instanceof Error ? e.message : "Update failed",
+                                          });
+                                        }
+                                      });
+                                    }}
+                                  >
+                                    Save
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                  onClick={() => {
+                                    setEditingId(c.id);
+                                    setEditingText(c.content);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
+
+                          {isAdmin ? (
+                            <div className="mt-2 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                onClick={() => {
+                                  setMsg(null);
+                                  startTransition(async () => {
+                                    try {
+                                      const res = await hideFeedComment(c.id, !c.is_hidden);
+                                      setMsg({ tone: "success", text: res.message });
+                                    } catch (e) {
+                                      setMsg({
+                                        tone: "error",
+                                        text: e instanceof Error ? e.message : "Hide failed",
+                                      });
+                                    }
+                                  });
+                                }}
+                              >
+                                {c.is_hidden ? "Unhide" : "Hide"}
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                onClick={() => {
+                                  const ok = window.confirm("Delete this comment?");
+                                  if (!ok) return;
+                                  setMsg(null);
+                                  startTransition(async () => {
+                                    try {
+                                      const res = await deleteFeedComment(c.id);
+                                      setMsg({ tone: "success", text: res.message });
+                                    } catch (e) {
+                                      setMsg({
+                                        tone: "error",
+                                        text: e instanceof Error ? e.message : "Delete failed",
+                                      });
+                                    }
+                                  });
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="mt-2">
+                          <Textarea
+                            label="Edit comment"
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            placeholder="Update your comment"
+                          />
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-sm whitespace-pre-wrap">{renderWithMentions(c.content)}</div>
+                      )}
+                      {c.is_hidden && isAdmin ? (
+                        <div className="mt-2 text-xs text-[color:var(--muted)]">Hidden from public.</div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-sm text-[color:var(--muted)]">No comments yet.</div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <MiniProfileModal
+        open={!!selectedUserId}
+        subject={selected}
+        awards={awards}
+        leaderboard={leaderboard}
+        onClose={() => setSelectedUserId(null)}
+      />
+    </div>
+  );
+}
+
+export function CommentsButton({
+  postId,
+  canComment,
+  isAdmin,
+  myUserId,
+  mentionCandidates,
+  comments,
+  commenterProfiles,
+  upvoteCountByComment,
+  upvotedByMe,
+  awards,
+  leaderboard,
+}: {
+  postId: string;
+  canComment: boolean;
+  isAdmin: boolean;
+  myUserId: string | null;
+  mentionCandidates: MentionCandidate[];
+  comments: FeedComment[];
+  commenterProfiles: Map<string, { favorited_username: string; photo_url: string | null; bio?: string | null }>;
+  upvoteCountByComment: Map<string, number>;
+  upvotedByMe: Set<string>;
+  awards: MiniProfileAwardRow[];
+  leaderboard: MiniProfilePointsRow[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
+        Comments ({comments.length})
+      </Button>
+      <CommentsModal
+        open={open}
+        postId={postId}
+        canComment={canComment}
+        isAdmin={isAdmin}
+        myUserId={myUserId}
+        mentionCandidates={mentionCandidates}
+        comments={comments}
+        commenterProfiles={commenterProfiles}
+        upvoteCountByComment={upvoteCountByComment}
+        upvotedByMe={upvotedByMe}
+        awards={awards}
+        leaderboard={leaderboard}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+export function LikeCountButton({
+  count,
+  canOpen,
+  likers,
+  awards,
+  leaderboard,
+}: {
+  count: number;
+  canOpen: boolean;
+  likers: LikerProfile[];
+  awards: MiniProfileAwardRow[];
+  leaderboard: MiniProfilePointsRow[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!canOpen) {
+    return <span>{count} like(s)</span>;
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="underline underline-offset-4"
+        onClick={() => setOpen(true)}
+      >
+        {count} like(s)
+      </button>
+      <WhoLikedModal
+        open={open}
+        count={count}
+        likers={likers}
+        awards={awards}
+        leaderboard={leaderboard}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+function FeedEditModal({
+  open,
+  post,
+  pending,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  post: FeedPost;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (fd: FormData) => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70"
+        aria-label="Close edit post"
+        onClick={onClose}
+      />
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl px-4 pb-4">
+        <Card title="Edit post">
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSave(new FormData(e.currentTarget));
+            }}
+          >
+            <input type="hidden" name="id" value={post.id} />
+            <Input label="Title" name="title" defaultValue={post.title ?? ""} required />
+            <Input
+              label="Post type"
+              name="post_type"
+              defaultValue={post.post_type ?? ""}
+              required
+            />
+            <Textarea
+              label="Content"
+              name="content"
+              defaultValue={post.content ?? ""}
+              required
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export function FeedAdminPostControls({
+  post,
+  isAdmin,
+}: {
+  post: FeedPost;
+  isAdmin: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState<null | { tone: "success" | "error"; text: string }>(null);
+
+  if (!isAdmin) return null;
+
+  return (
+    <div className="space-y-2">
+      {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={pending}
+          onClick={() => {
+            setMsg(null);
+            setOpen(true);
+          }}
+        >
+          Edit
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={pending}
+          onClick={() => {
+            const ok = window.confirm("Delete this post? This cannot be undone.");
+            if (!ok) return;
+            setMsg(null);
+            startTransition(async () => {
+              try {
+                const res = (await deleteFeedPost(post.id)) as any;
+                setMsg({ tone: "success", text: String(res?.message ?? "Post deleted.") });
+                router.refresh();
+              } catch (e) {
+                setMsg({
+                  tone: "error",
+                  text: e instanceof Error ? e.message : "Delete failed",
+                });
+              }
+            });
+          }}
+        >
+          Delete
+        </Button>
+      </div>
+
+      <FeedEditModal
+        open={open}
+        post={post}
+        pending={pending}
+        onClose={() => setOpen(false)}
+        onSave={(fd) => {
+          setMsg(null);
+          startTransition(async () => {
+            try {
+              const res = (await updateFeedPost(fd)) as any;
+              setMsg({ tone: "success", text: String(res?.message ?? "Post updated.") });
+              setOpen(false);
+              router.refresh();
+            } catch (e) {
+              setMsg({
+                tone: "error",
+                text: e instanceof Error ? e.message : "Update failed",
+              });
+            }
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+export function FeedMedia({
+  mediaUrl,
+  mediaType,
+}: {
+  mediaUrl: string;
+  mediaType: string;
+}) {
+  if (!mediaUrl) return null;
+
+  if (mediaType === "video") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-black/20">
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          src={mediaUrl}
+          className="block w-full max-h-[400px] object-contain"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-black/20">
+      <img
+        src={mediaUrl}
+        alt="Feed media"
+        loading="lazy"
+        className="block w-full max-h-[400px] object-contain"
+      />
+    </div>
+  );
+}
+
+export function FeedShareButton({
+  postId,
+  title,
+  content,
+  canEarn = true,
+}: {
+  postId: string;
+  title: string;
+  content: string;
+  canEarn?: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const link = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}/feed#${postId}`;
+  }, [postId]);
+
+  const message = useMemo(() => {
+    const trimmed = content.trim().replace(/\s+/g, " ");
+    const snippet = trimmed.length > 120 ? `${trimmed.slice(0, 120)}…` : trimmed;
+    return `${title}\n\n${snippet}\n\n${link}`.trim();
+  }, [title, content, link]);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={pending || !canEarn}
+        onClick={() => {
+          setMsg(null);
+          setOpen(true);
+        }}
+      >
+        Share
+      </Button>
+
+      {msg ? <div className="text-xs text-[color:var(--muted)]">{msg}</div> : null}
+
+      <ShareModal
+        open={open}
+        title="Share this post"
+        link={link}
+        message={message}
+        confirmLabel="I shared it"
+        pending={pending}
+        onClose={() => setOpen(false)}
+        onConfirm={() => {
+          if (!canEarn) return;
+          startTransition(async () => {
+            try {
+              const res = await logFeedPostShare(postId);
+              setMsg(res.message);
+              setOpen(false);
+            } catch (e) {
+              setMsg(e instanceof Error ? e.message : "Share logging failed");
+            }
+          });
+        }}
+      />
+    </>
+  );
+}
+
+export function LikeButton({
+  postId,
+  liked,
+  canEarn = true,
+}: {
+  postId: string;
+  liked: boolean;
+  canEarn?: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-1">
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={pending || !canEarn}
+        onClick={() => {
+          if (!canEarn) return;
+          setMsg(null);
+          startTransition(async () => {
+            await toggleLike(postId, liked);
+            setMsg(liked ? "💔 Like removed" : "❤️ Like logged (+1)");
+          });
+        }}
+      >
+        {liked ? "Liked" : pending ? "..." : "Like"}
+      </Button>
+      {msg ? <div className="text-xs text-[color:var(--muted)]">{msg}</div> : null}
+    </div>
+  );
+}
