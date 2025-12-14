@@ -1055,7 +1055,8 @@ export function FeedShareButton({
 
   const message = useMemo(() => {
     const trimmed = content.trim().replace(/\s+/g, " ");
-    const snippet = trimmed.length > 120 ? `${trimmed.slice(0, 120)}…` : trimmed;
+    const chars = Array.from(trimmed);
+    const snippet = chars.length > 120 ? `${chars.slice(0, 120).join("")}…` : trimmed;
     return `${title}\n\n${snippet}\n\n${link}`.trim();
   }, [title, content, link]);
 

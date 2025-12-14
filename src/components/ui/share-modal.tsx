@@ -4,8 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
+function safeEncodeURIComponent(input: string) {
+  try {
+    return encodeURIComponent(input);
+  } catch {
+    return encodeURIComponent(String(input).replace(/[\uD800-\uDFFF]/g, "\uFFFD"));
+  }
+}
+
 function buildFacebookShareUrl(url: string) {
-  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+  return `https://www.facebook.com/sharer/sharer.php?u=${safeEncodeURIComponent(url)}`;
 }
 
 function buildXShareUrl(url: string, text?: string) {
@@ -24,11 +32,11 @@ function buildRedditShareUrl(url: string, title?: string) {
 
 function buildMessengerShareUrl(url: string) {
   // Works on some mobile devices; desktop fallback will just do nothing.
-  return `fb-messenger://share?link=${encodeURIComponent(url)}`;
+  return `fb-messenger://share?link=${safeEncodeURIComponent(url)}`;
 }
 
 function buildSmsShareUrl(message: string) {
-  return `sms:?&body=${encodeURIComponent(message)}`;
+  return `sms:?&body=${safeEncodeURIComponent(message)}`;
 }
 
 export function ShareModal({
@@ -70,7 +78,7 @@ export function ShareModal({
     setSharedAttempted(false);
   }, [open]);
 
-  const smsUrl = useMemo(() => buildSmsShareUrl(message), [message]);
+  const smsUrl = open ? buildSmsShareUrl(message) : "";
 
   const shareNow = async () => {
     try {
