@@ -22,6 +22,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CannaFam (CFM)",
   description: "CannaFam Member loyalty hub for CannaStreams",
+  icons: {
+    icon: "/icon",
+    apple: "/apple-icon",
+  },
 };
 
 export default async function RootLayout({
