@@ -90,7 +90,22 @@ export async function TopNavAuth() {
         </form>
       </div>
 
-      <div className="flex items-center sm:hidden">
+      <div className="flex items-center gap-2 sm:hidden">
+        <Button
+          as="link"
+          href="/noties"
+          variant="secondary"
+          className={navBtnClass + " relative"}
+        >
+          <span className="inline-flex items-center" aria-hidden>
+            🔔
+          </span>
+          <span className="sr-only">Noties</span>
+          {unread > 0 ? (
+            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[rgba(209,31,42,0.95)]" />
+          ) : null}
+        </Button>
+
         <details className="relative">
           <summary
             aria-label="Open menu"
@@ -122,19 +137,6 @@ export async function TopNavAuth() {
                 Admin
               </Link>
             ) : null}
-            <Link href="/noties" className={mobileMenuItemClass}>
-              <span className="inline-flex w-full items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2">
-                  <span aria-hidden>🔔</span>
-                  <span>Noties</span>
-                </span>
-                {unread > 0 ? (
-                  <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-[rgba(209,31,42,0.9)] px-2 py-[1px] text-[11px] font-semibold text-white">
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                ) : null}
-              </span>
-            </Link>
             <Link href="/account" className={mobileMenuItemClass}>
               Account
             </Link>
