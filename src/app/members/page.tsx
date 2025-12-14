@@ -1,11 +1,13 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
+import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { MembersClient } from "./ui";
 
 export const runtime = "nodejs";
 
 export default async function MembersPage() {
+  await requireUser();
   const sb = await supabaseServer();
   const { data, error } = await sb
     .from("cfm_public_members")

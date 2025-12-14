@@ -1,6 +1,7 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
+import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
   LeaderboardClient,
@@ -12,6 +13,7 @@ import {
 export const runtime = "nodejs";
 
 export default async function LeaderboardPage() {
+  await requireUser();
   const sb = await supabaseServer();
 
   const { data, error } = await sb.rpc("cfm_leaderboard", { limit_n: 100 });
