@@ -7,6 +7,8 @@ import { BottomNav, type NavSessionState } from "@/components/shell/bottomnav";
 import { getAuthedUserOrNull } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
