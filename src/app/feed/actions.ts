@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseAdminOrNull } from "@/lib/supabase/admin";
 import { requireAdmin, requireApprovedMember } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
 import { env } from "@/lib/env";
@@ -266,7 +266,12 @@ export async function addFeedComment(postId: string, content: string) {
   const commentId = String(insertedComment?.id ?? "").trim();
   if (commentId) {
     try {
-      const admin = supabaseAdmin();
+      const admin = supabaseAdminOrNull();
+      if (!admin) {
+        console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
+        revalidatePath("/noties");
+        return { ok: true as const, message: "Comment posted.", commentId: insertedComment?.id ?? null };
+      }
 
       const usernames = extractMentionUsernames(text);
       if (usernames.length) {
@@ -283,13 +288,14 @@ export async function addFeedComment(postId: string, content: string) {
         }
 
         for (const uid of mentionedUserIds) {
-          await admin.from("cfm_noties").insert({
+          const { error: notieErr } = await admin.from("cfm_noties").insert({
             member_id: uid,
             actor_user_id: user.id,
             type: "mention",
             post_id: pid,
             comment_id: commentId,
           });
+          if (notieErr) console.error("Failed to create mention notie", notieErr.message);
         }
       }
 
@@ -303,13 +309,14 @@ export async function addFeedComment(postId: string, content: string) {
       );
 
       for (const aid of adminIds) {
-        await admin.from("cfm_noties").insert({
+        const { error: notieErr } = await admin.from("cfm_noties").insert({
           member_id: aid,
           actor_user_id: user.id,
           type: "new_comment",
           post_id: pid,
           comment_id: commentId,
         });
+        if (notieErr) console.error("Failed to create admin comment notie", notieErr.message);
       }
     } catch {
     }
@@ -346,7 +353,12 @@ export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
 
   if (!upvoted && insertedNew) {
     try {
-      const admin = supabaseAdmin();
+      const admin = supabaseAdminOrNull();
+      if (!admin) {
+        console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
+        revalidatePath("/noties");
+        return { ok: true as const, message: upvoted ? "Upvote removed." : "Upvoted." };
+      }
       const { data: comment } = await admin
         .from("cfm_feed_comments")
         .select("id,user_id,post_id")
@@ -357,13 +369,14 @@ export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
       const ownerId = String(c?.user_id ?? "").trim();
       const postId = String(c?.post_id ?? "").trim();
       if (ownerId && ownerId !== user.id) {
-        await admin.from("cfm_noties").insert({
+        const { error: notieErr } = await admin.from("cfm_noties").insert({
           member_id: ownerId,
           actor_user_id: user.id,
           type: "comment_upvote",
           post_id: postId || null,
           comment_id: cid,
         });
+        if (notieErr) console.error("Failed to create upvote notie", notieErr.message);
       }
     } catch {
     }

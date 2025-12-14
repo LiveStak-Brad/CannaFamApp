@@ -7,3 +7,11 @@ export function supabaseAdmin() {
     auth: { persistSession: false },
   });
 }
+
+export function supabaseAdminOrNull() {
+  try {
+    return supabaseAdmin();
+  } catch {
+    return null;
+  }
+}

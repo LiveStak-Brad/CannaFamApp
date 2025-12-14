@@ -55,21 +55,28 @@ export default async function NotiesPage() {
   const { start: startOfTodayUTC, end: startOfTomorrowUTC } = centralDayRangeUTC(today);
 
   let noties: Notie[] = [];
-  try {
-    const { data } = await sb
-      .from("cfm_noties")
-      .select("id,type,is_read,post_id,comment_id,actor_user_id,created_at")
-      .eq("member_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    noties = (data ?? []) as Notie[];
+  let notiesErrorMessage: string | null = null;
+  const { data: notiesData, error: notiesErr } = await sb
+    .from("cfm_noties")
+    .select("id,type,is_read,post_id,comment_id,actor_user_id,created_at")
+    .eq("member_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (notiesErr) {
+    notiesErrorMessage = notiesErr.message;
+    noties = [];
+  } else {
+    noties = (notiesData ?? []) as Notie[];
 
     const unreadIds = noties.filter((n) => !n?.is_read).map((n) => n.id);
     if (unreadIds.length) {
-      await sb.from("cfm_noties").update({ is_read: true }).in("id", unreadIds);
+      const { error: markErr } = await sb
+        .from("cfm_noties")
+        .update({ is_read: true })
+        .in("id", unreadIds);
+      if (markErr) notiesErrorMessage = markErr.message;
     }
-  } catch {
-    noties = [];
   }
 
   const [
@@ -257,6 +264,9 @@ export default async function NotiesPage() {
         </div>
 
         <Card title="Notifications">
+          {notiesErrorMessage ? (
+            <div className="mb-2 text-sm text-red-200">{notiesErrorMessage}</div>
+          ) : null}
           {noties.length ? (
             <div className="space-y-2">
               {noties.map((n) => {

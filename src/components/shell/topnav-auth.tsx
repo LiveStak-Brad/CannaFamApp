@@ -36,11 +36,12 @@ export async function TopNavAuth() {
 
   let unread = 0;
   try {
-    const { count } = await sb
+    const { count, error } = await sb
       .from("cfm_noties")
       .select("id", { count: "exact", head: true })
       .eq("member_id", user.id)
       .eq("is_read", false);
+    if (error) console.error("Failed to load unread noties", error.message);
     unread = count ?? 0;
   } catch {
     unread = 0;
