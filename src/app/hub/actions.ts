@@ -15,6 +15,30 @@ function guessExtFromMime(mime: string) {
   return null;
 }
 
+function normalizeHttpUrl(input: string) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^www\./i.test(raw) || raw.includes(".")) return `https://${raw}`;
+  return null;
+}
+
+function normalizeHandleUrl(kind: "instagram" | "x" | "tiktok" | "youtube", input: string) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return null;
+  const http = normalizeHttpUrl(raw);
+  if (http) return http;
+
+  const handle = raw.replace(/^@+/, "").trim();
+  if (!handle) return null;
+
+  if (kind === "instagram") return `https://instagram.com/${handle}`;
+  if (kind === "x") return `https://x.com/${handle}`;
+  if (kind === "tiktok") return `https://www.tiktok.com/@${handle}`;
+  if (kind === "youtube") return `https://youtube.com/@${handle}`;
+  return null;
+}
+
 export async function checkIn() {
   const user = await requireUser();
   const sb = await supabaseServer();
@@ -76,6 +100,21 @@ export async function updateMyProfile(formData: FormData) {
   const bioRaw = String(formData.get("bio") ?? "");
   const bio = bioRaw.trim() || null;
 
+  const publicLinkRaw = String(formData.get("public_link") ?? "");
+  const public_link = normalizeHttpUrl(publicLinkRaw);
+
+  const instagramRaw = String(formData.get("instagram_link") ?? "");
+  const instagram_link = normalizeHandleUrl("instagram", instagramRaw);
+
+  const xRaw = String(formData.get("x_link") ?? "");
+  const x_link = normalizeHandleUrl("x", xRaw);
+
+  const tiktokRaw = String(formData.get("tiktok_link") ?? "");
+  const tiktok_link = normalizeHandleUrl("tiktok", tiktokRaw);
+
+  const youtubeRaw = String(formData.get("youtube_link") ?? "");
+  const youtube_link = normalizeHandleUrl("youtube", youtubeRaw);
+
   const photo = formData.get("photo");
   let photo_url: string | null = null;
 
@@ -108,9 +147,19 @@ export async function updateMyProfile(formData: FormData) {
     photo_url = publicData.publicUrl;
   }
 
+  const baseUpdate = {
+    favorited_username,
+    bio,
+    public_link,
+    instagram_link,
+    x_link,
+    tiktok_link,
+    youtube_link,
+  };
+
   const { error } = await sb
     .from("cfm_members")
-    .update(photo_url ? { favorited_username, photo_url, bio } : { favorited_username, bio })
+    .update(photo_url ? { ...baseUpdate, photo_url } : baseUpdate)
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);

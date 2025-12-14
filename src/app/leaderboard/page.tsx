@@ -21,7 +21,7 @@ export default async function LeaderboardPage() {
   const { data: profiles } = usernames.length
     ? await sb
         .from("cfm_public_members")
-        .select("favorited_username,photo_url,bio")
+        .select("favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
         .in("favorited_username", usernames)
     : { data: [] };
 

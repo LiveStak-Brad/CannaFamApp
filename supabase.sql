@@ -43,9 +43,20 @@ create table if not exists public.cfm_members (
   favorited_username text not null,
   photo_url text,
   bio text,
+  public_link text,
+  instagram_link text,
+  x_link text,
+  tiktok_link text,
+  youtube_link text,
   points int default 0,
   created_at timestamp default now()
 );
+
+alter table public.cfm_members add column if not exists public_link text;
+alter table public.cfm_members add column if not exists instagram_link text;
+alter table public.cfm_members add column if not exists x_link text;
+alter table public.cfm_members add column if not exists tiktok_link text;
+alter table public.cfm_members add column if not exists youtube_link text;
 
 -- Public roster view (prevents exposing user_id/points via anon)
 create or replace view public.cfm_public_members as
@@ -54,8 +65,29 @@ create or replace view public.cfm_public_members as
     favorited_username,
     photo_url,
     bio,
+    public_link,
+    instagram_link,
+    x_link,
+    tiktok_link,
+    youtube_link,
     created_at
   from public.cfm_members;
+
+create or replace view public.cfm_public_member_ids as
+  select
+    user_id,
+    favorited_username,
+    photo_url,
+    bio,
+    public_link,
+    instagram_link,
+    x_link,
+    tiktok_link,
+    youtube_link
+  from public.cfm_members
+  where user_id is not null;
+
+grant select on public.cfm_public_member_ids to anon, authenticated;
 
 -- Daily check-ins
 create table if not exists public.cfm_checkins (

@@ -14,6 +14,18 @@ import { HubCheckInButton, HubSpinButton } from "./ui";
 
 export const runtime = "nodejs";
 
+type MemberProfile = {
+  id: string;
+  favorited_username: string;
+  photo_url: string | null;
+  bio: string | null;
+  public_link: string | null;
+  instagram_link: string | null;
+  x_link: string | null;
+  tiktok_link: string | null;
+  youtube_link: string | null;
+};
+
 export default async function HubPage() {
   const user = await requireUser();
   const sb = await supabaseServer();
@@ -27,11 +39,13 @@ export default async function HubPage() {
 
   let autoLinkDebug: string | null = null;
 
-  let { data: member } = await sb
+  let { data: memberRaw } = await sb
     .from("cfm_members")
-    .select("id,favorited_username,photo_url,bio")
+    .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
     .eq("user_id", user.id)
     .maybeSingle();
+
+  let member = (memberRaw as unknown as MemberProfile | null) ?? null;
 
   if (!isAdmin && !member) {
     const email = (user.email ?? "").toLowerCase().trim();
@@ -88,10 +102,10 @@ export default async function HubPage() {
 
         const refetch = await sb
           .from("cfm_members")
-          .select("id,favorited_username,photo_url,bio")
+          .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
           .eq("user_id", user.id)
           .maybeSingle();
-        member = refetch.data ?? null;
+        member = (refetch.data as unknown as MemberProfile | null) ?? null;
       }
     }
   }
@@ -199,6 +213,40 @@ export default async function HubPage() {
                   defaultValue={member?.bio ?? ""}
                   placeholder="Add a short bio for your mini profile"
                 />
+
+                <Input
+                  label="Link"
+                  name="public_link"
+                  defaultValue={member?.public_link ?? ""}
+                  placeholder="https://..."
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Instagram"
+                    name="instagram_link"
+                    defaultValue={member?.instagram_link ?? ""}
+                    placeholder="@handle or URL"
+                  />
+                  <Input
+                    label="X"
+                    name="x_link"
+                    defaultValue={member?.x_link ?? ""}
+                    placeholder="@handle or URL"
+                  />
+                  <Input
+                    label="TikTok"
+                    name="tiktok_link"
+                    defaultValue={member?.tiktok_link ?? ""}
+                    placeholder="@handle or URL"
+                  />
+                  <Input
+                    label="YouTube"
+                    name="youtube_link"
+                    defaultValue={member?.youtube_link ?? ""}
+                    placeholder="@handle or URL"
+                  />
+                </div>
                 <Button type="submit" variant="secondary">
                   Save profile
                 </Button>

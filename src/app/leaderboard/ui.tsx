@@ -12,6 +12,11 @@ export type PublicProfile = {
   favorited_username: string;
   photo_url: string | null;
   bio: string | null;
+  public_link?: string | null;
+  instagram_link?: string | null;
+  x_link?: string | null;
+  tiktok_link?: string | null;
+  youtube_link?: string | null;
 };
 
 export type AwardRow = {
@@ -67,6 +72,11 @@ export function LeaderboardClient({
         favorited_username: selected.favorited_username,
         photo_url: profile?.photo_url ?? null,
         bio: profile?.bio ?? null,
+        public_link: profile?.public_link ?? null,
+        instagram_link: profile?.instagram_link ?? null,
+        x_link: profile?.x_link ?? null,
+        tiktok_link: profile?.tiktok_link ?? null,
+        youtube_link: profile?.youtube_link ?? null,
       }
     : null;
 

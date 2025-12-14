@@ -70,7 +70,7 @@ export default async function FeedPage() {
   // Public-safe member list for @mention autocomplete
   const { data: mentionCandidatesRaw } = await sb
     .from("cfm_public_member_ids")
-    .select("user_id,favorited_username,photo_url,bio")
+    .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
     .limit(2000);
   const mentionCandidates = (mentionCandidatesRaw ?? []) as any[];
 
@@ -93,7 +93,16 @@ export default async function FeedPage() {
   let upvotes: UpvoteRow[] = [];
   let commenterProfiles = new Map<
     string,
-    { favorited_username: string; photo_url: string | null; bio?: string | null }
+    {
+      favorited_username: string;
+      photo_url: string | null;
+      bio?: string | null;
+      public_link?: string | null;
+      instagram_link?: string | null;
+      x_link?: string | null;
+      tiktok_link?: string | null;
+      youtube_link?: string | null;
+    }
   >();
 
   try {
@@ -119,7 +128,7 @@ export default async function FeedPage() {
     const { data: publicMembers } = commenterIds.length
       ? await sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url,bio")
+          .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
           .in("user_id", commenterIds)
       : { data: [] };
 
@@ -129,6 +138,11 @@ export default async function FeedPage() {
         favorited_username: String(m.favorited_username ?? ""),
         photo_url: (m.photo_url ?? null) as string | null,
         bio: (m.bio ?? null) as string | null,
+        public_link: (m.public_link ?? null) as string | null,
+        instagram_link: (m.instagram_link ?? null) as string | null,
+        x_link: (m.x_link ?? null) as string | null,
+        tiktok_link: (m.tiktok_link ?? null) as string | null,
+        youtube_link: (m.youtube_link ?? null) as string | null,
       });
     }
   } catch {
@@ -170,13 +184,22 @@ export default async function FeedPage() {
 
     const byUser = new Map<
       string,
-      { favorited_username: string; photo_url: string | null; bio?: string | null }
+      {
+        favorited_username: string;
+        photo_url: string | null;
+        bio?: string | null;
+        public_link?: string | null;
+        instagram_link?: string | null;
+        x_link?: string | null;
+        tiktok_link?: string | null;
+        youtube_link?: string | null;
+      }
     >();
 
     try {
       const { data: publicMembers, error: publicErr } = await sb
         .from("cfm_public_member_ids")
-        .select("user_id,favorited_username,photo_url,bio")
+        .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
         .in("user_id", userIds);
 
       if (publicErr) throw new Error(publicErr.message);
@@ -187,13 +210,18 @@ export default async function FeedPage() {
           favorited_username: String(m.favorited_username ?? ""),
           photo_url: (m.photo_url ?? null) as string | null,
           bio: (m.bio ?? null) as string | null,
+          public_link: (m.public_link ?? null) as string | null,
+          instagram_link: (m.instagram_link ?? null) as string | null,
+          x_link: (m.x_link ?? null) as string | null,
+          tiktok_link: (m.tiktok_link ?? null) as string | null,
+          youtube_link: (m.youtube_link ?? null) as string | null,
         });
       }
     } catch {
       if (isAdmin) {
         const { data: likerMembers } = await sb
           .from("cfm_members")
-          .select("user_id,favorited_username,photo_url,bio")
+          .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
           .in("user_id", userIds);
 
         for (const m of likerMembers ?? []) {
@@ -202,6 +230,11 @@ export default async function FeedPage() {
             favorited_username: m.favorited_username,
             photo_url: m.photo_url,
             bio: (m as any).bio ?? null,
+            public_link: (m as any).public_link ?? null,
+            instagram_link: (m as any).instagram_link ?? null,
+            x_link: (m as any).x_link ?? null,
+            tiktok_link: (m as any).tiktok_link ?? null,
+            youtube_link: (m as any).youtube_link ?? null,
           });
         }
       }
@@ -217,6 +250,11 @@ export default async function FeedPage() {
           favorited_username: info.favorited_username,
           photo_url: info.photo_url,
           bio: (info as any).bio ?? null,
+          public_link: (info as any).public_link ?? null,
+          instagram_link: (info as any).instagram_link ?? null,
+          x_link: (info as any).x_link ?? null,
+          tiktok_link: (info as any).tiktok_link ?? null,
+          youtube_link: (info as any).youtube_link ?? null,
         },
       ]);
     }

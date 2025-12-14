@@ -9,7 +9,7 @@ export default async function MembersPage() {
   const sb = await supabaseServer();
   const { data, error } = await sb
     .from("cfm_public_members")
-    .select("id,favorited_username,photo_url,bio")
+    .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
     .order("created_at", { ascending: true });
 
   const { data: awards } = await sb

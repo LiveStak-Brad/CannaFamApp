@@ -10,6 +10,10 @@ export type MiniProfileSubject = {
   photo_url?: string | null;
   bio?: string | null;
   public_link?: string | null;
+  instagram_link?: string | null;
+  x_link?: string | null;
+  tiktok_link?: string | null;
+  youtube_link?: string | null;
 };
 
 export type MiniProfilePointsRow = {
@@ -61,16 +65,16 @@ export function MiniProfileModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  if (!open || !subject) return null;
-
   const lb = useMemo(() => {
+    if (!subject) return null;
     if (subject.user_id) {
       return leaderboard.find((r) => r.user_id === subject.user_id) ?? null;
     }
     return leaderboard.find((r) => r.favorited_username === subject.favorited_username) ?? null;
-  }, [leaderboard, subject.favorited_username, subject.user_id]);
+  }, [leaderboard, subject]);
 
   const awardCounts = useMemo(() => {
+    if (!subject) return new Map<string, number>();
     const uid = lb?.user_id ?? subject.user_id;
     if (!uid) return new Map<string, number>();
     const out = new Map<string, number>();
@@ -81,11 +85,21 @@ export function MiniProfileModal({
       out.set(t, (out.get(t) ?? 0) + 1);
     }
     return out;
-  }, [awards, lb?.user_id, subject.user_id]);
+  }, [awards, lb, subject]);
+
+  if (!open || !subject) return null;
 
   const initial = (subject.favorited_username || "?").trim().slice(0, 1).toUpperCase();
   const photoUrl = subject.photo_url ?? null;
   const bio = subject.bio ?? null;
+
+  const socials = [
+    { key: "public_link", label: "Link", href: subject.public_link ?? null },
+    { key: "instagram", label: "IG", href: subject.instagram_link ?? null },
+    { key: "x", label: "X", href: subject.x_link ?? null },
+    { key: "tiktok", label: "TikTok", href: subject.tiktok_link ?? null },
+    { key: "youtube", label: "YouTube", href: subject.youtube_link ?? null },
+  ].filter((s) => !!s.href);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -112,9 +126,30 @@ export function MiniProfileModal({
                   {initial}
                 </div>
               )}
-              <div className="min-w-0">
-                <div className="text-base font-semibold truncate">{subject.favorited_username}</div>
-                <div className="text-xs text-[color:var(--muted)]">Mini profile</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-base font-semibold truncate">
+                      {subject.favorited_username}
+                    </div>
+                    <div className="text-xs text-[color:var(--muted)]">Mini profile</div>
+                  </div>
+                  {socials.length ? (
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {socials.map((s) => (
+                        <a
+                          key={s.key}
+                          href={String(s.href)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-2 py-1 text-xs"
+                        >
+                          {s.label}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 

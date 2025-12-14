@@ -15,6 +15,11 @@ type PublicMember = {
   favorited_username: string;
   photo_url: string | null;
   bio: string | null;
+  public_link?: string | null;
+  instagram_link?: string | null;
+  x_link?: string | null;
+  tiktok_link?: string | null;
+  youtube_link?: string | null;
 };
 
 type AwardRow = {
@@ -60,6 +65,11 @@ export function MembersClient({
         favorited_username: selected.favorited_username,
         photo_url: selected.photo_url,
         bio: selected.bio,
+        public_link: selected.public_link ?? null,
+        instagram_link: selected.instagram_link ?? null,
+        x_link: selected.x_link ?? null,
+        tiktok_link: selected.tiktok_link ?? null,
+        youtube_link: selected.youtube_link ?? null,
       }
     : null;
 
