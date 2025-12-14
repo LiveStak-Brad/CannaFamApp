@@ -34,6 +34,10 @@ function PointsExplainerModal({ open, onClose }: { open: boolean; onClose: () =>
               Points are calculated automatically from your activity.
             </div>
 
+            <div className="text-[color:var(--muted)]">
+              Daily limits reset at 12:00am Central Time.
+            </div>
+
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">✅ Check-in</div>

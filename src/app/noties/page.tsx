@@ -3,7 +3,7 @@ import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
-import { todayISODate } from "@/lib/utils";
+import { centralDayRangeUTC, todayISODate } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -34,6 +34,7 @@ export default async function NotiesPage() {
   const sb = await supabaseServer();
 
   const today = todayISODate();
+  const { start: startOfTodayUTC, end: startOfTomorrowUTC } = centralDayRangeUTC(today);
 
   const [
     { count: commentsToday },
@@ -46,8 +47,8 @@ export default async function NotiesPage() {
       .from("cfm_feed_comments")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .gte("created_at", `${today}T00:00:00.000Z`)
-      .lt("created_at", `${today}T23:59:59.999Z`),
+      .gte("created_at", startOfTodayUTC)
+      .lt("created_at", startOfTomorrowUTC),
     sb
       .from("cfm_checkins")
       .select("id", { count: "exact", head: true })
@@ -74,8 +75,8 @@ export default async function NotiesPage() {
   const { data: upvoteRows } = await sb
     .from("cfm_feed_comment_upvotes")
     .select("comment_id")
-    .gte("created_at", `${today}T00:00:00.000Z`)
-    .lt("created_at", `${today}T23:59:59.999Z`)
+    .gte("created_at", startOfTodayUTC)
+    .lt("created_at", startOfTomorrowUTC)
     .limit(5000);
 
   let upvotesReceivedToday = 0;
@@ -216,6 +217,7 @@ export default async function NotiesPage() {
         <div className="space-y-1">
           <h1 className="text-xl font-semibold">🔔 Noties</h1>
           <p className="text-sm text-[color:var(--muted)]">Notifications and your daily checklist.</p>
+          <p className="text-xs text-[color:var(--muted)]">Daily limits reset at 12:00am Central Time.</p>
         </div>
 
         <Card title="Notifications">
