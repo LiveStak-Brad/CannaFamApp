@@ -2,10 +2,26 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireAdmin, requireApprovedMember } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { stripe } from "@/lib/stripe";
+
+type PublicMemberIdRow = { user_id: string | null };
+type AdminRow = { user_id: string | null };
+type FeedCommentRow = { id: string; post_id: string | null; user_id: string | null };
+
+function extractMentionUsernames(text: string) {
+  const matches = String(text ?? "").matchAll(/@([A-Za-z0-9_]+)/g);
+  const out: string[] = [];
+  for (const m of matches) {
+    const u = String(m?.[1] ?? "").trim();
+    if (!u) continue;
+    out.push(u);
+  }
+  return Array.from(new Set(out)).slice(0, 10);
+}
 
 export async function toggleLike(postId: string, liked: boolean) {
   const user = await requireApprovedMember();
@@ -234,16 +250,73 @@ export async function addFeedComment(postId: string, content: string) {
   if (!text) throw new Error("Comment cannot be empty.");
   if (text.length > 500) throw new Error("Comment is too long (max 500 chars).");
 
-  const { error } = await sb.from("cfm_feed_comments").insert({
-    post_id: pid,
-    user_id: user.id,
-    content: text,
-  });
+  const { data: commentRow, error } = await sb
+    .from("cfm_feed_comments")
+    .insert({
+      post_id: pid,
+      user_id: user.id,
+      content: text,
+    })
+    .select("id,post_id,user_id")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
 
+  const insertedComment = (commentRow ?? null) as FeedCommentRow | null;
+  const commentId = String(insertedComment?.id ?? "").trim();
+  if (commentId) {
+    try {
+      const admin = supabaseAdmin();
+
+      const usernames = extractMentionUsernames(text);
+      if (usernames.length) {
+        const mentionedUserIds = new Set<string>();
+        for (const uname of usernames) {
+          const { data: m } = await admin
+            .from("cfm_public_member_ids")
+            .select("user_id")
+            .ilike("favorited_username", uname)
+            .limit(1)
+            .maybeSingle();
+          const uid = String(((m as PublicMemberIdRow | null)?.user_id ?? "")).trim();
+          if (uid && uid !== user.id) mentionedUserIds.add(uid);
+        }
+
+        for (const uid of mentionedUserIds) {
+          await admin.from("cfm_noties").insert({
+            member_id: uid,
+            actor_user_id: user.id,
+            type: "mention",
+            post_id: pid,
+            comment_id: commentId,
+          });
+        }
+      }
+
+      const { data: adminUsers } = await admin.from("cfm_admins").select("user_id");
+      const adminIds = Array.from(
+        new Set(
+          (adminUsers ?? [])
+            .map((r) => String(((r as AdminRow | null)?.user_id ?? "")).trim())
+            .filter((id) => id && id !== user.id),
+        ),
+      );
+
+      for (const aid of adminIds) {
+        await admin.from("cfm_noties").insert({
+          member_id: aid,
+          actor_user_id: user.id,
+          type: "new_comment",
+          post_id: pid,
+          comment_id: commentId,
+        });
+      }
+    } catch {
+    }
+  }
+
   revalidatePath("/feed");
-  return { ok: true as const, message: "Comment posted." };
+  return { ok: true as const, message: "Comment posted.", commentId: insertedComment?.id ?? null };
 }
 
 export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
@@ -253,6 +326,7 @@ export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
   const cid = String(commentId ?? "").trim();
   if (!cid) throw new Error("Comment id is required.");
 
+  let insertedNew = false;
   if (upvoted) {
     const { error } = await sb
       .from("cfm_feed_comment_upvotes")
@@ -261,11 +335,38 @@ export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
       .eq("user_id", user.id);
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await sb.from("cfm_feed_comment_upvotes")
+    const { error } = await sb
+      .from("cfm_feed_comment_upvotes")
       .insert({ comment_id: cid, user_id: user.id });
     const msg = (error?.message ?? "").toLowerCase();
     const wasDup = msg.includes("duplicate") || msg.includes("unique");
     if (error && !wasDup) throw new Error(error.message);
+    insertedNew = !error;
+  }
+
+  if (!upvoted && insertedNew) {
+    try {
+      const admin = supabaseAdmin();
+      const { data: comment } = await admin
+        .from("cfm_feed_comments")
+        .select("id,user_id,post_id")
+        .eq("id", cid)
+        .maybeSingle();
+
+      const c = (comment ?? null) as FeedCommentRow | null;
+      const ownerId = String(c?.user_id ?? "").trim();
+      const postId = String(c?.post_id ?? "").trim();
+      if (ownerId && ownerId !== user.id) {
+        await admin.from("cfm_noties").insert({
+          member_id: ownerId,
+          actor_user_id: user.id,
+          type: "comment_upvote",
+          post_id: postId || null,
+          comment_id: cid,
+        });
+      }
+    } catch {
+    }
   }
 
   revalidatePath("/feed");

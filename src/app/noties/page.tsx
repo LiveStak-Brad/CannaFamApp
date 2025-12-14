@@ -25,8 +25,26 @@ type Checklist = {
   link_visits_capped: number;
 };
 
+type Notie = {
+  id: string;
+  type: string;
+  is_read: boolean;
+  post_id: string | null;
+  comment_id: string | null;
+  actor_user_id: string | null;
+  created_at: string | null;
+};
+
 function clamp(n: number, max: number) {
   return Math.max(0, Math.min(max, n));
+}
+
+function notieLabel(type: string) {
+  const t = String(type ?? "").trim();
+  if (t === "comment_upvote") return "⬆️ Someone upvoted your comment";
+  if (t === "mention") return "@ You were mentioned";
+  if (t === "new_comment") return "💬 New comment";
+  return "🔔 Notification";
 }
 
 export default async function NotiesPage() {
@@ -35,6 +53,24 @@ export default async function NotiesPage() {
 
   const today = todayISODate();
   const { start: startOfTodayUTC, end: startOfTomorrowUTC } = centralDayRangeUTC(today);
+
+  let noties: Notie[] = [];
+  try {
+    const { data } = await sb
+      .from("cfm_noties")
+      .select("id,type,is_read,post_id,comment_id,actor_user_id,created_at")
+      .eq("member_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    noties = (data ?? []) as Notie[];
+
+    const unreadIds = noties.filter((n) => !n?.is_read).map((n) => n.id);
+    if (unreadIds.length) {
+      await sb.from("cfm_noties").update({ is_read: true }).in("id", unreadIds);
+    }
+  } catch {
+    noties = [];
+  }
 
   const [
     { count: commentsToday },
@@ -221,9 +257,35 @@ export default async function NotiesPage() {
         </div>
 
         <Card title="Notifications">
-          <div className="text-sm text-[color:var(--muted)]">
-            Coming next: comment activity + upvote notifications.
-          </div>
+          {noties.length ? (
+            <div className="space-y-2">
+              {noties.map((n) => {
+                const postId = n?.post_id ? String(n.post_id) : "";
+                const href = postId ? `/feed#${postId}` : "/feed";
+                return (
+                  <Link
+                    key={String(n.id)}
+                    href={href}
+                    className="block rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate">{notieLabel(n?.type)}</div>
+                        <div className="mt-1 text-xs text-[color:var(--muted)] truncate">
+                          {n?.created_at ? new Date(String(n.created_at)).toLocaleString() : ""}
+                        </div>
+                      </div>
+                      {!n?.is_read ? (
+                        <div className="text-xs font-semibold text-[rgba(209,31,42,0.95)]">NEW</div>
+                      ) : null}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-sm text-[color:var(--muted)]">No notifications yet.</div>
+          )}
         </Card>
 
         <Card title="Daily Checklist">

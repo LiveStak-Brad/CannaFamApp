@@ -102,6 +102,17 @@ create table if not exists public.cfm_awards (
   created_at timestamp default now()
 );
 
+create table if not exists public.cfm_noties (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null,
+  actor_user_id uuid,
+  type text not null,
+  post_id uuid,
+  comment_id uuid,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 -- Enable RLS
 alter table public.cfm_applications enable row level security;
 alter table public.cfm_members enable row level security;
@@ -110,6 +121,7 @@ alter table public.cfm_shares enable row level security;
 alter table public.cfm_feed_posts enable row level security;
 alter table public.cfm_feed_likes enable row level security;
 alter table public.cfm_awards enable row level security;
+alter table public.cfm_noties enable row level security;
 
 -- cfm_applications
 create policy "applications_insert_anyone"
@@ -236,6 +248,19 @@ on public.cfm_feed_likes
 for insert
 to authenticated
 with check (public.cfm_is_admin() or (public.cfm_is_approved_member() and user_id = auth.uid()));
+
+create policy "noties_select_own_or_admin"
+on public.cfm_noties
+for select
+to authenticated
+using (public.cfm_is_admin() or member_id = auth.uid());
+
+create policy "noties_update_own"
+on public.cfm_noties
+for update
+to authenticated
+using (public.cfm_is_admin() or member_id = auth.uid())
+with check (public.cfm_is_admin() or member_id = auth.uid());
 
 create policy "feed_likes_delete_own_or_admin"
 on public.cfm_feed_likes
