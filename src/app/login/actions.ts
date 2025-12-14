@@ -20,6 +20,32 @@ function formatErrorMessage(err: unknown) {
   }
 }
 
+export async function resendSignupVerification(formData: FormData): Promise<Result> {
+  try {
+    const email = String(formData.get("email") ?? "").trim();
+    if (!email) return { ok: false, message: "Email is required." };
+
+    const baseUrl = await getBaseUrlFromRequestOrEnv();
+    if (!baseUrl) return { ok: false, message: "Missing site URL." };
+    const emailRedirectTo = new URL("/auth/callback", baseUrl).toString();
+
+    const sb = await supabaseServer();
+    const { error } = await sb.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo,
+      },
+    });
+
+    if (error) return { ok: false, message: error.message || formatErrorMessage(error) };
+    return { ok: true };
+  } catch (err) {
+    console.error("resendSignupVerification failed", err);
+    return { ok: false, message: formatErrorMessage(err) };
+  }
+}
+
 async function getBaseUrlFromRequestOrEnv() {
   const base = env.siteUrl?.trim();
   if (base) return base;

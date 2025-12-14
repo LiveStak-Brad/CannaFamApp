@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   sendMagicLink,
   sendPasswordReset,
+  resendSignupVerification,
   signInWithPassword,
   signUpWithPassword,
 } from "@/app/login/actions";
@@ -57,7 +58,11 @@ export function LoginForm() {
     >
       {result?.ok ? (
         <Notice tone="success">
-          {mode === "magic" ? "Check your email for the sign-in link." : "Signed in."}
+          {typeof result.message === "string" && result.message.trim()
+            ? result.message
+            : mode === "magic"
+              ? "Check your email for the sign-in link."
+              : "Signed in."}
         </Notice>
       ) : null}
       {result && !result.ok ? <Notice tone="error">{errorText}</Notice> : null}
@@ -168,6 +173,33 @@ export function LoginForm() {
           }}
         >
           Send password reset email
+        </Button>
+      ) : null}
+
+      {mode === "password" ? (
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={pending}
+          onClick={() => {
+            setResult(null);
+            startTransition(async () => {
+              const formEl = formRef.current;
+              if (!formEl) {
+                setResult({ ok: false, message: "Form not ready. Please try again." });
+                return;
+              }
+              const fd = new FormData(formEl);
+              const res = await resendSignupVerification(fd);
+              if (res.ok) {
+                setResult({ ok: true, message: "Verification email sent. Check your inbox." });
+              } else {
+                setResult({ ok: false, message: res.message });
+              }
+            });
+          }}
+        >
+          Resend verification email
         </Button>
       ) : null}
     </form>

@@ -10,6 +10,7 @@ import {
   approveApplication,
   rejectApplication,
   removeMember,
+  sendMemberInvite,
   createFeedPost,
   grantDailyGiftBonus,
   assignAward,
@@ -398,27 +399,52 @@ export function AdminActions({
                     {m.user_id ? " • linked" : " • unlinked"}
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={pending}
-                  onClick={() => {
-                    setMsg(null);
-                    startTransition(async () => {
-                      try {
-                        await removeMember(m.id);
-                        setMsg({ tone: "success", text: `Removed: ${m.favorited_username}` });
-                      } catch (e) {
-                        setMsg({
-                          tone: "error",
-                          text: e instanceof Error ? e.message : "Remove failed",
+                <div className="flex items-center gap-2">
+                  {!m.user_id ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={pending}
+                      onClick={() => {
+                        setMsg(null);
+                        startTransition(async () => {
+                          try {
+                            const res = await sendMemberInvite(m.id);
+                            setMsg({ tone: "success", text: res.message });
+                          } catch (e) {
+                            setMsg({
+                              tone: "error",
+                              text: e instanceof Error ? e.message : "Invite failed",
+                            });
+                          }
                         });
-                      }
-                    });
-                  }}
-                >
-                  Remove
-                </Button>
+                      }}
+                    >
+                      Send invite
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={pending}
+                    onClick={() => {
+                      setMsg(null);
+                      startTransition(async () => {
+                        try {
+                          await removeMember(m.id);
+                          setMsg({ tone: "success", text: `Removed: ${m.favorited_username}` });
+                        } catch (e) {
+                          setMsg({
+                            tone: "error",
+                            text: e instanceof Error ? e.message : "Remove failed",
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
               </div>
             ))
           ) : (
