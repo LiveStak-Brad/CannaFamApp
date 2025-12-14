@@ -1,6 +1,7 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
+import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ const CATEGORIES = [
 ];
 
 export default async function AwardsPage() {
+  await requireUser();
   const sb = await supabaseServer();
 
   const { data: awards } = await sb
