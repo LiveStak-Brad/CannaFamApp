@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --background: #070a08;
+  --foreground: #e7efe9;
+  --card: rgba(16, 20, 18, 0.78);
+  --border: rgba(255, 255, 255, 0.08);
+  --muted: rgba(231, 239, 233, 0.68);
+  --accent: #d11f2a;
+  --accent-2: #ff3b47;
+  --accent-green: #19c060;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #070a08;
+    --foreground: #e7efe9;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto,
+    Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: rgba(209, 31, 42, 0.28);
+}
