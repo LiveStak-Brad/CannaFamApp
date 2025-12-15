@@ -1301,6 +1301,7 @@ export function LikeButton({
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [openWhoLiked, setOpenWhoLiked] = useState(false);
 
   const [localLiked, setLocalLiked] = useState(liked);
   const [localCount, setLocalCount] = useState(likeCount);
@@ -1312,41 +1313,55 @@ export function LikeButton({
 
   return (
     <div className="space-y-1">
-      <Button
-        type="button"
-        variant="secondary"
-        className="px-3 py-2 text-xs"
-        disabled={pending || !canEarn}
-        onClick={() => {
-          if (!canEarn) return;
-          setMsg(null);
-          startTransition(async () => {
-            const nextLiked = !localLiked;
-            setLocalLiked(nextLiked);
-            setLocalCount((c) => Math.max(0, c + (nextLiked ? 1 : -1)));
-            try {
-              await toggleLike(postId, localLiked);
-              setMsg(localLiked ? "💔 Like removed" : "❤️ Like logged (+1)");
-            } catch (e) {
-              setLocalLiked(localLiked);
-              setLocalCount(likeCount);
-              setMsg(e instanceof Error ? e.message : "Like failed");
-            }
-          });
-        }}
-      >
-        {localLiked ? "Liked" : pending ? "..." : "Like"}
-      </Button>
-      <div className="text-[11px] text-[color:var(--muted)]">
-        <LikeCountButton
-          count={localCount}
-          canOpen={localCount > 0}
-          likers={likers}
-          awards={awards}
-          leaderboard={leaderboard}
-        />
+      <div className="inline-flex overflow-hidden rounded-xl border border-[color:var(--border)] bg-[color:var(--card)]">
+        <button
+          type="button"
+          disabled={pending || !canEarn}
+          className="px-3 py-2 text-xs font-semibold text-[color:var(--foreground)] transition active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => {
+            if (!canEarn) return;
+            setMsg(null);
+            startTransition(async () => {
+              const nextLiked = !localLiked;
+              setLocalLiked(nextLiked);
+              setLocalCount((c) => Math.max(0, c + (nextLiked ? 1 : -1)));
+              try {
+                await toggleLike(postId, localLiked);
+                setMsg(localLiked ? "💔 Like removed" : "❤️ Like logged (+1)");
+              } catch (e) {
+                setLocalLiked(liked);
+                setLocalCount(likeCount);
+                setMsg(e instanceof Error ? e.message : "Like failed");
+              }
+            });
+          }}
+        >
+          {localLiked ? "Liked" : pending ? "..." : "Like"}
+        </button>
+        <button
+          type="button"
+          disabled={pending || localCount <= 0}
+          className="border-l border-[color:var(--border)] px-3 py-2 text-xs font-semibold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (localCount <= 0) return;
+            setOpenWhoLiked(true);
+          }}
+          aria-label="View who liked"
+        >
+          {localCount}
+        </button>
       </div>
       {msg ? <div className="text-xs text-[color:var(--muted)]">{msg}</div> : null}
+
+      <WhoLikedModal
+        open={openWhoLiked}
+        count={localCount}
+        likers={likers}
+        awards={awards}
+        leaderboard={leaderboard}
+        onClose={() => setOpenWhoLiked(false)}
+      />
     </div>
   );
 }
