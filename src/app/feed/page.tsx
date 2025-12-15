@@ -6,17 +6,24 @@ import { supabaseServer } from "@/lib/supabase/server";
 import {
   FeedAdminPostControls,
   FeedMedia,
+  GiftButton,
+  GiftSummary,
   FeedShareButton,
   LikeButton,
   LikeCountButton,
   CommentsButton,
   type FeedPost,
+  type GiftTopGifter,
   type LikerProfile,
 } from "./ui";
 
 export const runtime = "nodejs";
 
-export default async function FeedPage() {
+export default async function FeedPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const sb = await supabaseServer();
 
   const user = await getAuthedUserOrNull();
@@ -34,6 +41,14 @@ export default async function FeedPage() {
     ? await sb.from("cfm_members").select("id").eq("user_id", user.id).maybeSingle()
     : { data: null };
   const canEarn = !!user && !!member;
+
+  const giftParam = typeof searchParams?.gift === "string" ? searchParams?.gift : null;
+  const giftNotice =
+    giftParam === "success"
+      ? "✅ Gift checkout completed. If payment succeeds, it will show up shortly."
+      : giftParam === "cancel"
+        ? "Gift checkout canceled."
+        : null;
 
   const { data: awards } = await sb
     .from("cfm_awards")
@@ -66,6 +81,107 @@ export default async function FeedPage() {
   }
 
   const postIds = (posts ?? []).map((p) => p.id);
+
+  // Monetization settings + presets (safe defaults)
+  const { data: monetizationSettings } = await sb
+    .from("cfm_monetization_settings")
+    .select("enable_post_gifts,allow_custom_amount,min_gift_cents,max_gift_cents,currency")
+    .limit(1)
+    .maybeSingle();
+
+  const enablePostGifts = !!(monetizationSettings as any)?.enable_post_gifts;
+  const allowCustom = !!(monetizationSettings as any)?.allow_custom_amount;
+  const minCents = Number((monetizationSettings as any)?.min_gift_cents ?? 100);
+  const maxCents = Number((monetizationSettings as any)?.max_gift_cents ?? 20000);
+
+  const { data: presetRows } = await sb
+    .from("cfm_gift_presets")
+    .select("amount_cents")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+
+  const giftPresets = ((presetRows ?? []) as Array<{ amount_cents: number }>).map((r) => Number(r.amount_cents));
+  const presets = giftPresets.length ? giftPresets : [100, 300, 500, 1000, 2000];
+
+  // Gift totals + top gifters per post (paid only)
+  const giftsByPost = new Map<
+    string,
+    {
+      totalCents: number;
+      topGifters: GiftTopGifter[];
+    }
+  >();
+
+  if (postIds.length) {
+    try {
+      const { data: giftRows } = await sb
+        .from("cfm_post_gifts")
+        .select("post_id,gifter_user_id,amount_cents,status")
+        .in("post_id", postIds)
+        .in("status", ["paid"])
+        .limit(5000);
+
+      const rows = (giftRows ?? []) as Array<{
+        post_id: string;
+        gifter_user_id: string;
+        amount_cents: number;
+        status: string;
+      }>;
+
+      const gifterIds = Array.from(new Set(rows.map((r) => String(r.gifter_user_id)))).filter(Boolean);
+      const gifterProfiles = new Map<string, { favorited_username: string; photo_url: string | null }>();
+
+      if (gifterIds.length) {
+        const { data: gifters } = await sb
+          .from("cfm_public_member_ids")
+          .select("user_id,favorited_username,photo_url")
+          .in("user_id", gifterIds)
+          .limit(2000);
+
+        for (const g of (gifters ?? []) as any[]) {
+          if (!g?.user_id) continue;
+          gifterProfiles.set(String(g.user_id), {
+            favorited_username: String(g.favorited_username ?? ""),
+            photo_url: (g.photo_url ?? null) as string | null,
+          });
+        }
+      }
+
+      const totalsByPost = new Map<string, number>();
+      const totalsByPostAndGifter = new Map<string, Map<string, number>>();
+
+      for (const r of rows) {
+        const pid = String(r.post_id);
+        const uid = String(r.gifter_user_id);
+        const cents = Number(r.amount_cents ?? 0);
+        if (!pid || !uid || !Number.isFinite(cents) || cents <= 0) continue;
+
+        totalsByPost.set(pid, (totalsByPost.get(pid) ?? 0) + cents);
+        const byUser = totalsByPostAndGifter.get(pid) ?? new Map<string, number>();
+        byUser.set(uid, (byUser.get(uid) ?? 0) + cents);
+        totalsByPostAndGifter.set(pid, byUser);
+      }
+
+      for (const pid of postIds) {
+        const totalCents = totalsByPost.get(pid) ?? 0;
+        const byUser = totalsByPostAndGifter.get(pid) ?? new Map<string, number>();
+        const top = Array.from(byUser.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([uid, total]) => {
+            const prof = gifterProfiles.get(uid);
+            return {
+              favorited_username: prof?.favorited_username ?? "Member",
+              photo_url: prof?.photo_url ?? null,
+              total_cents: total,
+            };
+          });
+
+        giftsByPost.set(pid, { totalCents, topGifters: top });
+      }
+    } catch {
+    }
+  }
 
   // Public-safe member list for @mention autocomplete
   const { data: mentionCandidatesRaw } = await sb
@@ -273,6 +389,12 @@ export default async function FeedPage() {
           </div>
         </div>
 
+        {giftNotice ? (
+          <Card>
+            <div className="text-sm text-[color:var(--muted)]">{giftNotice}</div>
+          </Card>
+        ) : null}
+
         <div className="space-y-3">
           {posts?.length ? (
             posts.map((p) => (
@@ -289,6 +411,12 @@ export default async function FeedPage() {
                   {p.media_url && p.media_type ? (
                     <FeedMedia mediaUrl={p.media_url} mediaType={p.media_type} />
                   ) : null}
+
+                  <GiftSummary
+                    totalCents={giftsByPost.get(p.id)?.totalCents ?? 0}
+                    topGifters={giftsByPost.get(p.id)?.topGifters ?? []}
+                  />
+
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-[color:var(--muted)]">
                       <LikeCountButton
@@ -312,6 +440,14 @@ export default async function FeedPage() {
                         isAdmin={canEditPosts}
                         awards={(awards ?? []) as any}
                         leaderboard={(leaderboard ?? []) as any}
+                      />
+                      <GiftButton
+                        postId={p.id}
+                        canGift={canEarn && enablePostGifts}
+                        presets={presets}
+                        allowCustom={allowCustom}
+                        minCents={minCents}
+                        maxCents={maxCents}
                       />
                       <FeedShareButton
                         postId={p.id}

@@ -167,8 +167,8 @@ export async function createPostGiftCheckoutSession(postId: string, amountCents:
   const s = stripe();
   const session = await s.checkout.sessions.create({
     mode: "payment",
-    success_url: `${env.siteUrl}/feed?gift=success&post_id=${encodeURIComponent(pid)}`,
-    cancel_url: `${env.siteUrl}/feed?gift=cancel&post_id=${encodeURIComponent(pid)}`,
+    success_url: `${env.siteUrl}/feed?gift=success&gift_id=${encodeURIComponent(String(giftRow.id))}&post_id=${encodeURIComponent(pid)}`,
+    cancel_url: `${env.siteUrl}/feed?gift=cancel&gift_id=${encodeURIComponent(String(giftRow.id))}&post_id=${encodeURIComponent(pid)}`,
     line_items: [
       {
         quantity: 1,

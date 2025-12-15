@@ -174,6 +174,69 @@ function GiftModal({
   );
 }
 
+export function GiftButton({
+  postId,
+  canGift,
+  presets,
+  allowCustom,
+  minCents,
+  maxCents,
+}: {
+  postId: string;
+  canGift: boolean;
+  presets: number[];
+  allowCustom: boolean;
+  minCents: number;
+  maxCents: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-1">
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={pending || !canGift}
+        onClick={() => {
+          if (!canGift) return;
+          setMsg(null);
+          setOpen(true);
+        }}
+      >
+        Gift
+      </Button>
+
+      {msg ? <div className="text-xs text-[color:var(--muted)]">{msg}</div> : null}
+
+      <GiftModal
+        open={open}
+        postId={postId}
+        pending={pending}
+        presets={presets}
+        allowCustom={allowCustom}
+        minCents={minCents}
+        maxCents={maxCents}
+        onClose={() => setOpen(false)}
+        onStartCheckout={(amountCents) => {
+          if (!canGift) return;
+          setMsg(null);
+          startTransition(async () => {
+            try {
+              const res = await createPostGiftCheckoutSession(postId, amountCents);
+              if (!res?.url) throw new Error("Checkout failed.");
+              window.location.href = res.url;
+            } catch (e) {
+              setMsg(e instanceof Error ? e.message : "Checkout failed");
+            }
+          });
+        }}
+      />
+    </div>
+  );
+}
+
 export function GiftSummary({
   totalCents,
   topGifters,

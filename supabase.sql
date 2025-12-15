@@ -145,6 +145,40 @@ create table if not exists public.cfm_noties (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.cfm_monetization_settings (
+  id uuid primary key default gen_random_uuid(),
+  enable_post_gifts boolean not null default false,
+  allow_custom_amount boolean not null default true,
+  min_gift_cents int not null default 100,
+  max_gift_cents int not null default 20000,
+  currency text not null default 'usd',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.cfm_gift_presets (
+  id uuid primary key default gen_random_uuid(),
+  amount_cents int not null,
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.cfm_post_gifts (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.cfm_feed_posts(id) on delete cascade,
+  gifter_user_id uuid not null,
+  recipient_user_id uuid,
+  amount_cents int not null,
+  currency text not null default 'usd',
+  provider text not null default 'stripe',
+  status text not null default 'pending',
+  stripe_session_id text,
+  stripe_payment_intent_id text,
+  stripe_event_id text,
+  paid_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 -- Enable RLS
 alter table public.cfm_applications enable row level security;
 alter table public.cfm_members enable row level security;
@@ -154,6 +188,9 @@ alter table public.cfm_feed_posts enable row level security;
 alter table public.cfm_feed_likes enable row level security;
 alter table public.cfm_awards enable row level security;
 alter table public.cfm_noties enable row level security;
+alter table public.cfm_monetization_settings enable row level security;
+alter table public.cfm_gift_presets enable row level security;
+alter table public.cfm_post_gifts enable row level security;
 
 -- cfm_applications
 create policy "applications_insert_anyone"
@@ -293,6 +330,66 @@ for update
 to authenticated
 using (public.cfm_is_admin() or member_id = auth.uid())
 with check (public.cfm_is_admin() or member_id = auth.uid());
+
+create policy "monetization_settings_select_anyone"
+on public.cfm_monetization_settings
+for select
+to anon, authenticated
+using (true);
+
+create policy "monetization_settings_insert_admin_only"
+on public.cfm_monetization_settings
+for insert
+to authenticated
+with check (public.cfm_is_admin());
+
+create policy "monetization_settings_update_admin_only"
+on public.cfm_monetization_settings
+for update
+to authenticated
+using (public.cfm_is_admin())
+with check (public.cfm_is_admin());
+
+create policy "gift_presets_select_anyone"
+on public.cfm_gift_presets
+for select
+to anon, authenticated
+using (true);
+
+create policy "gift_presets_insert_admin_only"
+on public.cfm_gift_presets
+for insert
+to authenticated
+with check (public.cfm_is_admin());
+
+create policy "gift_presets_update_admin_only"
+on public.cfm_gift_presets
+for update
+to authenticated
+using (public.cfm_is_admin())
+with check (public.cfm_is_admin());
+
+create policy "post_gifts_select_authenticated"
+on public.cfm_post_gifts
+for select
+to authenticated
+using (true);
+
+create policy "post_gifts_insert_member_only"
+on public.cfm_post_gifts
+for insert
+to authenticated
+with check (
+  public.cfm_is_admin()
+  or (public.cfm_is_approved_member() and gifter_user_id = auth.uid())
+);
+
+create policy "post_gifts_update_admin_only"
+on public.cfm_post_gifts
+for update
+to authenticated
+using (public.cfm_is_admin())
+with check (public.cfm_is_admin());
 
 create policy "feed_likes_delete_own_or_admin"
 on public.cfm_feed_likes
