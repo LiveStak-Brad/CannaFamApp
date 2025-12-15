@@ -776,7 +776,7 @@ begin
     select count(*)::int as streak_points
     from ranked
     where a is not null
-      and d = (a - ((rn - 1)::int));
+      and d = (a - ((rn - 1)::int))
   ) st on true
   left join lateral (
     select count(*)::int as checkin_points
