@@ -513,6 +513,7 @@ begin
       + coalesce(ci.checkin_points, 0)
       + (coalesce(gb.gift_bonus_days, 0) * 5)
       + coalesce(sp.spin_points, 0)
+      + coalesce(gp.gift_points, 0)
     )::int as total_points
   from public.cfm_members m
   left join lateral (
@@ -559,6 +560,12 @@ begin
     from public.cfm_daily_spins ds
     where ds.user_id = m.user_id
   ) sp on true
+  left join lateral (
+    select (coalesce(sum(pg.amount_cents), 0) / 100)::int as gift_points
+    from public.cfm_post_gifts pg
+    where pg.gifter_user_id = m.user_id
+      and pg.status = 'paid'
+  ) gp on true
   where m.user_id is not null
   order by total_points desc, m.created_at asc
   limit greatest(1, limit_n);
