@@ -2,14 +2,11 @@ import Link from "next/link";
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
-import { updateMyProfile } from "./actions";
 import { HubCheckInButton, HubSpinButton } from "./ui";
 
 export const runtime = "nodejs";
@@ -187,75 +184,20 @@ export default async function HubPage() {
                 <div className="text-sm font-semibold">{member.favorited_username}</div>
               ) : null}
 
-              <form
-                action={updateMyProfile}
-                method="post"
-                encType="multipart/form-data"
-                className="space-y-3"
-              >
-                <Input
-                  label="Favorited username"
-                  name="favorited_username"
-                  defaultValue={member?.favorited_username ?? ""}
-                  required
-                  placeholder="Your Favorited username"
-                />
-                <div className="space-y-1">
-                  <div className="text-sm font-medium">Profile photo</div>
-                  <input
-                    type="file"
-                    name="photo"
-                    accept="image/*"
-                    className="block w-full text-sm text-[color:var(--muted)] file:mr-3 file:rounded-lg file:border file:border-[color:var(--border)] file:bg-black/20 file:px-3 file:py-2 file:text-sm file:text-[color:var(--foreground)]"
-                  />
-                  <div className="text-xs text-[color:var(--muted)]">
-                    Upload a new photo to replace your current one.
-                  </div>
-                </div>
-                <Textarea
-                  label="Bio"
-                  name="bio"
-                  defaultValue={member?.bio ?? ""}
-                  placeholder="Add a short bio for your mini profile"
-                />
-
-                <Input
-                  label="Link"
-                  name="public_link"
-                  defaultValue={member?.public_link ?? ""}
-                  placeholder="https://..."
-                />
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Instagram"
-                    name="instagram_link"
-                    defaultValue={member?.instagram_link ?? ""}
-                    placeholder="@handle or URL"
-                  />
-                  <Input
-                    label="X"
-                    name="x_link"
-                    defaultValue={member?.x_link ?? ""}
-                    placeholder="@handle or URL"
-                  />
-                  <Input
-                    label="TikTok"
-                    name="tiktok_link"
-                    defaultValue={member?.tiktok_link ?? ""}
-                    placeholder="@handle or URL"
-                  />
-                  <Input
-                    label="YouTube"
-                    name="youtube_link"
-                    defaultValue={member?.youtube_link ?? ""}
-                    placeholder="@handle or URL"
-                  />
-                </div>
-                <Button type="submit" variant="secondary">
-                  Save profile
+              <div className="flex flex-wrap gap-2">
+                <Button as="link" href="/me" variant="secondary">
+                  Edit profile
                 </Button>
-              </form>
+                {member?.favorited_username ? (
+                  <Button
+                    as="link"
+                    href={`/u/${encodeURIComponent(member.favorited_username)}`}
+                    variant="secondary"
+                  >
+                    View profile
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </Card>
         ) : null}

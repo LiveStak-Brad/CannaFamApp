@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,24 +116,34 @@ export function MiniProfileModal({
         <Card title="Member">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              {photoUrl ? (
-                <img
-                  src={photoUrl}
-                  alt={subject.favorited_username}
-                  className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.05)] text-lg font-semibold">
-                  {initial}
-                </div>
-              )}
+              <Link
+                href={`/u/${encodeURIComponent(subject.favorited_username)}`}
+                onClick={() => onClose()}
+                className="shrink-0"
+              >
+                {photoUrl ? (
+                  <img
+                    src={photoUrl}
+                    alt={subject.favorited_username}
+                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.05)] text-lg font-semibold">
+                    {initial}
+                  </div>
+                )}
+              </Link>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-base font-semibold truncate">
+                    <Link
+                      href={`/u/${encodeURIComponent(subject.favorited_username)}`}
+                      onClick={() => onClose()}
+                      className="block text-base font-semibold truncate"
+                    >
                       {subject.favorited_username}
-                    </div>
+                    </Link>
                     <div className="text-xs text-[color:var(--muted)]">Mini profile</div>
                   </div>
                   {socials.length ? (
