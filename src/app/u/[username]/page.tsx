@@ -67,6 +67,9 @@ export default async function UserProfilePage({
           <div className="mt-2 text-xs text-[color:var(--muted)]">
             Lookup: <span className="font-mono">{uname || "(empty)"}</span>
           </div>
+          <div className="mt-2 text-xs text-[color:var(--muted)]">
+            Params: <span className="font-mono">{JSON.stringify(params)}</span>
+          </div>
         </Card>
       </Container>
     );

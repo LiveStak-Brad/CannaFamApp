@@ -26,52 +26,86 @@ async function getBaseUrlFromRequestOrEnv() {
   if (base) return base;
 
   const h = await headers();
-  const origin = h.get("origin") ?? "";
+  const xfProto = (h.get("x-forwarded-proto") ?? "").trim();
+  const xfHost = (h.get("x-forwarded-host") ?? "").trim();
+  const host = (h.get("host") ?? "").trim();
+
+  const proto = xfProto || "https";
+  const finalHost = xfHost || host;
+  if (finalHost) return `${proto}://${finalHost}`;
+
+  const origin = (h.get("origin") ?? "").trim();
   return origin;
 }
 
 export async function sendMemberInvite(memberId: string) {
-  await requireAdmin();
-  const sb = supabaseAdmin();
+  try {
+    await requireAdmin();
 
-  const mid = String(memberId ?? "").trim();
-  if (!mid) throw new Error("memberId is required.");
+    if (!env.supabaseServiceRoleKey) {
+      return {
+        ok: false as const,
+        message:
+          "Missing SUPABASE_SERVICE_ROLE_KEY on the server (Vercel env). This is required to send invites.",
+      };
+    }
 
-  const { data: member, error: memberErr } = await sb
-    .from("cfm_members")
-    .select("id,user_id,favorited_username")
-    .eq("id", mid)
-    .maybeSingle();
-  if (memberErr) throw new Error(memberErr.message);
-  if (!member) throw new Error("Member not found.");
-  if (member.user_id) {
-    return { ok: true as const, message: "Member is already linked." };
+    const sb = supabaseAdmin();
+
+    const mid = String(memberId ?? "").trim();
+    if (!mid) return { ok: false as const, message: "memberId is required." };
+
+    const { data: member, error: memberErr } = await sb
+      .from("cfm_members")
+      .select("id,user_id,favorited_username")
+      .eq("id", mid)
+      .maybeSingle();
+    if (memberErr) return { ok: false as const, message: memberErr.message };
+    if (!member) return { ok: false as const, message: "Member not found." };
+    if (member.user_id) {
+      return { ok: true as const, message: "Member is already linked." };
+    }
+
+    const { data: app, error: appErr } = await sb
+      .from("cfm_applications")
+      .select("email,status")
+      .eq("favorited_username", member.favorited_username)
+      .eq("status", "approved")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (appErr) return { ok: false as const, message: appErr.message };
+
+    const email = String(app?.email ?? "").trim().toLowerCase();
+    if (!email) {
+      return { ok: false as const, message: "No approved application email found for this member." };
+    }
+
+    const baseUrl = await getBaseUrlFromRequestOrEnv();
+    if (!baseUrl) {
+      return {
+        ok: false as const,
+        message:
+          "Missing site URL. Set NEXT_PUBLIC_SITE_URL in your Vercel env (recommended), or ensure the request has forwarded host headers.",
+      };
+    }
+
+    const redirectTo = new URL("/auth/callback", baseUrl);
+    redirectTo.searchParams.set("next", "/hub");
+
+    const { error: inviteErr } = await sb.auth.admin.inviteUserByEmail(email, {
+      redirectTo: redirectTo.toString(),
+    });
+    if (inviteErr) return { ok: false as const, message: inviteErr.message };
+
+    revalidatePath("/admin");
+    return { ok: true as const, message: `Invite sent to ${email}.` };
+  } catch (e) {
+    return {
+      ok: false as const,
+      message: e instanceof Error ? e.message : "Invite failed",
+    };
   }
-
-  const { data: app, error: appErr } = await sb
-    .from("cfm_applications")
-    .select("email,status")
-    .eq("favorited_username", member.favorited_username)
-    .eq("status", "approved")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (appErr) throw new Error(appErr.message);
-
-  const email = String(app?.email ?? "").trim().toLowerCase();
-  if (!email) throw new Error("No approved application email found for this member.");
-
-  const baseUrl = await getBaseUrlFromRequestOrEnv();
-  if (!baseUrl) throw new Error("Missing site URL.");
-  const redirectTo = new URL("/auth/callback", baseUrl);
-  redirectTo.searchParams.set("next", "/hub");
-
-  const { error: inviteErr } = await sb.auth.admin.inviteUserByEmail(email, {
-    redirectTo: redirectTo.toString(),
-  });
-  if (inviteErr) throw new Error(inviteErr.message);
-
-  return { ok: true as const, message: `Invite sent to ${email}.` };
 }
 
 export async function linkMemberByEmail(memberId: string, email: string) {
