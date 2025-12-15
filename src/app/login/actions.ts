@@ -200,6 +200,35 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
           if (upsertErr) {
             console.warn("signUpWithPassword: failed to pre-create cfm_members", upsertErr);
           }
+
+          try {
+            const { data: csRow, error: csErr } = await admin
+              .from("cfm_members")
+              .select("user_id")
+              .ilike("favorited_username", "cannastreams")
+              .limit(1)
+              .maybeSingle();
+            if (csErr) {
+              console.warn("signUpWithPassword: cannastreams lookup failed", csErr);
+            } else {
+              const csId = String((csRow as any)?.user_id ?? "").trim();
+              if (csId && csId !== newUserId) {
+                const { error: f1 } = await admin.from("cfm_follows").upsert(
+                  { follower_user_id: newUserId, followed_user_id: csId },
+                  { onConflict: "follower_user_id,followed_user_id" },
+                );
+                if (f1) console.warn("signUpWithPassword: auto-follow cannastreams failed", f1);
+
+                const { error: f2 } = await admin.from("cfm_follows").upsert(
+                  { follower_user_id: csId, followed_user_id: newUserId },
+                  { onConflict: "follower_user_id,followed_user_id" },
+                );
+                if (f2) console.warn("signUpWithPassword: auto-follow back failed", f2);
+              }
+            }
+          } catch (e) {
+            console.warn("signUpWithPassword: auto-follow cannastreams failed", e);
+          }
         } catch (e) {
           console.warn("signUpWithPassword: failed to pre-create cfm_members", e);
         }

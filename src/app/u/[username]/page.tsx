@@ -7,6 +7,7 @@ import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
 import { todayISODate } from "@/lib/utils";
+import { FollowButton } from "./ui";
 
 export const runtime = "nodejs";
 
@@ -165,6 +166,29 @@ export default async function UserProfilePage({
 
   const isOwnProfile = !!linkedUserId && String(authedUser.id) === String(linkedUserId);
 
+  const followerCount = linkedUserId
+    ? (await sb
+        .from("cfm_follows")
+        .select("id", { count: "exact", head: true })
+        .eq("followed_user_id", linkedUserId)).count ?? 0
+    : 0;
+
+  const followingCount = linkedUserId
+    ? (await sb
+        .from("cfm_follows")
+        .select("id", { count: "exact", head: true })
+        .eq("follower_user_id", linkedUserId)).count ?? 0
+    : 0;
+
+  const isFollowing = linkedUserId
+    ? !!(await sb
+        .from("cfm_follows")
+        .select("id")
+        .eq("follower_user_id", authedUser.id)
+        .eq("followed_user_id", linkedUserId)
+        .maybeSingle()).data
+    : false;
+
   const { data: adminRow } = await sb
     .from("cfm_admins")
     .select("role")
@@ -309,6 +333,17 @@ export default async function UserProfilePage({
               )}
 
               <div className="min-w-0 flex-1 space-y-2">
+                {linkedUserId ? (
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-[color:var(--muted)]">
+                    <span>Followers: {followerCount}</span>
+                    <span>Following: {followingCount}</span>
+                  </div>
+                ) : null}
+
+                {!isOwnProfile && linkedUserId ? (
+                  <FollowButton targetUserId={linkedUserId} initialFollowing={isFollowing} />
+                ) : null}
+
                 {profile?.bio ? (
                   <div className="text-sm text-[color:var(--muted)] whitespace-pre-wrap">
                     {profile.bio}

@@ -247,6 +247,21 @@ create table if not exists public.cfm_feed_likes (
   unique (post_id, user_id)
 );
 
+-- Follows
+create table if not exists public.cfm_follows (
+  id uuid primary key default gen_random_uuid(),
+  follower_user_id uuid not null,
+  followed_user_id uuid not null,
+  created_at timestamptz not null default now(),
+  unique (follower_user_id, followed_user_id)
+);
+
+create index if not exists cfm_follows_follower_idx
+  on public.cfm_follows (follower_user_id);
+
+create index if not exists cfm_follows_followed_idx
+  on public.cfm_follows (followed_user_id);
+
 -- Awards
 create table if not exists public.cfm_awards (
   id uuid primary key default gen_random_uuid(),
@@ -328,6 +343,7 @@ alter table public.cfm_checkins enable row level security;
 alter table public.cfm_shares enable row level security;
 alter table public.cfm_feed_posts enable row level security;
 alter table public.cfm_feed_likes enable row level security;
+alter table public.cfm_follows enable row level security;
 alter table public.cfm_awards enable row level security;
 alter table public.cfm_noties enable row level security;
 alter table public.cfm_monetization_settings enable row level security;
@@ -405,6 +421,29 @@ on public.cfm_members
 for delete
 to authenticated
 using (public.cfm_is_admin());
+
+-- cfm_follows
+drop policy if exists "follows_select_authenticated" on public.cfm_follows;
+drop policy if exists "follows_insert_self_or_admin" on public.cfm_follows;
+drop policy if exists "follows_delete_self_or_admin" on public.cfm_follows;
+
+create policy "follows_select_authenticated"
+on public.cfm_follows
+for select
+to authenticated
+using (true);
+
+create policy "follows_insert_self_or_admin"
+on public.cfm_follows
+for insert
+to authenticated
+with check (public.cfm_is_admin() or follower_user_id = auth.uid());
+
+create policy "follows_delete_self_or_admin"
+on public.cfm_follows
+for delete
+to authenticated
+using (public.cfm_is_admin() or follower_user_id = auth.uid());
 
 -- cfm_checkins
 create policy "checkins_select_own"
