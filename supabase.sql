@@ -67,9 +67,23 @@ set favorited_username = btrim(favorited_username)
 where favorited_username is not null
   and favorited_username <> btrim(favorited_username);
 
-alter table public.cfm_members
-  add constraint if not exists cfm_members_username_not_blank
-  check (btrim(favorited_username) <> '');
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'cfm_members'
+      and c.conname = 'cfm_members_username_not_blank'
+  ) then
+    alter table public.cfm_members
+      add constraint cfm_members_username_not_blank
+      check (btrim(favorited_username) <> '');
+  end if;
+end
+$$;
 
 create unique index if not exists cfm_members_username_unique
   on public.cfm_members (lower(btrim(favorited_username)));
