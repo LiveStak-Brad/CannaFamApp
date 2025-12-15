@@ -120,20 +120,29 @@ export async function updateMyProfile(formData: FormData) {
 
   if (!favorited_username) throw new Error("Username is required.");
 
-  if (photo instanceof File && photo.size > 0) {
-    const mime = (photo.type || "").toLowerCase();
+  const upload =
+    photo &&
+    typeof photo === "object" &&
+    typeof (photo as any).arrayBuffer === "function" &&
+    Number((photo as any).size ?? 0) > 0
+      ? (photo as any)
+      : null;
+
+  if (upload) {
+    const mime = String(upload.type ?? "").toLowerCase();
     if (!mime.startsWith("image/")) {
       throw new Error("Profile photo must be an image.");
     }
 
-    const originalExt = (photo.name.split(".").pop() || "").toLowerCase();
+    const name = String(upload.name ?? "upload");
+    const originalExt = (name.split(".").pop() || "").toLowerCase();
     const ext =
       (originalExt && /^[a-z0-9]+$/.test(originalExt) ? originalExt : "") ||
       guessExtFromMime(mime) ||
       "jpg";
 
     const objectPath = `profiles/${user.id}/${randomUUID()}.${ext}`;
-    const bytes = Buffer.from(await photo.arrayBuffer());
+    const bytes = Buffer.from(await upload.arrayBuffer());
 
     const { error: uploadErr } = await sb.storage
       .from("cfm-photos")
