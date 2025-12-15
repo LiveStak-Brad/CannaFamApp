@@ -27,6 +27,16 @@ type FeedComment = {
   is_hidden?: boolean | null;
 };
 
+type AwardRow = {
+  id: string;
+  user_id: string | null;
+  award_type: string | null;
+  week_start: string | null;
+  week_end: string | null;
+  notes: string | null;
+  created_at: string | null;
+};
+
 function fmtTime(iso: string | null) {
   if (!iso) return "";
   try {
@@ -157,6 +167,24 @@ export default async function UserProfilePage({
     comments = (commentRows ?? []) as unknown as FeedComment[];
   }
 
+  let awards: AwardRow[] = [];
+  if (linkedUserId) {
+    const { data: awardRows } = await sb
+      .from("cfm_awards")
+      .select("id,user_id,award_type,week_start,week_end,notes,created_at")
+      .eq("user_id", linkedUserId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    awards = (awardRows ?? []) as unknown as AwardRow[];
+  }
+
+  const awardCounts = new Map<string, number>();
+  for (const a of awards) {
+    const t = String(a.award_type ?? "").trim();
+    if (!t) continue;
+    awardCounts.set(t, (awardCounts.get(t) ?? 0) + 1);
+  }
+
   const socials: Array<{ label: string; href: string }> = [];
   if (profile?.public_link) socials.push({ label: "Link", href: profile.public_link });
   if (profile?.instagram_link) socials.push({ label: "IG", href: profile.instagram_link });
@@ -273,6 +301,51 @@ export default async function UserProfilePage({
             </div>
           ) : (
             <div className="text-sm text-[color:var(--muted)]">No comments yet.</div>
+          )}
+        </Card>
+
+        <Card title="Awards">
+          {!linkedUserId ? (
+            <div className="text-sm text-[color:var(--muted)]">
+              Awards will appear once this member links their account.
+            </div>
+          ) : awardCounts.size ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {Array.from(awardCounts.entries())
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([t, n]) => (
+                    <div
+                      key={t}
+                      className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-xs"
+                    >
+                      {t} x{n}
+                    </div>
+                  ))}
+              </div>
+
+              <div className="space-y-2">
+                {awards.slice(0, 10).map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                  >
+                    <div className="text-sm font-semibold">{String(a.award_type ?? "")}</div>
+                    <div className="mt-1 text-xs text-[color:var(--muted)]">
+                      {(a.week_start && a.week_end) ? `${a.week_start} → ${a.week_end}` : ""}
+                      {a.created_at ? ` • ${fmtTime(a.created_at)}` : ""}
+                    </div>
+                    {a.notes ? (
+                      <div className="mt-2 text-sm text-[color:var(--muted)] whitespace-pre-wrap">
+                        {a.notes}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-[color:var(--muted)]">No awards yet.</div>
           )}
         </Card>
       </div>
