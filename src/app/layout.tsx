@@ -34,8 +34,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let navState: NavSessionState = "guest";
+  let anonymousGiftTotalCents = 0;
 
   const user = await getAuthedUserOrNull();
+  try {
+    const sb = await supabaseServer();
+    const { data } = await sb.rpc("cfm_anonymous_gift_total_cents");
+    anonymousGiftTotalCents = Number(data ?? 0);
+  } catch {
+    anonymousGiftTotalCents = 0;
+  }
   if (user) {
     const sb = await supabaseServer();
     const { data: adminRow } = await sb
@@ -68,7 +76,7 @@ export default async function RootLayout({
       >
         <TopNav right={<TopNavAuth />} />
         {children}
-        <BottomNav state={navState} />
+        <BottomNav state={navState} anonymousGiftTotalCents={anonymousGiftTotalCents} />
       </body>
     </html>
   );

@@ -41,6 +41,7 @@ export default async function FeedPage({
     ? await sb.from("cfm_members").select("id").eq("user_id", user.id).maybeSingle()
     : { data: null };
   const canEarn = !!user && !!member;
+  const leaderboardEligible = !!user && (!!member || isAdmin);
 
   const giftParam = typeof searchParams?.gift === "string" ? searchParams?.gift : null;
   const giftNotice =
@@ -123,12 +124,14 @@ export default async function FeedPage({
 
       const rows = (giftRows ?? []) as Array<{
         post_id: string;
-        gifter_user_id: string;
+        gifter_user_id: string | null;
         amount_cents: number;
         status: string;
       }>;
 
-      const gifterIds = Array.from(new Set(rows.map((r) => String(r.gifter_user_id)))).filter(Boolean);
+      const gifterIds = Array.from(
+        new Set(rows.map((r) => (r.gifter_user_id ? String(r.gifter_user_id) : "")).filter(Boolean)),
+      );
       const gifterProfiles = new Map<string, { favorited_username: string; photo_url: string | null }>();
 
       if (gifterIds.length) {
@@ -152,14 +155,16 @@ export default async function FeedPage({
 
       for (const r of rows) {
         const pid = String(r.post_id);
-        const uid = String(r.gifter_user_id);
+        const uid = r.gifter_user_id ? String(r.gifter_user_id) : "";
         const cents = Number(r.amount_cents ?? 0);
-        if (!pid || !uid || !Number.isFinite(cents) || cents <= 0) continue;
+        if (!pid || !Number.isFinite(cents) || cents <= 0) continue;
 
         totalsByPost.set(pid, (totalsByPost.get(pid) ?? 0) + cents);
-        const byUser = totalsByPostAndGifter.get(pid) ?? new Map<string, number>();
-        byUser.set(uid, (byUser.get(uid) ?? 0) + cents);
-        totalsByPostAndGifter.set(pid, byUser);
+        if (uid) {
+          const byUser = totalsByPostAndGifter.get(pid) ?? new Map<string, number>();
+          byUser.set(uid, (byUser.get(uid) ?? 0) + cents);
+          totalsByPostAndGifter.set(pid, byUser);
+        }
       }
 
       for (const pid of postIds) {
@@ -443,11 +448,18 @@ export default async function FeedPage({
                       />
                       <GiftButton
                         postId={p.id}
-                        canGift={canEarn && enablePostGifts}
+                        canGift={enablePostGifts}
                         presets={presets}
                         allowCustom={allowCustom}
                         minCents={minCents}
                         maxCents={maxCents}
+                        notice={
+                          enablePostGifts && !leaderboardEligible
+                            ? !user
+                              ? "You can gift anonymously. Log in + claim membership to appear on the gifter leaderboard."
+                              : "You can gift, but it will be counted as anonymous until you claim/link your membership."
+                            : null
+                        }
                       />
                       <FeedShareButton
                         postId={p.id}

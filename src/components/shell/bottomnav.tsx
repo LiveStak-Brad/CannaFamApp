@@ -55,8 +55,10 @@ function shouldShow(item: NavItem, state: NavSessionState) {
 
 export function BottomNav({
   state,
+  anonymousGiftTotalCents,
 }: {
   state: NavSessionState;
+  anonymousGiftTotalCents?: number;
 }) {
   const pathname = usePathname();
 
@@ -81,6 +83,12 @@ export function BottomNav({
             );
           })}
         </div>
+
+        {typeof anonymousGiftTotalCents === "number" && anonymousGiftTotalCents > 0 ? (
+          <div className="mt-2 text-center text-[11px] text-[color:var(--muted)]">
+            Anonymous gifted: ${(anonymousGiftTotalCents / 100).toFixed(2)}
+          </div>
+        ) : null}
       </div>
     </nav>
   );

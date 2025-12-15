@@ -44,22 +44,40 @@ export type LeaderboardRow = {
   link_visit_points?: number | null;
 };
 
+export type GiftLeaderboardRow = {
+  user_id: string;
+  favorited_username: string;
+  total_cents: number;
+};
+
+function formatUSD(cents: number) {
+  const n = Number(cents ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return "$0";
+  return `$${(n / 100).toFixed(2)}`;
+}
+
 export function LeaderboardClient({
   rows,
+  giftRows,
   errorMessage,
   profiles,
   awards,
 }: {
   rows: LeaderboardRow[];
+  giftRows: GiftLeaderboardRow[];
   errorMessage?: string | null;
   profiles: PublicProfile[];
   awards: AwardRow[];
 }) {
+  const [mode, setMode] = useState<"points" | "gifts">("points");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = useMemo(
-    () => rows.find((r) => r.user_id === selectedId) ?? null,
-    [rows, selectedId],
-  );
+  const selected = useMemo(() => {
+    if (!selectedId) return null;
+    if (mode === "gifts") {
+      return giftRows.find((r) => r.user_id === selectedId) ?? null;
+    }
+    return rows.find((r) => r.user_id === selectedId) ?? null;
+  }, [giftRows, mode, rows, selectedId]);
 
   const profile = useMemo(() => {
     if (!selected) return null;
@@ -82,11 +100,67 @@ export function LeaderboardClient({
 
   return (
     <>
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          className={
+            "rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold transition " +
+            (mode === "points"
+              ? "bg-[color:var(--card)] text-[color:var(--foreground)]"
+              : "bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)] hover:bg-[rgba(255,255,255,0.05)]")
+          }
+          onClick={() => {
+            setMode("points");
+            setSelectedId(null);
+          }}
+        >
+          Points
+        </button>
+        <button
+          type="button"
+          className={
+            "rounded-xl border border-[color:var(--border)] px-3 py-2 text-xs font-semibold transition " +
+            (mode === "gifts"
+              ? "bg-[color:var(--card)] text-[color:var(--foreground)]"
+              : "bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)] hover:bg-[rgba(255,255,255,0.05)]")
+          }
+          onClick={() => {
+            setMode("gifts");
+            setSelectedId(null);
+          }}
+        >
+          Gifts
+        </button>
+      </div>
+
       {errorMessage ? (
         <div className="space-y-2 text-sm text-[color:var(--muted)]">
           <div>Leaderboard is available to approved members.</div>
           <div className="text-xs">{errorMessage}</div>
         </div>
+      ) : mode === "gifts" ? (
+        giftRows.length ? (
+          <div className="space-y-2">
+            {giftRows.map((m, idx) => (
+              <button
+                key={m.user_id}
+                type="button"
+                onClick={() => setSelectedId(m.user_id)}
+                className="w-full rounded-xl px-2 py-2 text-left transition hover:bg-[rgba(255,255,255,0.03)]"
+              >
+                <div className="flex items-center justify-between text-sm">
+                  <div className="min-w-0">
+                    <span className="text-[color:var(--muted)]">#{idx + 1}</span>{" "}
+                    <span className="font-semibold">{m.favorited_username}</span>
+                  </div>
+                  <div className="font-semibold">{formatUSD(m.total_cents)}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-[color:var(--muted)]">No gifts yet.</div>
+        )
       ) : rows.length ? (
         <div className="space-y-2">
           {rows.map((m, idx) => (

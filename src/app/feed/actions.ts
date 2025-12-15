@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
-import { requireAdmin, requireApprovedMember } from "@/lib/auth";
+import { getAuthedUserOrNull, requireAdmin, requireApprovedMember } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { stripe } from "@/lib/stripe";
@@ -97,11 +97,44 @@ export async function logFeedPostShare(postId: string) {
 }
 
 export async function createPostGiftCheckoutSession(postId: string, amountCents: number) {
-  const user = await requireApprovedMember();
+  return createGiftCheckoutSession({ postId, amountCents, returnPath: "/feed" });
+}
+
+export async function createSiteGiftCheckoutSession(amountCents: number, returnPath: string) {
+  const rp = String(returnPath ?? "").trim() || "/";
+  return createGiftCheckoutSession({ postId: null, amountCents, returnPath: rp });
+}
+
+async function createGiftCheckoutSession({
+  postId,
+  amountCents,
+  returnPath,
+}: {
+  postId: string | null;
+  amountCents: number;
+  returnPath: string;
+}) {
   const sb = await supabaseServer();
 
-  const pid = String(postId ?? "").trim();
-  if (!pid) throw new Error("Post id is required.");
+  const user = await getAuthedUserOrNull();
+  let gifterUserId: string | null = null;
+  if (user) {
+    const { data: adminRow } = await sb
+      .from("cfm_admins")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { data: memberRow } = await sb
+      .from("cfm_members")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (adminRow?.role || memberRow?.id) gifterUserId = user.id;
+  }
+
+  const pid = postId ? String(postId).trim() : "";
 
   const cents = Number(amountCents);
   if (!Number.isFinite(cents) || cents <= 0) throw new Error("Invalid amount.");
@@ -138,21 +171,23 @@ export async function createPostGiftCheckoutSession(postId: string, amountCents:
     }
   }
 
-  const { data: post, error: postErr } = await sb
-    .from("cfm_feed_posts")
-    .select("id")
-    .eq("id", pid)
-    .maybeSingle();
-  if (postErr) throw new Error(postErr.message);
-  if (!post) throw new Error("Post not found.");
+  if (pid) {
+    const { data: post, error: postErr } = await sb
+      .from("cfm_feed_posts")
+      .select("id")
+      .eq("id", pid)
+      .maybeSingle();
+    if (postErr) throw new Error(postErr.message);
+    if (!post) throw new Error("Post not found.");
+  }
 
   const recipientUserId: string | null = null;
 
   const { data: giftRow, error: giftErr } = await sb
     .from("cfm_post_gifts")
     .insert({
-      post_id: pid,
-      gifter_user_id: user.id,
+      post_id: pid || null,
+      gifter_user_id: gifterUserId,
       recipient_user_id: recipientUserId,
       amount_cents: cents,
       currency,
@@ -167,8 +202,8 @@ export async function createPostGiftCheckoutSession(postId: string, amountCents:
   const s = stripe();
   const session = await s.checkout.sessions.create({
     mode: "payment",
-    success_url: `${env.siteUrl}/feed?gift=success&gift_id=${encodeURIComponent(String(giftRow.id))}&post_id=${encodeURIComponent(pid)}`,
-    cancel_url: `${env.siteUrl}/feed?gift=cancel&gift_id=${encodeURIComponent(String(giftRow.id))}&post_id=${encodeURIComponent(pid)}`,
+    success_url: `${env.siteUrl}${returnPath}?gift=success&gift_id=${encodeURIComponent(String(giftRow.id))}${pid ? `&post_id=${encodeURIComponent(pid)}` : ""}`,
+    cancel_url: `${env.siteUrl}${returnPath}?gift=cancel&gift_id=${encodeURIComponent(String(giftRow.id))}${pid ? `&post_id=${encodeURIComponent(pid)}` : ""}`,
     line_items: [
       {
         quantity: 1,
@@ -184,7 +219,7 @@ export async function createPostGiftCheckoutSession(postId: string, amountCents:
     metadata: {
       gift_id: String(giftRow.id),
       post_id: pid,
-      gifter_user_id: user.id,
+      gifter_user_id: gifterUserId ?? "",
       recipient_user_id: recipientUserId ?? "",
     },
   });

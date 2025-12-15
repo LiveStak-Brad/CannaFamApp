@@ -7,6 +7,7 @@ import { getAuthedUserOrNull } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { todayISODate } from "@/lib/utils";
 import { HomeLinkVisits } from "./ui";
+import { SiteGiftButton } from "@/app/feed/ui";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,26 @@ export default async function Home() {
     ? await sb.from("cfm_members").select("id").eq("user_id", user.id).maybeSingle()
     : { data: null };
   const canEarn = !!user && !!member;
+
+  const { data: monetizationSettings } = await sb
+    .from("cfm_monetization_settings")
+    .select("enable_post_gifts,allow_custom_amount,min_gift_cents,max_gift_cents")
+    .limit(1)
+    .maybeSingle();
+
+  const enablePostGifts = !!(monetizationSettings as any)?.enable_post_gifts;
+  const allowCustom = !!(monetizationSettings as any)?.allow_custom_amount;
+  const minCents = Number((monetizationSettings as any)?.min_gift_cents ?? 100);
+  const maxCents = Number((monetizationSettings as any)?.max_gift_cents ?? 20000);
+
+  const { data: presetRows } = await sb
+    .from("cfm_gift_presets")
+    .select("amount_cents")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+
+  const giftPresets = ((presetRows ?? []) as Array<{ amount_cents: number }>).map((r) => Number(r.amount_cents));
+  const presets = giftPresets.length ? giftPresets : [100, 300, 500, 1000, 2000];
 
   // Fetch today's visited links if logged in
   let visitedToday: string[] = [];
@@ -111,6 +132,29 @@ export default async function Home() {
 
         <Card title="CannaStreams links">
           <HomeLinkVisits initialVisited={visitedToday} discordJoined={discordJoined} canEarn={canEarn} />
+        </Card>
+
+        <Card title="Send a gift">
+          <div className="space-y-3 text-sm text-[color:var(--muted)]">
+            <div>
+              Gifts help fund hosting, development, and growth.
+            </div>
+            <SiteGiftButton
+              returnPath="/"
+              canGift={enablePostGifts}
+              presets={presets}
+              allowCustom={allowCustom}
+              minCents={minCents}
+              maxCents={maxCents}
+              notice={
+                !user
+                  ? "You can gift anonymously. Log in + claim membership to appear on the gifter leaderboard."
+                  : !member
+                    ? "You can gift, but it will be counted as anonymous until you claim/link your membership."
+                    : null
+              }
+            />
+          </div>
         </Card>
 
         <div className="text-xs text-[color:var(--muted)]">

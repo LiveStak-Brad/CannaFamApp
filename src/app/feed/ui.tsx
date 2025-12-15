@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   addFeedComment,
   createPostGiftCheckoutSession,
+  createSiteGiftCheckoutSession,
   deleteFeedComment,
   deleteFeedPost,
   hideFeedComment,
@@ -90,6 +91,7 @@ function GiftModal({
   allowCustom,
   minCents,
   maxCents,
+  notice,
   onClose,
   onStartCheckout,
 }: {
@@ -100,6 +102,7 @@ function GiftModal({
   allowCustom: boolean;
   minCents: number;
   maxCents: number;
+  notice?: string | null;
   onClose: () => void;
   onStartCheckout: (amountCents: number) => void;
 }) {
@@ -126,6 +129,12 @@ function GiftModal({
         <Card title="Send a gift">
           <div className="space-y-3">
             <div className="text-xs text-[color:var(--muted)]">Post: {postId}</div>
+
+            {notice ? (
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-xs text-[color:var(--muted)]">
+                {notice}
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2">
               {presets.map((c) => (
@@ -181,6 +190,7 @@ export function GiftButton({
   allowCustom,
   minCents,
   maxCents,
+  notice,
 }: {
   postId: string;
   canGift: boolean;
@@ -188,6 +198,7 @@ export function GiftButton({
   allowCustom: boolean;
   minCents: number;
   maxCents: number;
+  notice?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -218,6 +229,7 @@ export function GiftButton({
         allowCustom={allowCustom}
         minCents={minCents}
         maxCents={maxCents}
+        notice={notice ?? null}
         onClose={() => setOpen(false)}
         onStartCheckout={(amountCents) => {
           if (!canGift) return;
@@ -225,6 +237,72 @@ export function GiftButton({
           startTransition(async () => {
             try {
               const res = await createPostGiftCheckoutSession(postId, amountCents);
+              if (!res?.url) throw new Error("Checkout failed.");
+              window.location.href = res.url;
+            } catch (e) {
+              setMsg(e instanceof Error ? e.message : "Checkout failed");
+            }
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+export function SiteGiftButton({
+  returnPath,
+  canGift,
+  presets,
+  allowCustom,
+  minCents,
+  maxCents,
+  notice,
+}: {
+  returnPath: string;
+  canGift: boolean;
+  presets: number[];
+  allowCustom: boolean;
+  minCents: number;
+  maxCents: number;
+  notice?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-1">
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={pending || !canGift}
+        onClick={() => {
+          if (!canGift) return;
+          setMsg(null);
+          setOpen(true);
+        }}
+      >
+        Gift
+      </Button>
+
+      {msg ? <div className="text-xs text-[color:var(--muted)]">{msg}</div> : null}
+
+      <GiftModal
+        open={open}
+        postId="Site"
+        pending={pending}
+        presets={presets}
+        allowCustom={allowCustom}
+        minCents={minCents}
+        maxCents={maxCents}
+        notice={notice ?? null}
+        onClose={() => setOpen(false)}
+        onStartCheckout={(amountCents) => {
+          if (!canGift) return;
+          setMsg(null);
+          startTransition(async () => {
+            try {
+              const res = await createSiteGiftCheckoutSession(amountCents, returnPath);
               if (!res?.url) throw new Error("Checkout failed.");
               window.location.href = res.url;
             } catch (e) {

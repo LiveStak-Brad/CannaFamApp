@@ -165,8 +165,8 @@ create table if not exists public.cfm_gift_presets (
 
 create table if not exists public.cfm_post_gifts (
   id uuid primary key default gen_random_uuid(),
-  post_id uuid not null references public.cfm_feed_posts(id) on delete cascade,
-  gifter_user_id uuid not null,
+  post_id uuid references public.cfm_feed_posts(id) on delete cascade,
+  gifter_user_id uuid,
   recipient_user_id uuid,
   amount_cents int not null,
   currency text not null default 'usd',
@@ -178,6 +178,24 @@ create table if not exists public.cfm_post_gifts (
   paid_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.cfm_post_gifts alter column post_id drop not null;
+alter table public.cfm_post_gifts alter column gifter_user_id drop not null;
+
+create or replace function public.cfm_anonymous_gift_total_cents()
+returns bigint
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select coalesce(sum(g.amount_cents), 0)::bigint
+  from public.cfm_post_gifts g
+  where g.status = 'paid'
+    and g.gifter_user_id is null;
+$$;
+
+grant execute on function public.cfm_anonymous_gift_total_cents() to anon, authenticated;
 
 -- Enable RLS
 alter table public.cfm_applications enable row level security;
@@ -382,6 +400,16 @@ to authenticated
 with check (
   public.cfm_is_admin()
   or (public.cfm_is_approved_member() and gifter_user_id = auth.uid())
+  or (gifter_user_id is null)
+);
+
+create policy "post_gifts_insert_anonymous"
+on public.cfm_post_gifts
+for insert
+to anon
+with check (
+  gifter_user_id is null
+  and status = 'pending'
 );
 
 create policy "post_gifts_update_admin_only"
