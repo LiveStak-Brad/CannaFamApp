@@ -66,6 +66,9 @@ export default async function UserProfilePage({
       <Container>
         <Card title="Profile">
           <div className="text-sm text-[color:var(--muted)]">Member not found.</div>
+          <div className="mt-2 text-xs text-[color:var(--muted)]">
+            Lookup: <span className="font-mono">{uname || "(empty)"}</span>
+          </div>
           {lookupErrMsg ? (
             <div className="mt-2 text-xs text-[color:var(--muted)]">{lookupErrMsg}</div>
           ) : null}

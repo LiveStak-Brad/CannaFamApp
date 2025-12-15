@@ -144,7 +144,7 @@ begin
     m.youtube_link,
     m.created_at
   from public.cfm_members m
-  where m.favorited_username = uname
+  where btrim(m.favorited_username) = uname
   order by m.created_at desc
   limit 1;
 
@@ -166,7 +166,7 @@ begin
     m.youtube_link,
     m.created_at
   from public.cfm_members m
-  where m.favorited_username ilike uname
+  where btrim(m.favorited_username) ilike uname
   order by m.created_at desc
   limit 1;
 end;
