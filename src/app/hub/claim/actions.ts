@@ -11,9 +11,9 @@ type Result =
 export async function createMyProfile(formData: FormData): Promise<Result> {
   const user = await requireUser();
 
-  const favorited_username = String(
-    formData.get("favorited_username") ?? "",
-  ).trim();
+  const favorited_username = String(formData.get("favorited_username") ?? "")
+    .trim()
+    .replace(/^@/, "");
 
   if (!favorited_username) {
     return { ok: false, message: "Favorited username is required." };

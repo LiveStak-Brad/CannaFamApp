@@ -103,12 +103,12 @@ export function LoginForm() {
       </div>
 
       <Input
-        label="Email"
-        name="email"
-        type="email"
+        label="Email or username"
+        name="identifier"
+        type="text"
         required
-        autoComplete="email"
-        placeholder="you@example.com"
+        autoComplete="username"
+        placeholder="you@example.com or Favorited username"
       />
 
       {mode === "password" ? (
@@ -145,8 +145,12 @@ export function LoginForm() {
           onClick={() => {
             setResult(null);
             startTransition(async () => {
-              const emailEl = document.querySelector<HTMLInputElement>("input[name='email']");
-              const email = String(emailEl?.value ?? "").trim();
+              const identEl = document.querySelector<HTMLInputElement>("input[name='identifier']");
+              const email = String(identEl?.value ?? "").trim();
+              if (!email.includes("@")) {
+                setResult({ ok: false, message: "Password reset requires an email address." });
+                return;
+              }
               const fd = new FormData();
               fd.set("email", email);
               const res = await sendPasswordReset(fd);

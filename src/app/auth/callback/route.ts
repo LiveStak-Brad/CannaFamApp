@@ -60,6 +60,13 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       console.error("/auth/callback exchangeCodeForSession failed", error);
+      const msg = String((error as any)?.message ?? "");
+      if (msg.toLowerCase().includes("code challenge") && msg.toLowerCase().includes("code verifier")) {
+        const loginUrl = new URL("/login", url);
+        loginUrl.searchParams.set("message", "Email verified. Please sign in with your email + password.");
+        loginUrl.searchParams.set("next", next);
+        return NextResponse.redirect(loginUrl);
+      }
       const loginUrl = new URL("/login", url);
       loginUrl.searchParams.set("error", "invalid_or_expired");
       loginUrl.searchParams.set("message", error.message);

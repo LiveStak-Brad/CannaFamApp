@@ -30,7 +30,7 @@ export default function SignupPage() {
         <div className="space-y-1">
           <h1 className="text-xl font-semibold">✨ Create account</h1>
           <p className="text-sm text-[color:var(--muted)]">
-            Sign up with email + password. You’ll need to verify your email (check spam).
+            Email, Favorited username, and password. You’ll need to verify your email (check spam).
           </p>
         </div>
 

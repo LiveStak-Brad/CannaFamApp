@@ -41,6 +41,26 @@ export default async function HubPage() {
 
   let member = (memberRaw as unknown as MemberProfile | null) ?? null;
 
+  if (!isAdmin && !member) {
+    const suggested = String((user.user_metadata as any)?.favorited_username ?? "").trim();
+    if (suggested) {
+      const { error: insertErr } = await sb.from("cfm_members").insert({
+        user_id: user.id,
+        favorited_username: suggested,
+        points: 0,
+      });
+
+      if (!insertErr) {
+        const refetch = await sb
+          .from("cfm_members")
+          .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        member = (refetch.data as unknown as MemberProfile | null) ?? null;
+      }
+    }
+  }
+
   const approved = isAdmin || !!member;
 
   const today = todayISODate();

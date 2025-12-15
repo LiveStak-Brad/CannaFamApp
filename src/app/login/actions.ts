@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdminOrNull } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
 
 type Result =
@@ -67,10 +68,13 @@ async function getBaseUrlFromRequestOrEnv() {
 
 export async function sendMagicLink(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "")
+    const email = String(formData.get("email") ?? formData.get("identifier") ?? "")
       .trim()
       .toLowerCase();
     if (!email) return { ok: false, message: "Email is required." };
+    if (!email.includes("@")) {
+      return { ok: false, message: "Magic link requires an email address." };
+    }
 
     const baseUrl = await getBaseUrlFromRequestOrEnv();
     if (!baseUrl) return { ok: false, message: "Missing site URL." };
@@ -94,12 +98,42 @@ export async function sendMagicLink(formData: FormData): Promise<Result> {
 
 export async function signInWithPassword(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "")
-      .trim()
-      .toLowerCase();
+    const identifierRaw = String(formData.get("identifier") ?? formData.get("email") ?? "").trim();
+    const identifier = identifierRaw.toLowerCase();
     const password = String(formData.get("password") ?? "");
-    if (!email) return { ok: false, message: "Email is required." };
+    if (!identifier) return { ok: false, message: "Email or username is required." };
     if (!password) return { ok: false, message: "Password is required." };
+
+    let email = identifier;
+    const looksLikeEmail = email.includes("@");
+    if (!looksLikeEmail) {
+      const username = identifierRaw.replace(/^@/, "").trim();
+      const admin = supabaseAdminOrNull();
+      if (!admin) {
+        return { ok: false, message: "Username login is not available right now. Please use your email." };
+      }
+
+      const { data: member, error: memberErr } = await admin
+        .from("cfm_members")
+        .select("user_id")
+        .ilike("favorited_username", username)
+        .limit(1)
+        .maybeSingle();
+      if (memberErr) return { ok: false, message: memberErr.message || formatErrorMessage(memberErr) };
+
+      const userId = String((member as any)?.user_id ?? "").trim();
+      if (!userId) {
+        return { ok: false, message: "Username not found. Try your email, or create your profile first." };
+      }
+
+      const { data: u, error: userErr } = await admin.auth.admin.getUserById(userId);
+      if (userErr) return { ok: false, message: userErr.message || formatErrorMessage(userErr) };
+      const resolved = String(u.user?.email ?? "").trim().toLowerCase();
+      if (!resolved) {
+        return { ok: false, message: "Could not resolve email for that username. Please use your email." };
+      }
+      email = resolved;
+    }
 
     const sb = await supabaseServer();
     const { error } = await sb.auth.signInWithPassword({ email, password });
@@ -117,22 +151,51 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
       .trim()
       .toLowerCase();
     const password = String(formData.get("password") ?? "");
+    const favorited_username = String(formData.get("favorited_username") ?? "")
+      .trim()
+      .replace(/^@/, "");
     if (!email) return { ok: false, message: "Email is required." };
     if (!password) return { ok: false, message: "Password is required." };
+    if (!favorited_username) return { ok: false, message: "Favorited username is required." };
 
     const baseUrl = await getBaseUrlFromRequestOrEnv();
     if (!baseUrl) return { ok: false, message: "Missing site URL." };
     const emailRedirectTo = new URL("/auth/callback", baseUrl).toString();
 
     const sb = await supabaseServer();
-    const { error } = await sb.auth.signUp({
+    const { data, error } = await sb.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo,
+        data: {
+          favorited_username,
+        },
       },
     });
     if (error) return { ok: false, message: error.message || formatErrorMessage(error) };
+
+    const newUserId = String((data as any)?.user?.id ?? "").trim();
+    if (newUserId) {
+      const admin = supabaseAdminOrNull();
+      if (admin) {
+        try {
+          await admin
+            .from("cfm_members")
+            .upsert(
+              {
+                user_id: newUserId,
+                favorited_username,
+                points: 0,
+              },
+              { onConflict: "user_id" },
+            );
+        } catch (e) {
+          console.warn("signUpWithPassword: failed to pre-create cfm_members", e);
+        }
+      }
+    }
+
     return { ok: true };
   } catch (err) {
     console.error("signUpWithPassword failed", err);
