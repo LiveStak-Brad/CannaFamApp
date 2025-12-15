@@ -42,6 +42,7 @@ export type LeaderboardRow = {
   gift_bonus_points: number | null;
   spin_points: number | null;
   link_visit_points?: number | null;
+  gift_dollar_points?: number | null;
 };
 
 export type GiftLeaderboardRow = {
@@ -189,6 +190,9 @@ export function LeaderboardClient({
                     <span>🎡 {m.spin_points ?? 0}</span>
                     {typeof m.link_visit_points !== "undefined" ? (
                       <span>🔎 {m.link_visit_points ?? 0}</span>
+                    ) : null}
+                    {typeof m.gift_dollar_points !== "undefined" ? (
+                      <span>$ {m.gift_dollar_points ?? 0}</span>
                     ) : null}
                   </div>
                 </div>

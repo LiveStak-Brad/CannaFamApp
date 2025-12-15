@@ -29,6 +29,7 @@ export type MiniProfilePointsRow = {
   gift_bonus_points: number | null;
   spin_points: number | null;
   link_visit_points?: number | null;
+  gift_dollar_points?: number | null;
 };
 
 export type MiniProfileAwardRow = {
@@ -178,6 +179,9 @@ export function MiniProfileModal({
                   <span>🎡 {lb.spin_points ?? 0}</span>
                   {typeof lb.link_visit_points !== "undefined" ? (
                     <span>🔎 {lb.link_visit_points ?? 0}</span>
+                  ) : null}
+                  {typeof lb.gift_dollar_points !== "undefined" ? (
+                    <span>$ {lb.gift_dollar_points ?? 0}</span>
                   ) : null}
                 </div>
               </div>

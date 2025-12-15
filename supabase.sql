@@ -481,9 +481,13 @@ returns table (
   streak_points int,
   share_points int,
   like_points int,
+  comment_points int,
+  comment_upvote_points int,
   checkin_points int,
   gift_bonus_points int,
   spin_points int,
+  link_visit_points int,
+  gift_dollar_points int,
   total_points int
 )
 language plpgsql
@@ -503,16 +507,23 @@ begin
     coalesce(st.streak_points, 0)::int as streak_points,
     coalesce(sh.share_points, 0)::int as share_points,
     coalesce(li.like_points, 0)::int as like_points,
+    coalesce(co.comment_points, 0)::int as comment_points,
+    coalesce(cu.comment_upvote_points, 0)::int as comment_upvote_points,
     coalesce(ci.checkin_points, 0)::int as checkin_points,
     (coalesce(gb.gift_bonus_days, 0) * 5)::int as gift_bonus_points,
     coalesce(sp.spin_points, 0)::int as spin_points,
+    coalesce(lv.link_visit_points, 0)::int as link_visit_points,
+    coalesce(gp.gift_points, 0)::int as gift_dollar_points,
     (
       coalesce(st.streak_points, 0)
       + coalesce(sh.share_points, 0)
       + coalesce(li.like_points, 0)
+      + coalesce(co.comment_points, 0)
+      + coalesce(cu.comment_upvote_points, 0)
       + coalesce(ci.checkin_points, 0)
       + (coalesce(gb.gift_bonus_days, 0) * 5)
       + coalesce(sp.spin_points, 0)
+      + coalesce(lv.link_visit_points, 0)
       + coalesce(gp.gift_points, 0)
     )::int as total_points
   from public.cfm_members m
@@ -551,6 +562,17 @@ begin
     where l.user_id = m.user_id
   ) li on true
   left join lateral (
+    select count(*)::int as comment_points
+    from public.cfm_feed_comments c
+    where c.user_id = m.user_id
+  ) co on true
+  left join lateral (
+    select count(*)::int as comment_upvote_points
+    from public.cfm_feed_comment_upvotes u
+    join public.cfm_feed_comments c on c.id = u.comment_id
+    where c.user_id = m.user_id
+  ) cu on true
+  left join lateral (
     select count(distinct g.bonus_date)::int as gift_bonus_days
     from public.cfm_daily_gift_bonus g
     where g.user_id = m.user_id
@@ -560,6 +582,11 @@ begin
     from public.cfm_daily_spins ds
     where ds.user_id = m.user_id
   ) sp on true
+  left join lateral (
+    select count(*)::int as link_visit_points
+    from public.cfm_link_visits v
+    where v.user_id = m.user_id
+  ) lv on true
   left join lateral (
     select (coalesce(sum(pg.amount_cents), 0) / 100)::int as gift_points
     from public.cfm_post_gifts pg
