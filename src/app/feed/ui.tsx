@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addFeedComment,
@@ -209,6 +209,7 @@ export function GiftButton({
       <Button
         type="button"
         variant="secondary"
+        className="px-3 py-2 text-xs"
         disabled={pending || !canGift}
         onClick={() => {
           if (!canGift) return;
@@ -275,6 +276,7 @@ export function SiteGiftButton({
       <Button
         type="button"
         variant="secondary"
+        className="px-3 py-2 text-xs"
         disabled={pending || !canGift}
         onClick={() => {
           if (!canGift) return;
@@ -967,8 +969,13 @@ export function CommentsButton({
 
   return (
     <>
-      <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
-        Comments ({comments.length})
+      <Button
+        type="button"
+        variant="secondary"
+        className="px-3 py-2 text-xs"
+        onClick={() => setOpen(true)}
+      >
+        💬 {comments.length}
       </Button>
       <CommentsModal
         open={open}
@@ -1005,7 +1012,7 @@ export function LikeCountButton({
   const [open, setOpen] = useState(false);
 
   if (!canOpen) {
-    return <span>{count} like(s)</span>;
+    return <span>{count} like{count === 1 ? "" : "s"}</span>;
   }
 
   return (
@@ -1015,7 +1022,7 @@ export function LikeCountButton({
         className="underline underline-offset-4"
         onClick={() => setOpen(true)}
       >
-        {count} like(s)
+        {count} like{count === 1 ? "" : "s"}
       </button>
       <WhoLikedModal
         open={open}
@@ -1238,6 +1245,7 @@ export function FeedShareButton({
       <Button
         type="button"
         variant="secondary"
+        className="px-3 py-2 text-xs"
         disabled={pending || !canEarn}
         onClick={() => {
           setMsg(null);
@@ -1277,32 +1285,67 @@ export function FeedShareButton({
 export function LikeButton({
   postId,
   liked,
+  likeCount,
+  likers,
+  awards,
+  leaderboard,
   canEarn = true,
 }: {
   postId: string;
   liked: boolean;
+  likeCount: number;
+  likers: LikerProfile[];
+  awards: MiniProfileAwardRow[];
+  leaderboard: MiniProfilePointsRow[];
   canEarn?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+
+  const [localLiked, setLocalLiked] = useState(liked);
+  const [localCount, setLocalCount] = useState(likeCount);
+
+  useEffect(() => {
+    setLocalLiked(liked);
+    setLocalCount(likeCount);
+  }, [liked, likeCount]);
 
   return (
     <div className="space-y-1">
       <Button
         type="button"
         variant="secondary"
+        className="px-3 py-2 text-xs"
         disabled={pending || !canEarn}
         onClick={() => {
           if (!canEarn) return;
           setMsg(null);
           startTransition(async () => {
-            await toggleLike(postId, liked);
-            setMsg(liked ? "💔 Like removed" : "❤️ Like logged (+1)");
+            const nextLiked = !localLiked;
+            setLocalLiked(nextLiked);
+            setLocalCount((c) => Math.max(0, c + (nextLiked ? 1 : -1)));
+            try {
+              await toggleLike(postId, localLiked);
+              setMsg(localLiked ? "💔 Like removed" : "❤️ Like logged (+1)");
+            } catch (e) {
+              setLocalLiked(localLiked);
+              setLocalCount(likeCount);
+              setMsg(e instanceof Error ? e.message : "Like failed");
+            }
           });
         }}
       >
-        {liked ? "Liked" : pending ? "..." : "Like"}
+        {localLiked ? "Liked" : pending ? "..." : "Like"}
       </Button>
+      <div className="text-[11px] text-[color:var(--muted)]">
+        <LikeCountButton
+          count={localCount}
+          canOpen={localCount > 0}
+          likers={likers}
+          awards={awards}
+          leaderboard={leaderboard}
+        />
+      </div>
       {msg ? <div className="text-xs text-[color:var(--muted)]">{msg}</div> : null}
     </div>
   );

@@ -10,7 +10,6 @@ import {
   GiftSummary,
   FeedShareButton,
   LikeButton,
-  LikeCountButton,
   CommentsButton,
   type FeedPost,
   type GiftTopGifter,
@@ -422,17 +421,8 @@ export default async function FeedPage({
                     topGifters={giftsByPost.get(p.id)?.topGifters ?? []}
                   />
 
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-[color:var(--muted)]">
-                      <LikeCountButton
-                        count={likeCount.get(p.id) ?? 0}
-                        canOpen={(likeCount.get(p.id) ?? 0) > 0}
-                        likers={likerProfilesByPost.get(p.id) ?? []}
-                        awards={(awards ?? []) as any}
-                        leaderboard={(leaderboard ?? []) as any}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <CommentsButton
                         postId={p.id}
                         canComment={canEarn}
@@ -467,7 +457,15 @@ export default async function FeedPage({
                         content={p.content ?? ""}
                         canEarn={canEarn}
                       />
-                      <LikeButton postId={p.id} liked={likedByMe.has(p.id)} canEarn={canEarn} />
+                      <LikeButton
+                        postId={p.id}
+                        liked={likedByMe.has(p.id)}
+                        likeCount={likeCount.get(p.id) ?? 0}
+                        likers={likerProfilesByPost.get(p.id) ?? []}
+                        awards={(awards ?? []) as any}
+                        leaderboard={(leaderboard ?? []) as any}
+                        canEarn={canEarn}
+                      />
                     </div>
                   </div>
                 </div>
