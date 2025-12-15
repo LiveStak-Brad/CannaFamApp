@@ -113,15 +113,22 @@ export async function signInWithPassword(formData: FormData): Promise<Result> {
         return { ok: false, message: "Username login is not available right now. Please use your email." };
       }
 
-      const { data: member, error: memberErr } = await admin
-        .from("cfm_members")
-        .select("user_id")
-        .ilike("favorited_username", username)
-        .limit(1)
-        .maybeSingle();
-      if (memberErr) return { ok: false, message: memberErr.message || formatErrorMessage(memberErr) };
+      const lookupMember = async (uname: string) => {
+        const { data, error } = await admin
+          .from("cfm_members")
+          .select("user_id")
+          .ilike("favorited_username", uname)
+          .limit(1)
+          .maybeSingle();
+        return { data, error };
+      };
 
-      const userId = String((member as any)?.user_id ?? "").trim();
+      const first = await lookupMember(username);
+      if (first.error) return { ok: false, message: first.error.message || formatErrorMessage(first.error) };
+      const second = !first.data ? await lookupMember(`@${username}`) : { data: first.data, error: null };
+      if (second.error) return { ok: false, message: second.error.message || formatErrorMessage(second.error) };
+
+      const userId = String((second.data as any)?.user_id ?? "").trim();
       if (!userId) {
         return { ok: false, message: "Username not found. Try your email, or create your profile first." };
       }
@@ -180,7 +187,7 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
       const admin = supabaseAdminOrNull();
       if (admin) {
         try {
-          await admin
+          const { error: upsertErr } = await admin
             .from("cfm_members")
             .upsert(
               {
@@ -190,9 +197,16 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
               },
               { onConflict: "user_id" },
             );
+          if (upsertErr) {
+            console.warn("signUpWithPassword: failed to pre-create cfm_members", upsertErr);
+          }
         } catch (e) {
           console.warn("signUpWithPassword: failed to pre-create cfm_members", e);
         }
+      } else {
+        console.warn(
+          "signUpWithPassword: SUPABASE_SERVICE_ROLE_KEY is missing; cannot pre-create cfm_members row",
+        );
       }
     }
 
