@@ -54,18 +54,19 @@ export default async function UserProfilePage({
   await requireApprovedMember();
   const sb = await supabaseServer();
 
-  const unameParam = String(params.username ?? "").trim();
-  const uname = decodeURIComponent(unameParam);
+  const uname = String(params.username ?? "").trim();
 
-  const { data: memberIdRaw } = await sb
-    .from("cfm_public_member_ids")
-    .select("user_id,favorited_username")
+  const { data: profileRaw } = await sb
+    .from("cfm_public_members")
+    .select(
+      "favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+    )
     .ilike("favorited_username", uname)
     .limit(1)
     .maybeSingle();
 
-  const memberId = (memberIdRaw as unknown as PublicMemberId | null) ?? null;
-  if (!memberId?.user_id) {
+  const profile = (profileRaw as unknown as PublicProfile | null) ?? null;
+  if (!profile?.favorited_username) {
     return (
       <Container>
         <Card title="Profile">
@@ -75,35 +76,38 @@ export default async function UserProfilePage({
     );
   }
 
-  const { data: profileRaw } = await sb
-    .from("cfm_public_members")
-    .select(
-      "favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
-    )
-    .ilike("favorited_username", memberId.favorited_username)
+  const { data: memberIdRaw } = await sb
+    .from("cfm_public_member_ids")
+    .select("user_id,favorited_username")
+    .ilike("favorited_username", profile.favorited_username)
     .limit(1)
     .maybeSingle();
 
-  const profile = (profileRaw as unknown as PublicProfile | null) ?? null;
+  const memberId = (memberIdRaw as unknown as PublicMemberId | null) ?? null;
+  const linkedUserId = String(memberId?.user_id ?? "").trim() || null;
 
   let pointsRow: any | null = null;
-  try {
-    const { data: lb } = await sb.rpc("cfm_leaderboard", { limit_n: 500 });
-    const rows = (lb ?? []) as any[];
-    pointsRow = rows.find((r) => String(r.user_id) === String(memberId.user_id)) ?? null;
-  } catch {
-    pointsRow = null;
+  if (linkedUserId) {
+    try {
+      const { data: lb } = await sb.rpc("cfm_leaderboard", { limit_n: 500 });
+      const rows = (lb ?? []) as any[];
+      pointsRow = rows.find((r) => String(r.user_id) === String(linkedUserId)) ?? null;
+    } catch {
+      pointsRow = null;
+    }
   }
 
-  const { data: commentRows } = await sb
-    .from("cfm_feed_comments")
-    .select("id,post_id,content,created_at,is_hidden")
-    .eq("user_id", memberId.user_id)
-    .or("is_hidden.is.null,is_hidden.eq.false")
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  const comments = (commentRows ?? []) as unknown as FeedComment[];
+  let comments: FeedComment[] = [];
+  if (linkedUserId) {
+    const { data: commentRows } = await sb
+      .from("cfm_feed_comments")
+      .select("id,post_id,content,created_at,is_hidden")
+      .eq("user_id", linkedUserId)
+      .or("is_hidden.is.null,is_hidden.eq.false")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    comments = (commentRows ?? []) as unknown as FeedComment[];
+  }
 
   const socials: Array<{ label: string; href: string }> = [];
   if (profile?.public_link) socials.push({ label: "Link", href: profile.public_link });
@@ -116,7 +120,7 @@ export default async function UserProfilePage({
     <Container>
       <div className="space-y-4">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">👤 {profile?.favorited_username ?? uname}</h1>
+          <h1 className="text-xl font-semibold">👤 {profile.favorited_username}</h1>
           <p className="text-sm text-[color:var(--muted)]">Member profile</p>
         </div>
 
@@ -193,7 +197,11 @@ export default async function UserProfilePage({
         </Card>
 
         <Card title="Recent comments">
-          {comments.length ? (
+          {!linkedUserId ? (
+            <div className="text-sm text-[color:var(--muted)]">
+              This member hasn’t linked their account yet.
+            </div>
+          ) : comments.length ? (
             <div className="space-y-3">
               {comments.map((c) => (
                 <div
