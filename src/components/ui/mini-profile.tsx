@@ -104,6 +104,7 @@ export function MiniProfileModal({
   ].filter((s) => !!s.href);
 
   const uname = String(subject.favorited_username ?? "").trim();
+  const profileHref = uname ? `/u/${encodeURIComponent(uname)}` : "/members";
 
   return (
     <div className="fixed inset-0 z-50">
@@ -119,7 +120,7 @@ export function MiniProfileModal({
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Link
-                href={`/u/${encodeURIComponent(uname)}`}
+                href={profileHref}
                 onClick={() => onClose()}
                 className="shrink-0"
               >
@@ -140,7 +141,7 @@ export function MiniProfileModal({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link
-                      href={`/u/${encodeURIComponent(uname)}`}
+                      href={profileHref}
                       onClick={() => onClose()}
                       className="block text-base font-semibold truncate"
                     >
