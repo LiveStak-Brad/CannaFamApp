@@ -716,6 +716,7 @@ returns table (
   spin_points int,
   link_visit_points int,
   gift_dollar_points int,
+  follow_points int,
   total_points int
 )
 language plpgsql
@@ -742,6 +743,7 @@ begin
     coalesce(sp.spin_points, 0)::int as spin_points,
     coalesce(lv.link_visit_points, 0)::int as link_visit_points,
     coalesce(gp.gift_points, 0)::int as gift_dollar_points,
+    (coalesce(fo.following_points, 0) + coalesce(fi.follower_points, 0))::int as follow_points,
     (
       coalesce(st.streak_points, 0)
       + coalesce(sh.share_points, 0)
@@ -753,6 +755,8 @@ begin
       + coalesce(sp.spin_points, 0)
       + coalesce(lv.link_visit_points, 0)
       + coalesce(gp.gift_points, 0)
+      + coalesce(fo.following_points, 0)
+      + coalesce(fi.follower_points, 0)
     )::int as total_points
   from public.cfm_members m
   left join lateral (
@@ -821,6 +825,16 @@ begin
     where pg.gifter_user_id = m.user_id
       and pg.status = 'paid'
   ) gp on true
+  left join lateral (
+    select count(*)::int as following_points
+    from public.cfm_follows f
+    where f.follower_user_id = m.user_id
+  ) fo on true
+  left join lateral (
+    select count(*)::int as follower_points
+    from public.cfm_follows f
+    where f.followed_user_id = m.user_id
+  ) fi on true
   where m.user_id is not null
   order by total_points desc, m.created_at asc
   limit greatest(1, limit_n);

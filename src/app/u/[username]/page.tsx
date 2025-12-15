@@ -393,6 +393,9 @@ export default async function UserProfilePage({
                   {typeof pointsRow.gift_dollar_points !== "undefined" ? (
                     <span>💰 {pointsRow.gift_dollar_points ?? 0}</span>
                   ) : null}
+                  {typeof pointsRow.follow_points !== "undefined" ? (
+                    <span>👥 {pointsRow.follow_points ?? 0}</span>
+                  ) : null}
                 </div>
               </div>
             ) : null}

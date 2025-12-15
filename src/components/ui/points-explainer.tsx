@@ -82,6 +82,10 @@ function PointsExplainerModal({ open, onClose }: { open: boolean; onClose: () =>
                 <div className="text-[color:var(--muted)]">+1 each, max 7/day</div>
               </div>
               <div className="flex items-start justify-between gap-3">
+                <div className="font-semibold">👥 Follows</div>
+                <div className="text-[color:var(--muted)]">+1 per follow and +1 per follower</div>
+              </div>
+              <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">💬 Discord</div>
                 <div className="text-[color:var(--muted)]">+1 (one-time)</div>
               </div>
