@@ -62,6 +62,18 @@ create table if not exists public.cfm_members (
   created_at timestamp default now()
 );
 
+update public.cfm_members
+set favorited_username = btrim(favorited_username)
+where favorited_username is not null
+  and favorited_username <> btrim(favorited_username);
+
+alter table public.cfm_members
+  add constraint if not exists cfm_members_username_not_blank
+  check (btrim(favorited_username) <> '');
+
+create unique index if not exists cfm_members_username_unique
+  on public.cfm_members (lower(btrim(favorited_username)));
+
 alter table public.cfm_members add column if not exists public_link text;
 alter table public.cfm_members add column if not exists instagram_link text;
 alter table public.cfm_members add column if not exists x_link text;
