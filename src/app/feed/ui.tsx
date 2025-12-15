@@ -256,6 +256,10 @@ function GiftModal({
               </div>
             ) : null}
 
+            <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-xs text-[color:var(--muted)]">
+              All gifts go to CannaStreams to support the platform. We still track "support earned" for member posts.
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               {presets.map((c) => (
                 <Button

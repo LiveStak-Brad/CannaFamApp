@@ -66,6 +66,12 @@ function fmtTime(iso: string | null) {
   }
 }
 
+function formatUSDFromCents(cents: number) {
+  const n = Number(cents ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return "$0";
+  return `$${(n / 100).toFixed(2)}`;
+}
+
 export default async function UserProfilePage({
   params,
 }: {
@@ -228,6 +234,42 @@ export default async function UserProfilePage({
     awards = (awardRows ?? []) as unknown as AwardRow[];
   }
 
+  let supportEarnedCents = 0;
+  if (linkedUserId) {
+    try {
+      const { data: postRows } = await sb
+        .from("cfm_feed_posts")
+        .select("id")
+        .eq("author_user_id", linkedUserId)
+        .limit(5000);
+
+      const postIds = Array.from(
+        new Set(
+          (postRows ?? [])
+            .map((p: any) => String(p?.id ?? "").trim())
+            .filter(Boolean),
+        ),
+      );
+
+      if (postIds.length) {
+        const { data: giftRows } = await sb
+          .from("cfm_post_gifts")
+          .select("post_id,amount_cents,status")
+          .in("post_id", postIds)
+          .eq("status", "paid")
+          .limit(5000);
+
+        for (const g of (giftRows ?? []) as any[]) {
+          const cents = Number(g?.amount_cents ?? 0);
+          if (!Number.isFinite(cents) || cents <= 0) continue;
+          supportEarnedCents += cents;
+        }
+      }
+    } catch {
+      supportEarnedCents = 0;
+    }
+  }
+
   const awardCounts = new Map<string, number>();
   for (const a of awards) {
     const t = String(a.award_type ?? "").trim();
@@ -316,6 +358,16 @@ export default async function UserProfilePage({
                   {typeof pointsRow.gift_dollar_points !== "undefined" ? (
                     <span>💰 {pointsRow.gift_dollar_points ?? 0}</span>
                   ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {linkedUserId ? (
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
+                <div className="text-xs text-[color:var(--muted)]">Support earned</div>
+                <div className="mt-1 text-2xl font-semibold">{formatUSDFromCents(supportEarnedCents)}</div>
+                <div className="mt-1 text-xs text-[color:var(--muted)]">
+                  All gifts go to CannaStreams to support the platform.
                 </div>
               </div>
             ) : null}
