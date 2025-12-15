@@ -173,7 +173,7 @@ export default async function HubPage() {
                   <img
                     src={member.photo_url}
                     alt={member.favorited_username ?? "Member"}
-                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover"
+                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover object-top"
                     referrerPolicy="no-referrer"
                   />
                   <div className="text-sm font-semibold">
