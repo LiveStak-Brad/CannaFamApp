@@ -8,7 +8,11 @@ returns boolean
 language sql
 stable
 as $$
-  select coalesce(auth.jwt() ->> 'email', '') = 'wcba.mo@gmail.com';
+  select exists (
+    select 1
+    from public.cfm_admins a
+    where a.user_id = auth.uid()
+  );
 $$;
 
 -- Approved member helper
@@ -17,11 +21,13 @@ returns boolean
 language sql
 stable
 as $$
-  select exists (
-    select 1
-    from public.cfm_members m
-    where m.user_id = auth.uid()
-  );
+  select
+    public.cfm_is_admin()
+    or exists (
+      select 1
+      from public.cfm_members m
+      where m.user_id = auth.uid()
+    );
 $$;
 
 -- Applications
