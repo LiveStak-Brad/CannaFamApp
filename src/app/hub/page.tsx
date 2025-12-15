@@ -187,7 +187,12 @@ export default async function HubPage() {
                 <div className="text-sm font-semibold">{member.favorited_username}</div>
               ) : null}
 
-              <form action={updateMyProfile} className="space-y-3">
+              <form
+                action={updateMyProfile}
+                method="post"
+                encType="multipart/form-data"
+                className="space-y-3"
+              >
                 <Input
                   label="Favorited username"
                   name="favorited_username"
