@@ -99,6 +99,81 @@ create or replace view public.cfm_public_member_ids as
 
 grant select on public.cfm_public_member_ids to anon, authenticated;
 
+create or replace function public.cfm_get_member_profile(username text)
+returns table (
+  id uuid,
+  user_id uuid,
+  favorited_username text,
+  photo_url text,
+  bio text,
+  public_link text,
+  instagram_link text,
+  x_link text,
+  tiktok_link text,
+  youtube_link text,
+  created_at timestamp
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  uname text;
+begin
+  if not (public.cfm_is_admin() or public.cfm_is_approved_member()) then
+    raise exception 'not authorized';
+  end if;
+
+  uname := btrim(coalesce(username, ''));
+  if uname = '' then
+    return;
+  end if;
+
+  return query
+  select
+    m.id,
+    m.user_id,
+    m.favorited_username,
+    m.photo_url,
+    m.bio,
+    m.public_link,
+    m.instagram_link,
+    m.x_link,
+    m.tiktok_link,
+    m.youtube_link,
+    m.created_at
+  from public.cfm_members m
+  where m.favorited_username = uname
+  order by m.created_at desc
+  limit 1;
+
+  if found then
+    return;
+  end if;
+
+  return query
+  select
+    m.id,
+    m.user_id,
+    m.favorited_username,
+    m.photo_url,
+    m.bio,
+    m.public_link,
+    m.instagram_link,
+    m.x_link,
+    m.tiktok_link,
+    m.youtube_link,
+    m.created_at
+  from public.cfm_members m
+  where m.favorited_username ilike uname
+  order by m.created_at desc
+  limit 1;
+end;
+$$;
+
+grant execute on function public.cfm_get_member_profile(text) to authenticated;
+
 -- Daily check-ins
 create table if not exists public.cfm_checkins (
   id uuid primary key default gen_random_uuid(),

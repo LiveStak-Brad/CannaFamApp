@@ -7,6 +7,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 type PublicProfile = {
+  user_id: string | null;
   favorited_username: string;
   photo_url: string | null;
   bio: string | null;
@@ -15,11 +16,6 @@ type PublicProfile = {
   x_link: string | null;
   tiktok_link: string | null;
   youtube_link: string | null;
-};
-
-type PublicMemberId = {
-  user_id: string;
-  favorited_username: string;
 };
 
 type FeedComment = {
@@ -54,36 +50,31 @@ export default async function UserProfilePage({
   await requireApprovedMember();
   const sb = await supabaseServer();
 
-  const uname = String(params.username ?? "").trim();
+  let uname = String(params.username ?? "").trim();
+  try {
+    uname = decodeURIComponent(uname);
+  } catch {
+  }
 
-  const { data: profileRows } = await sb
-    .from("cfm_public_members")
-    .select(
-      "favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link,created_at",
-    )
-    .ilike("favorited_username", uname)
-    .order("created_at", { ascending: false })
-    .limit(1);
+  const { data, error: lookupErr } = await sb.rpc("cfm_get_member_profile", { username: uname });
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  const profile = ((rows[0] ?? null) as unknown as PublicProfile | null) ?? null;
 
-  const profile = ((profileRows ?? [])[0] as unknown as PublicProfile | null) ?? null;
+  const lookupErrMsg = (lookupErr?.message || "").trim();
   if (!profile?.favorited_username) {
     return (
       <Container>
         <Card title="Profile">
           <div className="text-sm text-[color:var(--muted)]">Member not found.</div>
+          {lookupErrMsg ? (
+            <div className="mt-2 text-xs text-[color:var(--muted)]">{lookupErrMsg}</div>
+          ) : null}
         </Card>
       </Container>
     );
   }
 
-  const { data: memberIdRows } = await sb
-    .from("cfm_public_member_ids")
-    .select("user_id,favorited_username")
-    .ilike("favorited_username", profile.favorited_username)
-    .limit(1);
-
-  const memberId = ((memberIdRows ?? [])[0] as unknown as PublicMemberId | null) ?? null;
-  const linkedUserId = String(memberId?.user_id ?? "").trim() || null;
+  const linkedUserId = String(profile.user_id ?? "").trim() || null;
 
   let pointsRow: any | null = null;
   if (linkedUserId) {
@@ -130,7 +121,7 @@ export default async function UserProfilePage({
                 <img
                   src={profile.photo_url}
                   alt={profile.favorited_username}
-                  className="h-20 w-20 rounded-full border border-[color:var(--border)] object-cover"
+                  className="h-20 w-20 rounded-full border border-[color:var(--border)] object-cover object-top"
                   referrerPolicy="no-referrer"
                 />
               ) : (
