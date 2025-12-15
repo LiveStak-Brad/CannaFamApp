@@ -83,7 +83,7 @@ export default async function SupportPage() {
           {!canEarn ? (
             <div className="space-y-2 text-sm text-[color:var(--muted)]">
               <div>
-                Log in and claim/link your membership to earn points for sharing.
+                Log in and create your profile to earn points for sharing.
               </div>
             </div>
           ) : null}
@@ -94,7 +94,7 @@ export default async function SupportPage() {
           {!canEarn ? (
             <div className="space-y-2 text-sm text-[color:var(--muted)]">
               <div>
-                Log in and claim/link your membership to earn points for visiting links.
+                Log in and create your profile to earn points for visiting links.
               </div>
             </div>
           ) : null}
@@ -116,9 +116,9 @@ export default async function SupportPage() {
               maxCents={maxCents}
               notice={
                 !user
-                  ? "You can gift anonymously. Log in + claim membership to appear on the gifter leaderboard."
+                  ? "You can gift anonymously. Log in + create your profile to appear on the gifter leaderboard."
                   : !member
-                    ? "You can gift, but it will be counted as anonymous until you claim/link your membership."
+                    ? "You can gift, but it will be counted as anonymous until you create your profile."
                     : null
               }
             />

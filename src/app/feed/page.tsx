@@ -513,8 +513,8 @@ export default async function FeedPage({
                         notice={
                           enablePostGifts && !leaderboardEligible
                             ? !user
-                              ? "You can gift anonymously. Log in + claim membership to appear on the gifter leaderboard."
-                              : "You can gift, but it will be counted as anonymous until you claim/link your membership."
+                              ? "You can gift anonymously. Log in + create your profile to appear on the gifter leaderboard."
+                              : "You can gift, but it will be counted as anonymous until you create your profile."
                             : null
                         }
                       />

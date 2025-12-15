@@ -1,25 +1,22 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   sendMagicLink,
   sendPasswordReset,
-  resendSignupVerification,
   signInWithPassword,
-  signUpWithPassword,
 } from "@/app/login/actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import Link from "next/link";
 
 export function LoginForm() {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"password" | "magic">("password");
-  const [intent, setIntent] = useState<"signin" | "signup">("signin");
-  const formRef = useRef<HTMLFormElement | null>(null);
   const [result, setResult] = useState<null | { ok: boolean; message?: string }>(
     null,
   );
@@ -28,7 +25,7 @@ export function LoginForm() {
     const m = String(searchParams.get("message") ?? "").trim();
     if (m) return m;
     const e = String(searchParams.get("error") ?? "").trim();
-    if (e) return "Verification link is invalid or expired. Please resend the verification email or use magic link.";
+    if (e) return "Verification link is invalid or expired. Please use magic link or go to Sign up to resend the verification email.";
     return "";
   })();
 
@@ -42,21 +39,24 @@ export function LoginForm() {
   return (
     <form
       className="space-y-4"
-      ref={formRef}
       action={(fd) => {
         setResult(null);
         startTransition(async () => {
           const res =
             mode === "magic"
               ? await sendMagicLink(fd)
-              : intent === "signup"
-                ? await signUpWithPassword(fd)
-                : await signInWithPassword(fd);
+              : await signInWithPassword(fd);
 
           if (res.ok) {
-            setResult({ ok: true });
+            setResult({
+              ok: true,
+              message:
+                mode === "magic"
+                  ? "Check your email for the sign-in link (it may be in spam)."
+                  : "Signed in.",
+            });
             if (mode === "password") {
-              router.push(intent === "signup" ? "/apply" : "/hub");
+              router.push("/hub");
               router.refresh();
             }
           } else {
@@ -117,36 +117,9 @@ export function LoginForm() {
           name="password"
           type="password"
           required
-          autoComplete={intent === "signup" ? "new-password" : "current-password"}
+          autoComplete="current-password"
           placeholder="••••••••"
         />
-      ) : null}
-
-      {mode === "password" ? (
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant={intent === "signin" ? "primary" : "secondary"}
-            disabled={pending}
-            onClick={() => {
-              setResult(null);
-              setIntent("signin");
-            }}
-          >
-            Sign in
-          </Button>
-          <Button
-            type="button"
-            variant={intent === "signup" ? "primary" : "secondary"}
-            disabled={pending}
-            onClick={() => {
-              setResult(null);
-              setIntent("signup");
-            }}
-          >
-            Sign up
-          </Button>
-        </div>
       ) : null}
 
       <Button type="submit" disabled={pending}>
@@ -154,10 +127,15 @@ export function LoginForm() {
           ? "Working..."
           : mode === "magic"
             ? "Send magic link"
-            : intent === "signup"
-              ? "Create account"
-              : "Sign in"}
+            : "Sign in"}
       </Button>
+
+      <div className="text-xs text-[color:var(--muted)]">
+        New here?{" "}
+        <Link href="/signup" className="underline underline-offset-4">
+          Create an account
+        </Link>
+      </div>
 
       {mode === "password" ? (
         <Button
@@ -167,12 +145,10 @@ export function LoginForm() {
           onClick={() => {
             setResult(null);
             startTransition(async () => {
-              const formEl = formRef.current;
-              if (!formEl) {
-                setResult({ ok: false, message: "Form not ready. Please try again." });
-                return;
-              }
-              const fd = new FormData(formEl);
+              const emailEl = document.querySelector<HTMLInputElement>("input[name='email']");
+              const email = String(emailEl?.value ?? "").trim();
+              const fd = new FormData();
+              fd.set("email", email);
               const res = await sendPasswordReset(fd);
               if (res.ok) {
                 setResult({ ok: true });
@@ -183,33 +159,6 @@ export function LoginForm() {
           }}
         >
           Send password reset email
-        </Button>
-      ) : null}
-
-      {mode === "password" ? (
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={pending}
-          onClick={() => {
-            setResult(null);
-            startTransition(async () => {
-              const formEl = formRef.current;
-              if (!formEl) {
-                setResult({ ok: false, message: "Form not ready. Please try again." });
-                return;
-              }
-              const fd = new FormData(formEl);
-              const res = await resendSignupVerification(fd);
-              if (res.ok) {
-                setResult({ ok: true, message: "Verification email sent. Check your inbox." });
-              } else {
-                setResult({ ok: false, message: res.message });
-              }
-            });
-          }}
-        >
-          Resend verification email
         </Button>
       ) : null}
     </form>

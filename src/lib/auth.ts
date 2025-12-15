@@ -1,49 +1,7 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type AdminRole = "owner" | "admin" | "moderator";
-
-async function tryAutoLinkApprovedMember(user: { id: string; email?: string | null }) {
-  const email = (user.email ?? "").toLowerCase().trim();
-  if (!email) return false;
-
-  const admin = supabaseAdmin();
-
-  const { data: app, error: appErr } = await admin
-    .from("cfm_applications")
-    .select("favorited_username")
-    .eq("status", "approved")
-    .ilike("email", email)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (appErr || !app?.favorited_username) return false;
-
-  const { data: member, error: memberErr } = await admin
-    .from("cfm_members")
-    .select("id,user_id")
-    .eq("favorited_username", app.favorited_username)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (memberErr || !member) return false;
-
-  if (member.user_id) {
-    return member.user_id === user.id;
-  }
-
-  const { error: updateErr } = await admin
-    .from("cfm_members")
-    .update({ user_id: user.id })
-    .eq("id", member.id)
-    .is("user_id", null);
-
-  if (updateErr) return false;
-  return true;
-}
 
 export async function getAuthedUserOrNull() {
   const sb = await supabaseServer();
@@ -110,8 +68,6 @@ export async function requireApprovedMember() {
 
   if (error) throw new Error(error.message);
   if (!data) {
-    const linked = await tryAutoLinkApprovedMember(user);
-    if (linked) return user;
     redirect("/hub/claim");
   }
   return user;

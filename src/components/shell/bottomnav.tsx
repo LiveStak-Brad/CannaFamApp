@@ -15,7 +15,6 @@ type NavItem = {
 
 const ALL_ITEMS: NavItem[] = [
   { href: "/", label: "Home" },
-  { href: "/apply", label: "Apply" },
   { href: "/members", label: "Members" },
   { href: "/feed", label: "Feed" },
   { href: "/support", label: "Support" },
@@ -27,13 +26,13 @@ const ALL_ITEMS: NavItem[] = [
   { href: "/awards", label: "Awards" },
   { href: "/admin", label: "Admin", requiresAuth: true, adminOnly: true },
   { href: "/login", label: "Login" },
+  { href: "/signup", label: "Sign up" },
 ];
 
 function shouldShow(item: NavItem, state: NavSessionState) {
   if (state === "guest") {
     return [
       "/",
-      "/apply",
       "/members",
       "/feed",
       "/support",
@@ -41,13 +40,14 @@ function shouldShow(item: NavItem, state: NavSessionState) {
       "/awards",
       "/hub",
       "/login",
+      "/signup",
     ].includes(
       item.href,
     );
   }
 
   if (item.href === "/login") return false;
-  if (item.href === "/apply") return false;
+  if (item.href === "/signup") return false;
   if (item.adminOnly) return state === "admin";
   if (item.requiresApproval) return state === "member" || state === "admin";
   return true;

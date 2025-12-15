@@ -116,8 +116,8 @@ export default async function Home() {
 
         <div className="grid grid-cols-1 gap-3">
           {!member ? (
-            <Button as="link" href="/apply" variant="primary">
-              Apply for CFM
+            <Button as="link" href="/signup" variant="primary">
+              Create account
             </Button>
           ) : null}
           <Button as="link" href="/members" variant="secondary">
@@ -148,9 +148,9 @@ export default async function Home() {
               maxCents={maxCents}
               notice={
                 !user
-                  ? "You can gift anonymously. Log in + claim membership to appear on the gifter leaderboard."
+                  ? "You can gift anonymously. Log in + create your profile to appear on the gifter leaderboard."
                   : !member
-                    ? "You can gift, but it will be counted as anonymous until you claim/link your membership."
+                    ? "You can gift, but it will be counted as anonymous until you create your profile."
                     : null
               }
             />
@@ -158,8 +158,8 @@ export default async function Home() {
         </Card>
 
         <div className="text-xs text-[color:var(--muted)]">
-          <Link href="/apply" className="underline underline-offset-4">
-            Applications
+          <Link href="/signup" className="underline underline-offset-4">
+            Create account
           </Link>
           <span className="px-2">|</span>
           <Link href="/members" className="underline underline-offset-4">

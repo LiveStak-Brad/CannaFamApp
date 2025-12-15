@@ -12,10 +12,9 @@ export default async function ClaimPage() {
     <Container>
       <div className="space-y-4">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Claim membership</h1>
+          <h1 className="text-xl font-semibold">Create your profile</h1>
           <p className="text-sm text-[color:var(--muted)]">
-            If your application was approved, you can link your login to your CFM
-            member record.
+            Pick your Favorited username to create your member profile.
           </p>
         </div>
 

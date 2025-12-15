@@ -88,6 +88,10 @@ $$;
 create unique index if not exists cfm_members_username_unique
   on public.cfm_members (lower(btrim(favorited_username)));
 
+create unique index if not exists cfm_members_user_id_unique
+  on public.cfm_members (user_id)
+  where user_id is not null;
+
 alter table public.cfm_members add column if not exists public_link text;
 alter table public.cfm_members add column if not exists instagram_link text;
 alter table public.cfm_members add column if not exists x_link text;
@@ -371,11 +375,16 @@ using (public.cfm_is_admin() or public.cfm_is_approved_member());
 
 grant select on public.cfm_public_members to anon, authenticated;
 
-create policy "members_insert_admin_only"
+drop policy if exists "members_insert_admin_only" on public.cfm_members;
+drop policy if exists "members_insert_self_or_admin" on public.cfm_members;
+create policy "members_insert_self_or_admin"
 on public.cfm_members
 for insert
 to authenticated
-with check (public.cfm_is_admin());
+with check (
+  public.cfm_is_admin()
+  or (user_id = auth.uid())
+);
 
 create policy "members_update_admin_only"
 on public.cfm_members

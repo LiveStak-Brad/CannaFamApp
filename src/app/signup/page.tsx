@@ -1,11 +1,11 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
-import { LoginForm } from "./ui";
+import { SignupForm } from "./ui";
 
 export const runtime = "nodejs";
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <Container>
       <div className="space-y-4">
@@ -28,14 +28,14 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">🔒 Sign in</h1>
+          <h1 className="text-xl font-semibold">✨ Create account</h1>
           <p className="text-sm text-[color:var(--muted)]">
-            Sign in with password (fast) or use an email magic link.
+            Sign up with email + password. You’ll need to verify your email (check spam).
           </p>
         </div>
 
         <Card>
-          <LoginForm />
+          <SignupForm />
         </Card>
       </div>
     </Container>

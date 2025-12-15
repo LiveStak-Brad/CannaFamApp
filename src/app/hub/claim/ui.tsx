@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { claimMembership } from "./actions";
+import { createMyProfile } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
@@ -18,14 +18,14 @@ export function ClaimForm() {
       action={(fd) => {
         setResult(null);
         startTransition(async () => {
-          const res = await claimMembership(fd);
+          const res = await createMyProfile(fd);
           if (res.ok) setResult({ ok: true });
           else setResult({ ok: false, message: res.message });
         });
       }}
     >
       {result?.ok ? (
-        <Notice tone="success">Membership linked. Go back to the hub.</Notice>
+        <Notice tone="success">Profile created. Go back to the hub.</Notice>
       ) : null}
       {result && !result.ok ? (
         <Notice tone="error">{result.message}</Notice>
@@ -35,11 +35,11 @@ export function ClaimForm() {
         label="Favorited username"
         name="favorited_username"
         required
-        placeholder="Exact username used on your application"
+        placeholder="Your exact Favorited username"
       />
 
       <Button type="submit" disabled={pending}>
-        {pending ? "Linking..." : "Link membership"}
+        {pending ? "Saving..." : "Create profile"}
       </Button>
     </form>
   );

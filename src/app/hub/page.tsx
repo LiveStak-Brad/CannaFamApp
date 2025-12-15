@@ -3,7 +3,6 @@ import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
@@ -34,8 +33,6 @@ export default async function HubPage() {
     .maybeSingle();
   const isAdmin = !!adminRow?.role;
 
-  let autoLinkDebug: string | null = null;
-
   let { data: memberRaw } = await sb
     .from("cfm_members")
     .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
@@ -43,69 +40,6 @@ export default async function HubPage() {
     .maybeSingle();
 
   let member = (memberRaw as unknown as MemberProfile | null) ?? null;
-
-  if (!isAdmin && !member) {
-    const email = (user.email ?? "").toLowerCase().trim();
-    if (!email) {
-      autoLinkDebug = "Auto-link: your auth account has no email.";
-    }
-    if (email) {
-      const admin = supabaseAdmin();
-      const { data: app, error: appErr } = await admin
-        .from("cfm_applications")
-        .select("favorited_username")
-        .eq("status", "approved")
-        .ilike("email", email)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (appErr) {
-        autoLinkDebug = `Auto-link: application lookup error (${appErr.message}).`;
-      } else if (!app?.favorited_username) {
-        autoLinkDebug = "Auto-link: no approved application found for this email.";
-      }
-
-      if (app?.favorited_username) {
-        const { data: m, error: memberLookupErr } = await admin
-          .from("cfm_members")
-          .select("id,user_id")
-          .eq("favorited_username", app.favorited_username)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (memberLookupErr) {
-          autoLinkDebug = `Auto-link: member lookup error (${memberLookupErr.message}).`;
-        } else if (!m) {
-          autoLinkDebug = "Auto-link: approved application found, but no member record exists yet.";
-        } else if (m.user_id && m.user_id !== user.id) {
-          autoLinkDebug = "Auto-link: member record is already linked to another account.";
-        }
-
-        if (m && !m.user_id) {
-          const { error: updateErr } = await admin
-            .from("cfm_members")
-            .update({ user_id: user.id })
-            .eq("id", m.id)
-            .is("user_id", null);
-
-          if (updateErr) {
-            autoLinkDebug = `Auto-link: failed to link (${updateErr.message}).`;
-          } else {
-            autoLinkDebug = "Auto-link: linked successfully. Refreshing...";
-          }
-        }
-
-        const refetch = await sb
-          .from("cfm_members")
-          .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        member = (refetch.data as unknown as MemberProfile | null) ?? null;
-      }
-    }
-  }
 
   const approved = isAdmin || !!member;
 
@@ -149,18 +83,14 @@ export default async function HubPage() {
         </div>
 
         {!approved ? (
-          <Card title="Approval required">
+          <Card title="Create your profile">
             <div className="space-y-3 text-sm text-[color:var(--muted)]">
               <p>
-                Your account is not approved yet. Once an admin approves your CFM
-                application, you'll have access to member pages.
+                You're signed in. Create your member profile to start earning points.
               </p>
-              {autoLinkDebug ? (
-                <p className="text-xs">{autoLinkDebug}</p>
-              ) : null}
               <div className="grid grid-cols-1 gap-3">
                 <Button as="link" href="/hub/claim" variant="secondary">
-                  Claim membership
+                  Create profile
                 </Button>
               </div>
             </div>

@@ -15,14 +15,14 @@ export async function TopNavAuth() {
 
   if (!user) {
     return (
-      <Button
-        as="link"
-        href="/login"
-        variant="secondary"
-        className={navBtnClass}
-      >
-        Login
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button as="link" href="/login" variant="secondary" className={navBtnClass}>
+          Login
+        </Button>
+        <Button as="link" href="/signup" variant="secondary" className={navBtnClass}>
+          Sign up
+        </Button>
+      </div>
     );
   }
 
