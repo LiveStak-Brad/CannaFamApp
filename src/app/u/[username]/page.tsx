@@ -46,13 +46,15 @@ function fmtTime(iso: string | null) {
 export default async function UserProfilePage({
   params,
 }: {
-  params: { username: string };
+  params: Promise<{ username: string }>;
 }) {
   await requireApprovedMember();
   const sb = await supabaseServer();
   const admin = supabaseAdminOrNull();
 
-  let uname = String(params.username ?? "");
+  const resolvedParams = await params;
+
+  let uname = String(resolvedParams.username ?? "");
   try {
     uname = decodeURIComponent(uname);
   } catch {
@@ -68,7 +70,7 @@ export default async function UserProfilePage({
             Lookup: <span className="font-mono">{uname || "(empty)"}</span>
           </div>
           <div className="mt-2 text-xs text-[color:var(--muted)]">
-            Params: <span className="font-mono">{JSON.stringify(params)}</span>
+            Params: <span className="font-mono">{JSON.stringify(resolvedParams)}</span>
           </div>
         </Card>
       </Container>
