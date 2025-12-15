@@ -11,7 +11,6 @@ import {
   rejectApplication,
   removeMember,
   sendMemberInvite,
-  createFeedPost,
   grantDailyGiftBonus,
   assignAward,
   addAdmin,
@@ -451,64 +450,6 @@ export function AdminActions({
             <div className="text-sm text-[color:var(--muted)]">No members yet.</div>
           )}
         </div>
-      </Card>
-
-      <Card title="Create feed post">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setMsg(null);
-            const fd = new FormData(e.currentTarget);
-            startTransition(async () => {
-              try {
-                await createFeedPost(fd);
-                setMsg({ tone: "success", text: "Feed post created." });
-                e.currentTarget.reset();
-              } catch (err) {
-                setMsg({
-                  tone: "error",
-                  text: err instanceof Error ? err.message : "Create failed",
-                });
-              }
-            });
-          }}
-        >
-          <Input label="Title" name="title" required placeholder="Post title" />
-          <Input
-            label="Post type"
-            name="post_type"
-            required
-            placeholder="gift | snipe | award | leaderboard | announcement"
-          />
-          <Textarea label="Content" name="content" required placeholder="Write the update" />
-          <div className="space-y-1">
-            <div className="text-sm font-medium">Media (optional)</div>
-            <input
-              type="file"
-              name="media"
-              accept="image/*,video/*"
-              className="block w-full text-sm text-[color:var(--muted)] file:mr-3 file:rounded-lg file:border file:border-[color:var(--border)] file:bg-black/20 file:px-3 file:py-2 file:text-sm file:text-[color:var(--foreground)]"
-            />
-            <div className="text-xs text-[color:var(--muted)]">
-              One image or video. Uploading media is admin-only.
-            </div>
-          </div>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Saving..." : "Create post"}
-          </Button>
-        </form>
-
-        {posts.length ? (
-          <div className="mt-4 space-y-2">
-            <div className="text-xs text-[color:var(--muted)]">Recent posts</div>
-            {posts.map((p) => (
-              <div key={p.id} className="text-sm text-[color:var(--muted)]">
-                {p.title} {p.post_type ? `(${p.post_type})` : ""}
-              </div>
-            ))}
-          </div>
-        ) : null}
       </Card>
 
       <Card title="Assign award">

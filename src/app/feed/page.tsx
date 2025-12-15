@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
 import { getAuthedUserOrNull } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
+import { todayISODate } from "@/lib/utils";
 import {
   FeedAdminPostControls,
   FeedMedia,
@@ -11,10 +12,14 @@ import {
   FeedShareButton,
   LikeButton,
   CommentsButton,
+  MyDailyPostComposer,
   type FeedPost,
   type GiftTopGifter,
   type LikerProfile,
+  type MyDailyPost,
 } from "./ui";
+import Link from "next/link";
+import { AdminPostComposer } from "@/components/ui/admin-post-composer";
 
 export const runtime = "nodejs";
 
@@ -42,6 +47,19 @@ export default async function FeedPage({
   const canEarn = !!user && !!member;
   const leaderboardEligible = !!user && (!!member || isAdmin);
 
+  const today = todayISODate();
+  const { data: myDailyPostRow } = canEarn
+    ? await sb
+        .from("cfm_feed_posts")
+        .select("id,title,content,media_url,media_type")
+        .eq("post_type", "member")
+        .eq("author_user_id", user!.id)
+        .eq("post_date", today)
+        .maybeSingle()
+    : { data: null };
+
+  const myDailyPost = (myDailyPostRow ?? null) as MyDailyPost | null;
+
   const giftParam = typeof searchParams?.gift === "string" ? searchParams?.gift : null;
   const giftNotice =
     giftParam === "success"
@@ -66,7 +84,7 @@ export default async function FeedPage({
 
   const { data: posts, error: postsErr } = await sb
     .from("cfm_feed_posts")
-    .select("id,title,content,post_type,created_at,media_url,media_type")
+    .select("id,title,content,post_type,created_at,media_url,media_type,author_user_id,post_date")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -80,7 +98,38 @@ export default async function FeedPage({
     );
   }
 
-  const postIds = (posts ?? []).map((p) => p.id);
+  const filteredPosts = (posts ?? []).filter((p: any) => {
+    const t = String(p?.post_type ?? "").trim().toLowerCase();
+    if (t !== "member") return true;
+    return String(p?.post_date ?? "") === today;
+  });
+
+  const postIds = filteredPosts.map((p) => p.id);
+
+  const authorIds = Array.from(
+    new Set(
+      filteredPosts
+        .map((p: any) => String(p?.author_user_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  const authorById = new Map<string, { favorited_username: string; photo_url: string | null }>();
+  if (authorIds.length) {
+    const { data: authors } = await sb
+      .from("cfm_public_member_ids")
+      .select("user_id,favorited_username,photo_url")
+      .in("user_id", authorIds)
+      .limit(2000);
+
+    for (const a of (authors ?? []) as any[]) {
+      if (!a?.user_id) continue;
+      authorById.set(String(a.user_id), {
+        favorited_username: String(a.favorited_username ?? "Member"),
+        photo_url: (a.photo_url ?? null) as string | null,
+      });
+    }
+  }
 
   // Monetization settings + presets (safe defaults)
   const { data: monetizationSettings } = await sb
@@ -399,14 +448,32 @@ export default async function FeedPage({
           </Card>
         ) : null}
 
+        {canEditPosts ? <AdminPostComposer title="Post to the feed (admin)" /> : null}
+
+        <MyDailyPostComposer canPost={canEarn} existing={myDailyPost} />
+
         <div className="space-y-3">
-          {posts?.length ? (
-            posts.map((p) => (
+          {filteredPosts?.length ? (
+            filteredPosts.map((p: any) => (
               <Card key={p.id} title={p.title ?? ""}>
                 <div id={p.id} className="space-y-3">
                   <div className="text-xs text-[color:var(--muted)]">
                     {p.post_type ? p.post_type.toUpperCase() : ""}{" "}
                     {p.created_at ? ` • ${new Date(p.created_at).toLocaleString()}` : ""}
+                    {p.author_user_id ? (() => {
+                      const uid = String(p.author_user_id ?? "").trim();
+                      const info = uid ? authorById.get(uid) ?? null : null;
+                      const uname = String(info?.favorited_username ?? "").trim();
+                      if (!uname) return "";
+                      return (
+                        <>
+                          {" • "}
+                          <Link className="underline underline-offset-4" href={`/u/${encodeURIComponent(uname)}`}>
+                            @{uname}
+                          </Link>
+                        </>
+                      );
+                    })() : null}
                   </div>
                   <FeedAdminPostControls post={p as FeedPost} isAdmin={canEditPosts} />
                   <div className="text-sm text-[color:var(--foreground)] whitespace-pre-wrap">

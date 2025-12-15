@@ -22,7 +22,9 @@ function formatErrorMessage(err: unknown) {
 
 export async function resendSignupVerification(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "").trim();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     if (!email) return { ok: false, message: "Email is required." };
 
     const baseUrl = await getBaseUrlFromRequestOrEnv();
@@ -51,13 +53,23 @@ async function getBaseUrlFromRequestOrEnv() {
   if (base) return base;
 
   const h = await headers();
-  const origin = h.get("origin") ?? "";
+  const xfProto = (h.get("x-forwarded-proto") ?? "").trim();
+  const xfHost = (h.get("x-forwarded-host") ?? "").trim();
+  const host = (h.get("host") ?? "").trim();
+
+  const proto = xfProto || "https";
+  const finalHost = xfHost || host;
+  if (finalHost) return `${proto}://${finalHost}`;
+
+  const origin = (h.get("origin") ?? "").trim();
   return origin;
 }
 
 export async function sendMagicLink(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "").trim();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     if (!email) return { ok: false, message: "Email is required." };
 
     const baseUrl = await getBaseUrlFromRequestOrEnv();
@@ -82,7 +94,9 @@ export async function sendMagicLink(formData: FormData): Promise<Result> {
 
 export async function signInWithPassword(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "").trim();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     const password = String(formData.get("password") ?? "");
     if (!email) return { ok: false, message: "Email is required." };
     if (!password) return { ok: false, message: "Password is required." };
@@ -99,7 +113,9 @@ export async function signInWithPassword(formData: FormData): Promise<Result> {
 
 export async function signUpWithPassword(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "").trim();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     const password = String(formData.get("password") ?? "");
     if (!email) return { ok: false, message: "Email is required." };
     if (!password) return { ok: false, message: "Password is required." };
@@ -126,7 +142,9 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
 
 export async function sendPasswordReset(formData: FormData): Promise<Result> {
   try {
-    const email = String(formData.get("email") ?? "").trim();
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     if (!email) return { ok: false, message: "Email is required." };
 
     const baseUrl = await getBaseUrlFromRequestOrEnv();

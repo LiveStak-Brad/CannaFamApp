@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
@@ -11,6 +12,212 @@ import { stripe } from "@/lib/stripe";
 type PublicMemberIdRow = { user_id: string | null };
 type AdminRow = { user_id: string | null };
 type FeedCommentRow = { id: string; post_id: string | null; user_id: string | null };
+
+function guessExtFromMime(mime: string) {
+  const m = mime.toLowerCase();
+  if (m === "image/jpeg") return "jpg";
+  if (m === "image/png") return "png";
+  if (m === "image/webp") return "webp";
+  if (m === "image/gif") return "gif";
+  if (m === "video/mp4") return "mp4";
+  if (m === "video/webm") return "webm";
+  if (m === "video/quicktime") return "mov";
+  return null;
+}
+
+export async function createAdminPost(formData: FormData) {
+  const user = await requireAdmin();
+  const sb = await supabaseServer();
+
+  const title = String(formData.get("title") ?? "").trim();
+  const post_type = String(formData.get("post_type") ?? "").trim();
+  const content = String(formData.get("content") ?? "").trim();
+
+  if (!title) throw new Error("Title is required.");
+  if (!post_type) throw new Error("Post type is required.");
+  if (!content) throw new Error("Content is required.");
+
+  if (post_type.toLowerCase() === "member") {
+    throw new Error("'member' post type is reserved for member daily posts.");
+  }
+
+  const media = formData.get("media");
+  let media_url: string | null = null;
+  let media_type: string | null = null;
+
+  if (media instanceof File && media.size > 0) {
+    const mime = (media.type || "").toLowerCase();
+    if (!mime.startsWith("image/") && !mime.startsWith("video/")) {
+      throw new Error("Media must be an image or video.");
+    }
+
+    media_type = mime.startsWith("video/") ? "video" : "image";
+
+    const originalExt = (media.name.split(".").pop() || "").toLowerCase();
+    const ext =
+      (originalExt && /^[a-z0-9]+$/.test(originalExt) ? originalExt : "") ||
+      guessExtFromMime(mime) ||
+      (media_type === "video" ? "mp4" : "jpg");
+
+    const objectPath = `feed/admin/${user.id}/${randomUUID()}.${ext}`;
+    const bytes = Buffer.from(await media.arrayBuffer());
+
+    const admin = supabaseAdminOrNull();
+    const uploader = admin ?? sb;
+
+    const { error: uploadErr } = await uploader.storage
+      .from("cfm-photos")
+      .upload(objectPath, bytes, { contentType: mime, upsert: false });
+
+    if (uploadErr) {
+      const hint = admin
+        ? ""
+        : " (If this is failing in prod, ensure cfm-photos storage policies allow admin uploads or set SUPABASE_SERVICE_ROLE_KEY.)";
+      throw new Error(`Media upload failed: ${uploadErr.message}${hint}`);
+    }
+
+    const { data: publicData } = uploader.storage.from("cfm-photos").getPublicUrl(objectPath);
+    media_url = publicData.publicUrl;
+  }
+
+  const { error } = await sb.from("cfm_feed_posts").insert({
+    title,
+    post_type,
+    content,
+    media_url,
+    media_type,
+    author_user_id: user.id,
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/feed");
+  revalidatePath("/admin");
+  revalidatePath("/u");
+}
+
+export async function upsertMyDailyPost(formData: FormData) {
+  const user = await requireApprovedMember();
+  const sb = await supabaseServer();
+
+  const titleRaw = String(formData.get("title") ?? "").trim();
+  const content = String(formData.get("content") ?? "").trim();
+  if (!content) throw new Error("Post content is required.");
+  if (content.length > 2000) throw new Error("Post is too long (max 2000 chars).");
+
+  const today = todayISODate();
+
+  const { data: existing, error: existingErr } = await sb
+    .from("cfm_feed_posts")
+    .select("id,media_url,media_type")
+    .eq("post_type", "member")
+    .eq("author_user_id", user.id)
+    .eq("post_date", today)
+    .maybeSingle();
+  if (existingErr) throw new Error(existingErr.message);
+
+  const media = formData.get("media");
+  let media_url: string | null = (existing as any)?.media_url ?? null;
+  let media_type: string | null = (existing as any)?.media_type ?? null;
+
+  if (media instanceof File && media.size > 0) {
+    const mime = (media.type || "").toLowerCase();
+    if (!mime.startsWith("image/") && !mime.startsWith("video/")) {
+      throw new Error("Media must be an image or video.");
+    }
+
+    media_type = mime.startsWith("video/") ? "video" : "image";
+
+    const originalExt = (media.name.split(".").pop() || "").toLowerCase();
+    const ext =
+      (originalExt && /^[a-z0-9]+$/.test(originalExt) ? originalExt : "") ||
+      guessExtFromMime(mime) ||
+      (media_type === "video" ? "mp4" : "jpg");
+
+    const objectPath = `feed/member/${user.id}/${randomUUID()}.${ext}`;
+    const bytes = Buffer.from(await media.arrayBuffer());
+
+    const { error: uploadErr } = await sb.storage
+      .from("cfm-photos")
+      .upload(objectPath, bytes, { contentType: mime, upsert: false });
+    if (uploadErr) throw new Error(`Media upload failed: ${uploadErr.message}`);
+
+    const { data: publicData } = sb.storage.from("cfm-photos").getPublicUrl(objectPath);
+    media_url = publicData.publicUrl;
+  }
+
+  const title = titleRaw ? titleRaw : null;
+
+  if (existing?.id) {
+    const { error: updateErr } = await sb
+      .from("cfm_feed_posts")
+      .update({ title, content, media_url, media_type })
+      .eq("id", existing.id)
+      .eq("post_type", "member")
+      .eq("author_user_id", user.id)
+      .eq("post_date", today);
+    if (updateErr) throw new Error(updateErr.message);
+    revalidatePath("/feed");
+    revalidatePath("/hub");
+    return { ok: true as const, message: "Post updated." };
+  }
+
+  const { error: insertErr } = await sb.from("cfm_feed_posts").insert({
+    title,
+    content,
+    post_type: "member",
+    author_user_id: user.id,
+    post_date: today,
+    media_url,
+    media_type,
+  });
+
+  const msg = (insertErr?.message ?? "").toLowerCase();
+  const wasDup = msg.includes("duplicate") || msg.includes("unique");
+  if (insertErr && !wasDup) throw new Error(insertErr.message);
+
+  if (insertErr && wasDup) {
+    const { data: row, error: rowErr } = await sb
+      .from("cfm_feed_posts")
+      .select("id")
+      .eq("post_type", "member")
+      .eq("author_user_id", user.id)
+      .eq("post_date", today)
+      .maybeSingle();
+    if (rowErr) throw new Error(rowErr.message);
+    if (row?.id) {
+      const { error: updateErr } = await sb
+        .from("cfm_feed_posts")
+        .update({ title, content, media_url, media_type })
+        .eq("id", row.id)
+        .eq("post_type", "member")
+        .eq("author_user_id", user.id)
+        .eq("post_date", today);
+      if (updateErr) throw new Error(updateErr.message);
+    }
+  }
+
+  revalidatePath("/feed");
+  revalidatePath("/hub");
+  return { ok: true as const, message: "Post saved." };
+}
+
+export async function deleteMyDailyPost() {
+  const user = await requireApprovedMember();
+  const sb = await supabaseServer();
+
+  const today = todayISODate();
+  const { error } = await sb
+    .from("cfm_feed_posts")
+    .delete()
+    .eq("post_type", "member")
+    .eq("author_user_id", user.id)
+    .eq("post_date", today);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/feed");
+  revalidatePath("/hub");
+  return { ok: true as const, message: "Post deleted." };
+}
 
 function extractMentionUsernames(text: string) {
   const matches = String(text ?? "").matchAll(/@([A-Za-z0-9_]+)/g);

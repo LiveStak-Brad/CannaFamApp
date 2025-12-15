@@ -7,9 +7,11 @@ import {
   createPostGiftCheckoutSession,
   createSiteGiftCheckoutSession,
   deleteFeedComment,
+  deleteMyDailyPost,
   deleteFeedPost,
   hideFeedComment,
   logFeedPostShare,
+  upsertMyDailyPost,
   updateFeedComment,
   toggleCommentUpvote,
   toggleLike,
@@ -36,7 +38,125 @@ export type FeedPost = {
   created_at: string | null;
   media_url: string | null;
   media_type: string | null;
+  author_user_id?: string | null;
+  post_date?: string | null;
 };
+
+export type MyDailyPost = {
+  id: string;
+  title: string | null;
+  content: string | null;
+  media_url: string | null;
+  media_type: string | null;
+};
+
+export function MyDailyPostComposer({
+  canPost,
+  existing,
+}: {
+  canPost: boolean;
+  existing: MyDailyPost | null;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<null | { tone: "success" | "error"; text: string }>(null);
+
+  if (!canPost) return null;
+
+  return (
+    <Card title="Your post today">
+      <div className="space-y-3">
+        <div className="text-sm text-[color:var(--muted)]">
+          Limit 1 post per day. You can edit or delete your post for today.
+        </div>
+        {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setMsg(null);
+            const fd = new FormData(e.currentTarget);
+            startTransition(async () => {
+              try {
+                const res = await upsertMyDailyPost(fd);
+                setMsg({ tone: "success", text: res.message });
+                router.refresh();
+              } catch (err) {
+                setMsg({
+                  tone: "error",
+                  text: err instanceof Error ? err.message : "Save failed",
+                });
+              }
+            });
+          }}
+        >
+          <Input
+            label="Title (optional)"
+            name="title"
+            defaultValue={existing?.title ?? ""}
+            placeholder="Optional title"
+          />
+          <Textarea
+            label="Post"
+            name="content"
+            defaultValue={existing?.content ?? ""}
+            required
+            placeholder="Share an update for today"
+          />
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Media (optional)</div>
+            <input
+              type="file"
+              name="media"
+              accept="image/*,video/*"
+              className="block w-full text-sm text-[color:var(--muted)] file:mr-3 file:rounded-lg file:border file:border-[color:var(--border)] file:bg-black/20 file:px-3 file:py-2 file:text-sm file:text-[color:var(--foreground)]"
+            />
+            <div className="text-xs text-[color:var(--muted)]">One image or video.</div>
+          </div>
+
+          {existing?.media_url && existing?.media_type ? (
+            <div className="pt-1">
+              <FeedMedia mediaUrl={existing.media_url} mediaType={existing.media_type} />
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving..." : existing ? "Update" : "Post"}
+            </Button>
+            {existing ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => {
+                  const ok = window.confirm("Delete your post for today? This cannot be undone.");
+                  if (!ok) return;
+                  setMsg(null);
+                  startTransition(async () => {
+                    try {
+                      const res = await deleteMyDailyPost();
+                      setMsg({ tone: "success", text: res.message });
+                      router.refresh();
+                    } catch (err) {
+                      setMsg({
+                        tone: "error",
+                        text: err instanceof Error ? err.message : "Delete failed",
+                      });
+                    }
+                  });
+                }}
+              >
+                Delete
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      </div>
+    </Card>
+  );
+}
 
 export type LikerProfile = {
   user_id: string;

@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
+import { AdminPostComposer } from "@/components/ui/admin-post-composer";
+import { DailyPostComposer, type DailyPostDraft } from "@/components/ui/daily-post-composer";
 import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
+import { todayISODate } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -37,6 +40,16 @@ type AwardRow = {
   created_at: string | null;
 };
 
+type DailyPostRow = {
+  id: string;
+  title: string | null;
+  content: string | null;
+  media_url: string | null;
+  media_type: string | null;
+  created_at: string | null;
+  post_date: string | null;
+};
+
 function fmtTime(iso: string | null) {
   if (!iso) return "";
   try {
@@ -58,7 +71,7 @@ export default async function UserProfilePage({
 }: {
   params: Promise<{ username: string }>;
 }) {
-  await requireApprovedMember();
+  const authedUser = await requireApprovedMember();
   const sb = await supabaseServer();
   const admin = supabaseAdminOrNull();
 
@@ -143,6 +156,43 @@ export default async function UserProfilePage({
   }
 
   const linkedUserId = String(profile.user_id ?? "").trim() || null;
+
+  const isOwnProfile = !!linkedUserId && String(authedUser.id) === String(linkedUserId);
+
+  const { data: adminRow } = await sb
+    .from("cfm_admins")
+    .select("role")
+    .eq("user_id", authedUser.id)
+    .maybeSingle();
+  const adminRole = String((adminRow as any)?.role ?? "").trim();
+  const canAdminPost = adminRole === "owner" || adminRole === "admin";
+
+  let latestDailyPost: DailyPostRow | null = null;
+  if (linkedUserId) {
+    const { data } = await sb
+      .from("cfm_feed_posts")
+      .select("id,title,content,media_url,media_type,created_at,post_date")
+      .eq("post_type", "member")
+      .eq("author_user_id", linkedUserId)
+      .order("post_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    latestDailyPost = (data ?? null) as unknown as DailyPostRow | null;
+  }
+
+  let myDailyPostToday: DailyPostDraft | null = null;
+  if (isOwnProfile) {
+    const today = todayISODate();
+    const { data } = await sb
+      .from("cfm_feed_posts")
+      .select("id,title,content,media_url,media_type")
+      .eq("post_type", "member")
+      .eq("author_user_id", authedUser.id)
+      .eq("post_date", today)
+      .maybeSingle();
+    myDailyPostToday = (data ?? null) as unknown as DailyPostDraft | null;
+  }
 
   let pointsRow: any | null = null;
   if (linkedUserId) {
@@ -271,6 +321,54 @@ export default async function UserProfilePage({
             ) : null}
           </div>
         </Card>
+
+        <Card title="Daily post">
+          {!linkedUserId ? (
+            <div className="text-sm text-[color:var(--muted)]">
+              This member hasn’t linked their account yet.
+            </div>
+          ) : latestDailyPost ? (
+            <div className="space-y-3">
+              <div className="text-xs text-[color:var(--muted)]">
+                {latestDailyPost.post_date ? `${latestDailyPost.post_date}` : ""}
+                {latestDailyPost.created_at ? ` • ${fmtTime(latestDailyPost.created_at)}` : ""}
+              </div>
+              {latestDailyPost.title ? (
+                <div className="text-base font-semibold">{latestDailyPost.title}</div>
+              ) : null}
+              <div className="text-sm text-[color:var(--foreground)] whitespace-pre-wrap">
+                {latestDailyPost.content}
+              </div>
+              {latestDailyPost.media_url && latestDailyPost.media_type ? (
+                latestDailyPost.media_type === "video" ? (
+                  <video
+                    className="w-full rounded-xl border border-[color:var(--border)] bg-black"
+                    controls
+                    preload="metadata"
+                    src={latestDailyPost.media_url}
+                  />
+                ) : (
+                  <img
+                    src={latestDailyPost.media_url}
+                    alt="Daily post media"
+                    className="w-full rounded-xl border border-[color:var(--border)] object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                )
+              ) : null}
+            </div>
+          ) : (
+            <div className="text-sm text-[color:var(--muted)]">No daily post yet.</div>
+          )}
+        </Card>
+
+        {isOwnProfile ? (
+          <DailyPostComposer title="Post to your profile" existing={myDailyPostToday} />
+        ) : null}
+
+        {isOwnProfile && canAdminPost ? (
+          <AdminPostComposer title="Post to the feed (admin)" />
+        ) : null}
 
         <Card title="Recent comments">
           {!linkedUserId ? (

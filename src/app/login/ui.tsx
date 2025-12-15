@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   sendMagicLink,
   sendPasswordReset,
@@ -16,12 +16,21 @@ import { Notice } from "@/components/ui/notice";
 export function LoginForm() {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [intent, setIntent] = useState<"signin" | "signup">("signin");
   const formRef = useRef<HTMLFormElement | null>(null);
   const [result, setResult] = useState<null | { ok: boolean; message?: string }>(
     null,
   );
+
+  const callbackMessage = (() => {
+    const m = String(searchParams.get("message") ?? "").trim();
+    if (m) return m;
+    const e = String(searchParams.get("error") ?? "").trim();
+    if (e) return "Verification link is invalid or expired. Please resend the verification email or use magic link.";
+    return "";
+  })();
 
   const errorText =
     result && !result.ok
@@ -56,6 +65,7 @@ export function LoginForm() {
         });
       }}
     >
+      {callbackMessage ? <Notice tone="error">{callbackMessage}</Notice> : null}
       {result?.ok ? (
         <Notice tone="success">
           {typeof result.message === "string" && result.message.trim()

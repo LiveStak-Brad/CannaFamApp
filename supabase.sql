@@ -226,6 +226,15 @@ create table if not exists public.cfm_feed_posts (
   created_at timestamp default now()
 );
 
+alter table public.cfm_feed_posts add column if not exists author_user_id uuid;
+alter table public.cfm_feed_posts add column if not exists post_date date;
+alter table public.cfm_feed_posts add column if not exists media_url text;
+alter table public.cfm_feed_posts add column if not exists media_type text;
+
+create unique index if not exists cfm_feed_posts_one_per_user_per_day
+  on public.cfm_feed_posts (author_user_id, post_date)
+  where post_type = 'member' and author_user_id is not null and post_date is not null;
+
 -- Feed likes
 create table if not exists public.cfm_feed_likes (
   id uuid primary key default gen_random_uuid(),
@@ -439,6 +448,60 @@ on public.cfm_feed_posts
 for delete
 to authenticated
 using (public.cfm_is_admin());
+
+drop policy if exists "feed_posts_insert_member_daily" on public.cfm_feed_posts;
+create policy "feed_posts_insert_member_daily"
+on public.cfm_feed_posts
+for insert
+to authenticated
+with check (
+  public.cfm_is_admin()
+  or (
+    public.cfm_is_approved_member()
+    and post_type = 'member'
+    and author_user_id = auth.uid()
+    and post_date = timezone('America/Chicago', now())::date
+  )
+);
+
+drop policy if exists "feed_posts_update_member_own_today" on public.cfm_feed_posts;
+create policy "feed_posts_update_member_own_today"
+on public.cfm_feed_posts
+for update
+to authenticated
+using (
+  public.cfm_is_admin()
+  or (
+    public.cfm_is_approved_member()
+    and post_type = 'member'
+    and author_user_id = auth.uid()
+    and post_date = timezone('America/Chicago', now())::date
+  )
+)
+with check (
+  public.cfm_is_admin()
+  or (
+    public.cfm_is_approved_member()
+    and post_type = 'member'
+    and author_user_id = auth.uid()
+    and post_date = timezone('America/Chicago', now())::date
+  )
+);
+
+drop policy if exists "feed_posts_delete_member_own_today" on public.cfm_feed_posts;
+create policy "feed_posts_delete_member_own_today"
+on public.cfm_feed_posts
+for delete
+to authenticated
+using (
+  public.cfm_is_admin()
+  or (
+    public.cfm_is_approved_member()
+    and post_type = 'member'
+    and author_user_id = auth.uid()
+    and post_date = timezone('America/Chicago', now())::date
+  )
+);
 
 -- cfm_feed_likes
 create policy "feed_likes_select_anyone"
