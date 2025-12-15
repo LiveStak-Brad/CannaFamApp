@@ -243,6 +243,12 @@ for select
 to authenticated
 using (user_id = auth.uid());
 
+create policy "members_select_approved"
+on public.cfm_members
+for select
+to authenticated
+using (public.cfm_is_admin() or public.cfm_is_approved_member());
+
 grant select on public.cfm_public_members to anon, authenticated;
 
 create policy "members_insert_admin_only"
