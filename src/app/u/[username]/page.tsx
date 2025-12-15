@@ -56,16 +56,16 @@ export default async function UserProfilePage({
 
   const uname = String(params.username ?? "").trim();
 
-  const { data: profileRaw } = await sb
+  const { data: profileRows } = await sb
     .from("cfm_public_members")
     .select(
-      "favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+      "favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link,created_at",
     )
     .ilike("favorited_username", uname)
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-  const profile = (profileRaw as unknown as PublicProfile | null) ?? null;
+  const profile = ((profileRows ?? [])[0] as unknown as PublicProfile | null) ?? null;
   if (!profile?.favorited_username) {
     return (
       <Container>
@@ -76,14 +76,13 @@ export default async function UserProfilePage({
     );
   }
 
-  const { data: memberIdRaw } = await sb
+  const { data: memberIdRows } = await sb
     .from("cfm_public_member_ids")
     .select("user_id,favorited_username")
     .ilike("favorited_username", profile.favorited_username)
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
-  const memberId = (memberIdRaw as unknown as PublicMemberId | null) ?? null;
+  const memberId = ((memberIdRows ?? [])[0] as unknown as PublicMemberId | null) ?? null;
   const linkedUserId = String(memberId?.user_id ?? "").trim() || null;
 
   let pointsRow: any | null = null;
