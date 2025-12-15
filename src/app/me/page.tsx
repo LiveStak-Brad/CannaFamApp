@@ -35,6 +35,7 @@ export default async function MePage() {
     .maybeSingle();
 
   const member = (memberRaw as unknown as MemberProfile | null) ?? null;
+  const myUsername = String(member?.favorited_username ?? "").trim();
 
   return (
     <Container>
@@ -53,16 +54,16 @@ export default async function MePage() {
                 <img
                   src={member.photo_url}
                   alt={member.favorited_username ?? "Member"}
-                  className="h-14 w-14 rounded-full border border-[color:var(--border)] object-cover"
+                  className="h-14 w-14 rounded-full border border-[color:var(--border)] object-cover object-top"
                   referrerPolicy="no-referrer"
                 />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold truncate">
                     {member.favorited_username ?? "Member"}
                   </div>
-                  {member?.favorited_username ? (
+                  {myUsername ? (
                     <Link
-                      href={`/u/${encodeURIComponent(member.favorited_username)}`}
+                      href={`/u/${encodeURIComponent(myUsername)}`}
                       className="text-xs text-[color:var(--muted)] underline underline-offset-4"
                     >
                       View public profile

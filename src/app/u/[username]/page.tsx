@@ -3,6 +3,7 @@ import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdminOrNull } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -49,18 +50,67 @@ export default async function UserProfilePage({
 }) {
   await requireApprovedMember();
   const sb = await supabaseServer();
+  const admin = supabaseAdminOrNull();
 
-  let uname = String(params.username ?? "").trim();
+  let uname = String(params.username ?? "");
   try {
     uname = decodeURIComponent(uname);
   } catch {
   }
+  uname = uname.trim();
 
-  const { data, error: lookupErr } = await sb.rpc("cfm_get_member_profile", { username: uname });
-  const rows = Array.isArray(data) ? data : data ? [data] : [];
-  const profile = ((rows[0] ?? null) as unknown as PublicProfile | null) ?? null;
+  if (!uname) {
+    return (
+      <Container>
+        <Card title="Profile">
+          <div className="text-sm text-[color:var(--muted)]">Invalid profile URL.</div>
+          <div className="mt-2 text-xs text-[color:var(--muted)]">
+            Lookup: <span className="font-mono">{uname || "(empty)"}</span>
+          </div>
+        </Card>
+      </Container>
+    );
+  }
 
-  const lookupErrMsg = (lookupErr?.message || "").trim();
+  const profileFields =
+    "user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link";
+
+  let profile: PublicProfile | null = null;
+  let lookupErrMsg = "";
+
+  if (admin) {
+    const exactRes = await admin
+      .from("cfm_members")
+      .select(profileFields)
+      .eq("favorited_username", uname)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const exactRows = (exactRes.data ?? []) as any[];
+    if (exactRes.error) lookupErrMsg = exactRes.error.message;
+
+    if (exactRows.length) {
+      profile = (exactRows[0] as unknown as PublicProfile) ?? null;
+    } else {
+      const likeRes = await admin
+        .from("cfm_members")
+        .select(profileFields)
+        .ilike("favorited_username", uname)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const likeRows = (likeRes.data ?? []) as any[];
+      if (likeRes.error) lookupErrMsg = likeRes.error.message;
+      profile = (likeRows[0] as unknown as PublicProfile) ?? null;
+    }
+  } else {
+    const rpcRes = await sb.rpc("cfm_get_member_profile", { username: uname });
+    if (rpcRes.error) lookupErrMsg = rpcRes.error.message;
+    const data = rpcRes.data as unknown;
+    const rows = Array.isArray(data) ? (data as any[]) : data ? [data] : [];
+    profile = (rows[0] as unknown as PublicProfile) ?? null;
+  }
+
+  lookupErrMsg = String(lookupErrMsg || "").trim();
   if (!profile?.favorited_username) {
     return (
       <Container>

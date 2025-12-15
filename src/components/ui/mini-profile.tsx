@@ -96,12 +96,14 @@ export function MiniProfileModal({
   const bio = subject.bio ?? null;
 
   const socials = [
-    { key: "public_link", label: "Link", href: subject.public_link ?? null },
+    { key: "public", label: "Link", href: subject.public_link ?? null },
     { key: "instagram", label: "IG", href: subject.instagram_link ?? null },
     { key: "x", label: "X", href: subject.x_link ?? null },
     { key: "tiktok", label: "TikTok", href: subject.tiktok_link ?? null },
     { key: "youtube", label: "YouTube", href: subject.youtube_link ?? null },
   ].filter((s) => !!s.href);
+
+  const uname = String(subject.favorited_username ?? "").trim();
 
   return (
     <div className="fixed inset-0 z-50">
@@ -117,7 +119,7 @@ export function MiniProfileModal({
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Link
-                href={`/u/${encodeURIComponent(subject.favorited_username)}`}
+                href={`/u/${encodeURIComponent(uname)}`}
                 onClick={() => onClose()}
                 className="shrink-0"
               >
@@ -125,7 +127,7 @@ export function MiniProfileModal({
                   <img
                     src={photoUrl}
                     alt={subject.favorited_username}
-                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover"
+                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover object-top"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
@@ -138,7 +140,7 @@ export function MiniProfileModal({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link
-                      href={`/u/${encodeURIComponent(subject.favorited_username)}`}
+                      href={`/u/${encodeURIComponent(uname)}`}
                       onClick={() => onClose()}
                       className="block text-base font-semibold truncate"
                     >

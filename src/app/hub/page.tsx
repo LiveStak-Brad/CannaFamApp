@@ -136,6 +136,8 @@ export default async function HubPage() {
     ? leaderboard.find((r: any) => r.user_id === user.id) ?? null
     : null;
 
+  const myUsername = String(member?.favorited_username ?? "").trim();
+
   return (
     <Container>
       <div className="space-y-4">
@@ -188,10 +190,10 @@ export default async function HubPage() {
                 <Button as="link" href="/me" variant="secondary">
                   Edit profile
                 </Button>
-                {member?.favorited_username ? (
+                {myUsername ? (
                   <Button
                     as="link"
-                    href={`/u/${encodeURIComponent(member.favorited_username)}`}
+                    href={`/u/${encodeURIComponent(myUsername)}`}
                     variant="secondary"
                   >
                     View profile
