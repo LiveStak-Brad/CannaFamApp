@@ -70,6 +70,10 @@ function PointsExplainerModal({ open, onClose }: { open: boolean; onClose: () =>
                 <div className="text-[color:var(--muted)]">Random 1–5 per day</div>
               </div>
               <div className="flex items-start justify-between gap-3">
+                <div className="font-semibold">💰 Gifts</div>
+                <div className="text-[color:var(--muted)]">+1 per $1 gifted (paid gifts)</div>
+              </div>
+              <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">🎁 Gift bonus</div>
                 <div className="text-[color:var(--muted)]">+5 per day (admin confirmed)</div>
               </div>
