@@ -192,7 +192,7 @@ export function LeaderboardClient({
                       <span>🔎 {m.link_visit_points ?? 0}</span>
                     ) : null}
                     {typeof m.gift_dollar_points !== "undefined" ? (
-                      <span>$ {m.gift_dollar_points ?? 0}</span>
+                      <span>💰 {m.gift_dollar_points ?? 0}</span>
                     ) : null}
                   </div>
                 </div>

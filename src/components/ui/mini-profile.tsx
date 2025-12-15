@@ -181,7 +181,7 @@ export function MiniProfileModal({
                     <span>🔎 {lb.link_visit_points ?? 0}</span>
                   ) : null}
                   {typeof lb.gift_dollar_points !== "undefined" ? (
-                    <span>$ {lb.gift_dollar_points ?? 0}</span>
+                    <span>💰 {lb.gift_dollar_points ?? 0}</span>
                   ) : null}
                 </div>
               </div>
