@@ -519,8 +519,6 @@ function WhoLikedModal({
       }
     : null;
 
-  const followedSet = useMemo(() => new Set(followedUserIds ?? []), [followedUserIds]);
-
   return (
     <div className="fixed inset-0 z-50">
       <button
@@ -575,7 +573,6 @@ function WhoLikedModal({
         leaderboard={leaderboard}
         awards={awards}
         myUserId={myUserId}
-        initialFollowing={selectedSubject?.user_id ? followedSet.has(selectedSubject.user_id) : undefined}
         onClose={() => setSelectedUserId(null)}
       />
     </div>
@@ -1224,7 +1221,6 @@ function CommentsModal({
         awards={awards}
         leaderboard={leaderboard}
         myUserId={myUserId}
-        initialFollowing={selected?.user_id ? followedSet.has(selected.user_id) : undefined}
         onClose={() => setSelectedUserId(null)}
       />
     </div>
