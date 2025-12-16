@@ -249,6 +249,7 @@ export default async function FeedPage({
     post_id: string;
     user_id: string;
     content: string;
+    parent_comment_id: string | null;
     created_at: string | null;
     is_hidden: boolean | null;
   };
@@ -275,14 +276,32 @@ export default async function FeedPage({
   >();
 
   try {
-    const { data: commentRows } = postIds.length
-      ? await sb
-          .from("cfm_feed_comments")
-          .select("id,post_id,user_id,content,created_at,is_hidden")
-          .in("post_id", postIds)
-          .order("created_at", { ascending: true })
-      : { data: [] };
-    comments = (commentRows ?? []) as any;
+    if (postIds.length) {
+      const resWithParent = await sb
+        .from("cfm_feed_comments")
+        .select("id,post_id,user_id,content,parent_comment_id,created_at,is_hidden")
+        .in("post_id", postIds)
+        .order("created_at", { ascending: true });
+
+      if (resWithParent.error) {
+        const msg = String(resWithParent.error.message ?? "");
+        if (msg.includes("parent_comment_id") && msg.toLowerCase().includes("does not exist")) {
+          const resNoParent = await sb
+            .from("cfm_feed_comments")
+            .select("id,post_id,user_id,content,created_at,is_hidden")
+            .in("post_id", postIds)
+            .order("created_at", { ascending: true });
+          if (resNoParent.error) throw new Error(resNoParent.error.message);
+          comments = ((resNoParent.data ?? []) as any[]).map((r) => ({ ...r, parent_comment_id: null }));
+        } else {
+          throw new Error(msg);
+        }
+      } else {
+        comments = (resWithParent.data ?? []) as any;
+      }
+    } else {
+      comments = [];
+    }
 
     const commentIds = comments.map((c) => c.id);
     const { data: upvoteRows } = commentIds.length

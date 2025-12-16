@@ -746,15 +746,33 @@ export async function deleteFeedPost(postId: string) {
   return { ok: true as const, message: "Post deleted." };
 }
 
-export async function addFeedComment(postId: string, content: string) {
+export async function addFeedComment(postId: string, content: string, parentCommentId?: string | null) {
   const user = await requireApprovedMember();
   const sb = await supabaseServer();
 
   const pid = String(postId ?? "").trim();
   const text = String(content ?? "").trim();
+  const parentId = String(parentCommentId ?? "").trim() || null;
   if (!pid) throw new Error("Post id is required.");
   if (!text) throw new Error("Comment cannot be empty.");
   if (text.length > 500) throw new Error("Comment is too long (max 500 chars).");
+
+  if (parentId) {
+    const { data: parentRow, error: parentErr } = await sb
+      .from("cfm_feed_comments")
+      .select("id,post_id,parent_comment_id,user_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (parentErr) throw new Error(parentErr.message);
+
+    const parent = (parentRow ?? null) as any;
+    const parentPostId = String(parent?.post_id ?? "").trim();
+    const parentParentId = String(parent?.parent_comment_id ?? "").trim();
+
+    if (!parentPostId) throw new Error("Parent comment not found.");
+    if (parentPostId !== pid) throw new Error("Reply must be on the same post.");
+    if (parentParentId) throw new Error("Only one level of replies is allowed.");
+  }
 
   const { data: commentRow, error } = await sb
     .from("cfm_feed_comments")
@@ -762,6 +780,7 @@ export async function addFeedComment(postId: string, content: string) {
       post_id: pid,
       user_id: user.id,
       content: text,
+      parent_comment_id: parentId,
     })
     .select("id,post_id,user_id")
     .maybeSingle();
@@ -787,6 +806,7 @@ export async function addFeedComment(postId: string, content: string) {
       const p = (post ?? null) as FeedPostRow | null;
       const ownerId = String(p?.author_user_id ?? "").trim();
       if (ownerId && ownerId !== user.id) {
+        const msgText = parentId ? "replied to a comment on your post" : "commented on your post";
         const { error: notieErr } = await admin.from("cfm_noties").insert({
           member_id: ownerId,
           user_id: ownerId,
@@ -796,10 +816,34 @@ export async function addFeedComment(postId: string, content: string) {
           entity_id: pid,
           post_id: pid,
           comment_id: commentId,
-          message: "commented on your post",
+          message: msgText,
           is_read: false,
         });
         if (notieErr) console.error("Failed to create comment notie", notieErr.message);
+      }
+
+      if (parentId) {
+        const { data: parentRow } = await admin
+          .from("cfm_feed_comments")
+          .select("id,user_id")
+          .eq("id", parentId)
+          .maybeSingle();
+        const parentOwnerId = String((parentRow as any)?.user_id ?? "").trim();
+        if (parentOwnerId && parentOwnerId !== user.id) {
+          const { error: replyNotieErr } = await admin.from("cfm_noties").insert({
+            member_id: parentOwnerId,
+            user_id: parentOwnerId,
+            actor_user_id: user.id,
+            type: "comment",
+            entity_type: "comment",
+            entity_id: parentId,
+            post_id: pid,
+            comment_id: commentId,
+            message: "replied to your comment",
+            is_read: false,
+          });
+          if (replyNotieErr) console.error("Failed to create reply notie", replyNotieErr.message);
+        }
       }
 
       await notifyFollowers({
@@ -810,7 +854,7 @@ export async function addFeedComment(postId: string, content: string) {
         entityId: commentId,
         postId: pid,
         commentId,
-        message: "commented",
+        message: parentId ? "replied" : "commented",
       });
 
       await notifyMentionedUsers({

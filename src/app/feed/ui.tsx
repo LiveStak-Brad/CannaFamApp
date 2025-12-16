@@ -176,6 +176,7 @@ export type FeedComment = {
   post_id: string;
   user_id: string;
   content: string;
+  parent_comment_id: string | null;
   created_at: string | null;
   is_hidden: boolean | null;
 };
@@ -484,6 +485,7 @@ function WhoLikedModal({
   awards,
   leaderboard,
   myUserId,
+  followedUserIds,
   onClose,
 }: {
   open: boolean;
@@ -492,6 +494,7 @@ function WhoLikedModal({
   awards: MiniProfileAwardRow[];
   leaderboard: MiniProfilePointsRow[];
   myUserId?: string | null;
+  followedUserIds?: string[];
   onClose: () => void;
 }) {
   if (!open) return null;
@@ -515,6 +518,8 @@ function WhoLikedModal({
         youtube_link: selected.youtube_link ?? null,
       }
     : null;
+
+  const followedSet = useMemo(() => new Set(followedUserIds ?? []), [followedUserIds]);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -570,6 +575,7 @@ function WhoLikedModal({
         leaderboard={leaderboard}
         awards={awards}
         myUserId={myUserId}
+        initialFollowing={selectedSubject?.user_id ? followedSet.has(selectedSubject.user_id) : undefined}
         onClose={() => setSelectedUserId(null)}
       />
     </div>
@@ -585,6 +591,26 @@ function fmtTime(s: string | null) {
   }
 }
 
+export function LocalTime({ iso }: { iso: string | null | undefined }) {
+  const [out, setOut] = useState<string>("");
+
+  useEffect(() => {
+    const s = String(iso ?? "").trim();
+    if (!s) {
+      setOut("");
+      return;
+    }
+    try {
+      setOut(new Date(s).toLocaleString());
+    } catch {
+      setOut(s);
+    }
+  }, [iso]);
+
+  if (!iso) return null;
+  return <span>{out}</span>;
+}
+
 function CommentsModal({
   open,
   postId,
@@ -594,6 +620,7 @@ function CommentsModal({
   mentionCandidates,
   comments,
   commenterProfiles,
+  followedUserIds,
   upvoteCountByComment,
   upvotedByMe,
   awards,
@@ -620,6 +647,7 @@ function CommentsModal({
       youtube_link?: string | null;
     }
   >;
+  followedUserIds?: string[];
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;
   awards: MiniProfileAwardRow[];
@@ -631,12 +659,20 @@ function CommentsModal({
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [text, setText] = useState("");
+  const [sortMode, setSortMode] = useState<"newest" | "top">("newest");
+  const [replyToId, setReplyToId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>("");
+
+  const [localComments, setLocalComments] = useState<FeedComment[]>(comments);
+
+  useEffect(() => {
+    setLocalComments(comments);
+  }, [comments]);
 
   const selected = useMemo(() => {
     if (!selectedUserId) return null;
@@ -656,10 +692,49 @@ function CommentsModal({
     return subj;
   }, [commenterProfiles, selectedUserId]);
 
+  const followedSet = useMemo(() => new Set(followedUserIds ?? []), [followedUserIds]);
+
   const visible = useMemo(
-    () => comments.filter((c) => !c.is_hidden || isAdmin),
-    [comments, isAdmin],
+    () => localComments.filter((c) => !c.is_hidden || isAdmin),
+    [localComments, isAdmin],
   );
+
+  const replyToComment = useMemo(() => {
+    if (!replyToId) return null;
+    return visible.find((c) => c.id === replyToId) ?? null;
+  }, [replyToId, visible]);
+
+  const threads = useMemo(() => {
+    const parents = visible.filter((c) => !c.parent_comment_id);
+    const byParent = new Map<string, FeedComment[]>();
+    for (const c of visible) {
+      const pid = String(c.parent_comment_id ?? "").trim();
+      if (!pid) continue;
+      byParent.set(pid, [...(byParent.get(pid) ?? []), c]);
+    }
+
+    const byCreatedDesc = (a: FeedComment, b: FeedComment) => {
+      const at = String(a.created_at ?? "");
+      const bt = String(b.created_at ?? "");
+      if (at === bt) return 0;
+      return at > bt ? -1 : 1;
+    };
+
+    const byTop = (a: FeedComment, b: FeedComment) => {
+      const au = upvoteCountByComment.get(a.id) ?? 0;
+      const bu = upvoteCountByComment.get(b.id) ?? 0;
+      if (au !== bu) return bu - au;
+      return byCreatedDesc(a, b);
+    };
+
+    parents.sort(sortMode === "top" ? byTop : byCreatedDesc);
+
+    return parents.map((p) => {
+      const replies = (byParent.get(p.id) ?? []).slice();
+      replies.sort(sortMode === "top" ? byTop : byCreatedDesc);
+      return { parent: p, replies };
+    });
+  }, [sortMode, upvoteCountByComment, visible]);
 
   const mentionMatches = useMemo(() => {
     const q = (mentionQuery ?? "").trim().toLowerCase();
@@ -762,7 +837,40 @@ function CommentsModal({
             {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
 
             <div className="text-xs text-[color:var(--muted)]">
-              {comments.length} comment(s)
+              {localComments.length} comment(s)
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant={sortMode === "newest" ? "secondary" : undefined}
+                  disabled={pending}
+                  onClick={() => setSortMode("newest")}
+                >
+                  Newest
+                </Button>
+                <Button
+                  type="button"
+                  variant={sortMode === "top" ? "secondary" : undefined}
+                  disabled={pending}
+                  onClick={() => setSortMode("top")}
+                >
+                  Top
+                </Button>
+              </div>
+              {replyToComment ? (
+                <div className="text-xs text-[color:var(--muted)]">
+                  Replying to <span className="font-semibold">{commenterProfiles.get(replyToComment.user_id)?.favorited_username ?? "Member"}</span>
+                  <button
+                    type="button"
+                    className="ml-2 underline underline-offset-4"
+                    onClick={() => setReplyToId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             {canComment ? (
@@ -829,9 +937,28 @@ function CommentsModal({
                       setMsg(null);
                       startTransition(async () => {
                         try {
-                          const res = await addFeedComment(postId, text);
+                          const res = await addFeedComment(postId, text, replyToId);
                           setMsg({ tone: "success", text: res.message });
+                          const newId = String((res as any)?.commentId ?? "").trim() ||
+                            (globalThis.crypto && "randomUUID" in globalThis.crypto
+                              ? (globalThis.crypto as any).randomUUID()
+                              : String(Date.now()));
+                          if (myUserId) {
+                            setLocalComments((prev) => [
+                              ...prev,
+                              {
+                                id: newId,
+                                post_id: postId,
+                                user_id: myUserId,
+                                content: text,
+                                parent_comment_id: replyToId ?? null,
+                                created_at: new Date().toISOString(),
+                                is_hidden: false,
+                              },
+                            ]);
+                          }
                           setText("");
+                          setReplyToId(null);
                         } catch (e) {
                           setMsg({
                             tone: "error",
@@ -852,23 +979,31 @@ function CommentsModal({
             )}
 
             <div className="max-h-[55vh] space-y-2 overflow-auto">
-              {visible.length ? (
-                visible.map((c) => {
-                  const p = commenterProfiles.get(c.user_id) ?? null;
-                  const name = p?.favorited_username || "Member";
-                  const photo = p?.photo_url ?? null;
-                  const bio = p?.bio ?? null;
-
-                  const upCount = upvoteCountByComment.get(c.id) ?? 0;
-                  const mine = upvotedByMe.has(c.id);
-                  const isOwner = !!myUserId && c.user_id === myUserId;
-                  const isEditing = editingId === c.id;
-
+              {threads.length ? (
+                threads.map(({ parent, replies }) => {
+                  const all = [parent, ...replies];
                   return (
-                    <div
-                      key={c.id}
-                      className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
-                    >
+                    <div key={parent.id} className="space-y-2">
+                      {all.map((c) => {
+                        const isReply = !!c.parent_comment_id;
+                        const p = commenterProfiles.get(c.user_id) ?? null;
+                        const name = p?.favorited_username || "Member";
+                        const photo = p?.photo_url ?? null;
+                        const bio = p?.bio ?? null;
+
+                        const upCount = upvoteCountByComment.get(c.id) ?? 0;
+                        const mine = upvotedByMe.has(c.id);
+                        const isOwner = !!myUserId && c.user_id === myUserId;
+                        const isEditing = editingId === c.id;
+
+                        return (
+                          <div
+                            key={c.id}
+                            className={
+                              "rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3 " +
+                              (isReply ? "ml-10" : "")
+                            }
+                          >
                       <div className="flex items-start justify-between gap-3">
                         <button
                           type="button"
@@ -888,7 +1023,11 @@ function CommentsModal({
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <div className="text-sm font-semibold truncate">{name}</div>
-                              <FollowInline targetUserId={c.user_id} myUserId={myUserId} />
+                              <FollowInline
+                                targetUserId={c.user_id}
+                                myUserId={myUserId}
+                                initialFollowing={followedSet.has(c.user_id)}
+                              />
                             </div>
                             {bio ? (
                               <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
@@ -924,6 +1063,22 @@ function CommentsModal({
                           >
                             ⬆ {upCount}
                           </button>
+
+                          {!isReply ? (
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                onClick={() => {
+                                  if (!canComment) return;
+                                  setReplyToId(c.id);
+                                  requestAnimationFrame(() => composerRef.current?.focus());
+                                }}
+                              >
+                                Reply
+                              </button>
+                            </div>
+                          ) : null}
 
                           {isOwner ? (
                             <div className="mt-2 flex justify-end gap-2">
@@ -1043,6 +1198,9 @@ function CommentsModal({
                       {c.is_hidden && isAdmin ? (
                         <div className="mt-2 text-xs text-[color:var(--muted)]">Hidden from public.</div>
                       ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })
@@ -1066,6 +1224,7 @@ function CommentsModal({
         awards={awards}
         leaderboard={leaderboard}
         myUserId={myUserId}
+        initialFollowing={selected?.user_id ? followedSet.has(selected.user_id) : undefined}
         onClose={() => setSelectedUserId(null)}
       />
     </div>
@@ -1080,6 +1239,7 @@ export function CommentsButton({
   mentionCandidates,
   comments,
   commenterProfiles,
+  followedUserIds,
   upvoteCountByComment,
   upvotedByMe,
   awards,
@@ -1092,6 +1252,7 @@ export function CommentsButton({
   mentionCandidates: MentionCandidate[];
   comments: FeedComment[];
   commenterProfiles: Map<string, { favorited_username: string; photo_url: string | null; bio?: string | null }>;
+  followedUserIds?: string[];
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;
   awards: MiniProfileAwardRow[];
@@ -1118,6 +1279,7 @@ export function CommentsButton({
         mentionCandidates={mentionCandidates}
         comments={comments}
         commenterProfiles={commenterProfiles}
+        followedUserIds={followedUserIds}
         upvoteCountByComment={upvoteCountByComment}
         upvotedByMe={upvotedByMe}
         awards={awards}
@@ -1426,6 +1588,7 @@ export function LikeButton({
   leaderboard,
   canEarn = true,
   myUserId,
+  followedUserIds,
 }: {
   postId: string;
   liked: boolean;
@@ -1435,6 +1598,7 @@ export function LikeButton({
   leaderboard: MiniProfilePointsRow[];
   canEarn?: boolean;
   myUserId?: string | null;
+  followedUserIds?: string[];
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -1498,6 +1662,7 @@ export function LikeButton({
         awards={awards}
         leaderboard={leaderboard}
         myUserId={myUserId}
+        followedUserIds={followedUserIds}
         onClose={() => setOpenWhoLiked(false)}
       />
     </div>
