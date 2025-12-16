@@ -510,7 +510,11 @@ export async function assignAward(formData: FormData) {
       const { error: fErr } = await sb.from("cfm_noties").insert(rows);
       if (fErr) console.error("Failed to notify followers of award", fErr.message);
     }
-  } catch {
+  } catch (e) {
+    console.error(
+      "assignAward notie fanout failed",
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   revalidatePath("/admin");

@@ -163,7 +163,11 @@ export async function createAdminPost(formData: FormData) {
       });
       revalidatePath("/noties");
     }
-  } catch {
+  } catch (e) {
+    console.error(
+      "Noties fanout failed after admin post",
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   revalidatePath("/feed");
@@ -307,7 +311,11 @@ export async function upsertMyDailyPost(formData: FormData) {
         });
         revalidatePath("/noties");
       }
-    } catch {
+    } catch (e) {
+      console.error(
+        "Noties fanout failed after member post",
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 
@@ -497,7 +505,11 @@ export async function toggleLike(postId: string, liked: boolean) {
           revalidatePath("/noties");
         }
       }
-    } catch {
+    } catch (e) {
+      console.error(
+        "toggleLike notie insert failed",
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 
@@ -810,7 +822,11 @@ export async function addFeedComment(postId: string, content: string) {
       });
 
       revalidatePath("/noties");
-    } catch {
+    } catch (e) {
+      console.error(
+        "addFeedComment notie fanout failed",
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 
@@ -875,7 +891,11 @@ export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
         });
         if (notieErr) console.error("Failed to create upvote notie", notieErr.message);
       }
-    } catch {
+    } catch (e) {
+      console.error(
+        "toggleCommentUpvote notie insert failed",
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 

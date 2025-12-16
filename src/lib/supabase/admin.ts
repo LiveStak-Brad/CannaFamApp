@@ -11,7 +11,11 @@ export function supabaseAdmin() {
 export function supabaseAdminOrNull() {
   try {
     return supabaseAdmin();
-  } catch {
+  } catch (e) {
+    console.error(
+      "supabaseAdminOrNull failed",
+      e instanceof Error ? e.message : String(e),
+    );
     return null;
   }
 }

@@ -40,7 +40,11 @@ export async function setFollow(targetUserId: string, shouldFollow: boolean) {
         });
         if (notieErr) console.error("Failed to create follow notie", notieErr.message);
       }
-    } catch {
+    } catch (e) {
+      console.error(
+        "setFollow notie insert failed",
+        e instanceof Error ? e.message : String(e),
+      );
     }
   } else {
     const { error } = await sb
