@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { centralDayRangeUTC, todayISODate } from "@/lib/utils";
+import { NotiesClient, type ActorProfile, type NotieRow } from "./ui";
 
 export const runtime = "nodejs";
 
@@ -25,26 +26,10 @@ type Checklist = {
   link_visits_capped: number;
 };
 
-type Notie = {
-  id: string;
-  type: string;
-  is_read: boolean;
-  post_id: string | null;
-  comment_id: string | null;
-  actor_user_id: string | null;
-  created_at: string | null;
-};
+type Notie = NotieRow;
 
 function clamp(n: number, max: number) {
   return Math.max(0, Math.min(max, n));
-}
-
-function notieLabel(type: string) {
-  const t = String(type ?? "").trim();
-  if (t === "comment_upvote") return "⬆️ Someone upvoted your comment";
-  if (t === "mention") return "@ You were mentioned";
-  if (t === "new_comment") return "💬 New comment";
-  return "🔔 Notification";
 }
 
 export default async function NotiesPage() {
@@ -58,8 +43,8 @@ export default async function NotiesPage() {
   let notiesErrorMessage: string | null = null;
   const { data: notiesData, error: notiesErr } = await sb
     .from("cfm_noties")
-    .select("id,type,is_read,post_id,comment_id,actor_user_id,created_at")
-    .eq("member_id", user.id)
+    .select("id,type,is_read,entity_type,entity_id,post_id,comment_id,actor_user_id,message,created_at")
+    .or(`user_id.eq.${user.id},member_id.eq.${user.id}`)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -68,14 +53,39 @@ export default async function NotiesPage() {
     noties = [];
   } else {
     noties = (notiesData ?? []) as Notie[];
+  }
 
-    const unreadIds = noties.filter((n) => !n?.is_read).map((n) => n.id);
-    if (unreadIds.length) {
-      const { error: markErr } = await sb
-        .from("cfm_noties")
-        .update({ is_read: true })
-        .in("id", unreadIds);
-      if (markErr) notiesErrorMessage = markErr.message;
+  const actorIds = Array.from(
+    new Set(
+      (noties ?? [])
+        .map((n) => String((n as any)?.actor_user_id ?? "").trim())
+        .filter((v) => v),
+    ),
+  );
+
+  let actorProfiles: Record<string, ActorProfile> = {};
+  if (actorIds.length) {
+    try {
+      const { data: rows } = await sb
+        .from("cfm_public_member_ids")
+        .select("user_id,favorited_username,photo_url")
+        .in("user_id", actorIds)
+        .limit(500);
+      actorProfiles = Object.fromEntries(
+        (rows ?? []).map((r: any) => {
+          const uid = String(r.user_id ?? "").trim();
+          return [
+            uid,
+            {
+              user_id: uid,
+              favorited_username: String(r.favorited_username ?? "").trim(),
+              photo_url: r.photo_url ?? null,
+            } satisfies ActorProfile,
+          ];
+        }),
+      );
+    } catch {
+      actorProfiles = {};
     }
   }
 
@@ -267,35 +277,7 @@ export default async function NotiesPage() {
           {notiesErrorMessage ? (
             <div className="mb-2 text-sm text-red-200">{notiesErrorMessage}</div>
           ) : null}
-          {noties.length ? (
-            <div className="space-y-2">
-              {noties.map((n) => {
-                const postId = n?.post_id ? String(n.post_id) : "";
-                const href = postId ? `/feed#${postId}` : "/feed";
-                return (
-                  <Link
-                    key={String(n.id)}
-                    href={href}
-                    className="block rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{notieLabel(n?.type)}</div>
-                        <div className="mt-1 text-xs text-[color:var(--muted)] truncate">
-                          {n?.created_at ? new Date(String(n.created_at)).toLocaleString() : ""}
-                        </div>
-                      </div>
-                      {!n?.is_read ? (
-                        <div className="text-xs font-semibold text-[rgba(209,31,42,0.95)]">NEW</div>
-                      ) : null}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-sm text-[color:var(--muted)]">No notifications yet.</div>
-          )}
+          <NotiesClient initialNoties={noties} actorProfiles={actorProfiles} />
         </Card>
 
         <Card title="Daily Checklist">

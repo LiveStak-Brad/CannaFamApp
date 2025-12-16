@@ -3,6 +3,7 @@ import { getAuthedUserOrNull } from "@/lib/auth";
 import { logout } from "@/app/logout/actions";
 import { Button } from "@/components/ui/button";
 import { supabaseServer } from "@/lib/supabase/server";
+import { NotiesNavButton } from "@/components/shell/noties-nav-button";
 
 export async function TopNavAuth() {
   const user = await getAuthedUserOrNull();
@@ -39,7 +40,7 @@ export async function TopNavAuth() {
     const { count, error } = await sb
       .from("cfm_noties")
       .select("id", { count: "exact", head: true })
-      .eq("member_id", user.id)
+      .or(`user_id.eq.${user.id},member_id.eq.${user.id}`)
       .eq("is_read", false);
     if (error) console.error("Failed to load unread noties", error.message);
     unread = count ?? 0;
@@ -60,22 +61,7 @@ export async function TopNavAuth() {
             Admin
           </Button>
         ) : null}
-        <Button
-          as="link"
-          href="/noties"
-          variant="secondary"
-          className={navBtnClass}
-        >
-          <span className="inline-flex items-center gap-1 whitespace-nowrap">
-            <span>Noties</span>
-            <span aria-hidden>🔔</span>
-            {unread > 0 ? (
-              <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[rgba(209,31,42,0.9)] px-2 py-[1px] text-[11px] font-semibold text-white">
-                {unread > 99 ? "99+" : unread}
-              </span>
-            ) : null}
-          </span>
-        </Button>
+        <NotiesNavButton userId={user.id} initialUnread={unread} className={navBtnClass} mode="desktop" />
         <Button
           as="link"
           href="/account"
@@ -92,20 +78,12 @@ export async function TopNavAuth() {
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
-        <Button
-          as="link"
-          href="/noties"
-          variant="secondary"
-          className={navBtnClass + " relative"}
-        >
-          <span className="inline-flex items-center" aria-hidden>
-            🔔
-          </span>
-          <span className="sr-only">Noties</span>
-          {unread > 0 ? (
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[rgba(209,31,42,0.95)]" />
-          ) : null}
-        </Button>
+        <NotiesNavButton
+          userId={user.id}
+          initialUnread={unread}
+          className={navBtnClass}
+          mode="mobile"
+        />
 
         <details className="relative">
           <summary

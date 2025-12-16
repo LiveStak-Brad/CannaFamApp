@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdminOrNull } from "@/lib/supabase/admin";
 
 export async function setFollow(targetUserId: string, shouldFollow: boolean) {
   const user = await requireUser();
@@ -18,6 +19,29 @@ export async function setFollow(targetUserId: string, shouldFollow: boolean) {
       followed_user_id: target,
     });
     if (error) throw new Error(error.message);
+
+    try {
+      const admin = supabaseAdminOrNull();
+      if (!admin) {
+        console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
+      }
+      if (admin) {
+        const { error: notieErr } = await admin.from("cfm_noties").insert({
+          member_id: target,
+          user_id: target,
+          actor_user_id: user.id,
+          type: "follow",
+          entity_type: "user",
+          entity_id: target,
+          message: "followed you",
+          post_id: null,
+          comment_id: null,
+          is_read: false,
+        });
+        if (notieErr) console.error("Failed to create follow notie", notieErr.message);
+      }
+    } catch {
+    }
   } else {
     const { error } = await sb
       .from("cfm_follows")
@@ -31,6 +55,7 @@ export async function setFollow(targetUserId: string, shouldFollow: boolean) {
   revalidatePath("/members");
   revalidatePath("/leaderboard");
   revalidatePath("/feed");
+  revalidatePath("/noties");
 }
 
 export async function getIsFollowing(targetUserId: string): Promise<boolean> {

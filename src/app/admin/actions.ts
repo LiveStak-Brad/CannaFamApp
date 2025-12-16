@@ -4,8 +4,8 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireAdmin, requireOwner } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { todayISODate } from "@/lib/utils";
 import { env } from "@/lib/env";
 
@@ -465,9 +465,58 @@ export async function assignAward(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
+  try {
+    const msg = `Award: ${award_type}`;
+    const { error: notieErr } = await sb.from("cfm_noties").insert({
+      member_id: user_id,
+      user_id,
+      actor_user_id: null,
+      type: "award",
+      entity_type: "award",
+      entity_id: null,
+      post_id: null,
+      comment_id: null,
+      message: msg,
+      is_read: false,
+    });
+    if (notieErr) console.error("Failed to create award notie", notieErr.message);
+
+    const { data: followerRows } = await sb
+      .from("cfm_follows")
+      .select("follower_user_id")
+      .eq("followed_user_id", user_id)
+      .limit(1000);
+    const followerIds = Array.from(
+      new Set(
+        (followerRows ?? [])
+          .map((r: any) => String(r?.follower_user_id ?? "").trim())
+          .filter((id) => id && id !== user_id),
+      ),
+    );
+    const ids = followerIds.slice(0, 200);
+    if (ids.length) {
+      const rows = ids.map((uid) => ({
+        member_id: uid,
+        user_id: uid,
+        actor_user_id: user_id,
+        type: "follow_award",
+        entity_type: "award",
+        entity_id: null,
+        post_id: null,
+        comment_id: null,
+        message: "won an award",
+        is_read: false,
+      }));
+      const { error: fErr } = await sb.from("cfm_noties").insert(rows);
+      if (fErr) console.error("Failed to notify followers of award", fErr.message);
+    }
+  } catch {
+  }
+
   revalidatePath("/admin");
   revalidatePath("/feed");
   revalidatePath("/awards");
+  revalidatePath("/noties");
 
   return { ok: true as const, message: "Award assigned." };
 }

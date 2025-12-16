@@ -12,6 +12,9 @@ import { stripe } from "@/lib/stripe";
 type PublicMemberIdRow = { user_id: string | null };
 type AdminRow = { user_id: string | null };
 type FeedCommentRow = { id: string; post_id: string | null; user_id: string | null };
+type FeedPostRow = { id: string; author_user_id: string | null };
+type FollowRow = { follower_user_id: string | null };
+type AdminClient = NonNullable<ReturnType<typeof supabaseAdminOrNull>>;
 
 function guessExtFromMime(mime: string) {
   const m = mime.toLowerCase();
@@ -80,15 +83,88 @@ export async function createAdminPost(formData: FormData) {
     media_url = publicData.publicUrl;
   }
 
-  const { error } = await sb.from("cfm_feed_posts").insert({
-    title,
-    post_type,
-    content,
-    media_url,
-    media_type,
-    author_user_id: user.id,
-  });
+  const { data: postRow, error } = await sb
+    .from("cfm_feed_posts")
+    .insert({
+      title,
+      post_type,
+      content,
+      media_url,
+      media_type,
+      author_user_id: user.id,
+    })
+    .select("id,author_user_id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+
+  try {
+    const admin = supabaseAdminOrNull();
+    const inserted = (postRow ?? null) as FeedPostRow | null;
+    const pid = String(inserted?.id ?? "").trim();
+    if (!admin) {
+      console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
+    }
+    if (admin && pid) {
+      const broadcastType = post_type.toLowerCase() === "announcement" ? "announcement" : "system";
+
+      const { data: memberRows } = await admin
+        .from("cfm_public_member_ids")
+        .select("user_id")
+        .limit(5000);
+
+      const memberIds = Array.from(
+        new Set(
+          (memberRows ?? [])
+            .map((r) => String((r as PublicMemberIdRow | null)?.user_id ?? "").trim())
+            .filter((id) => id && id !== user.id),
+        ),
+      );
+
+      const message = title ? title : content.slice(0, 80);
+      const makeRow = (uid: string) => ({
+        member_id: uid,
+        user_id: uid,
+        actor_user_id: user.id,
+        type: broadcastType,
+        entity_type: "post",
+        entity_id: pid,
+        post_id: pid,
+        comment_id: null,
+        message,
+        is_read: false,
+      });
+
+      const BATCH = 500;
+      for (let i = 0; i < memberIds.length; i += BATCH) {
+        const chunk = memberIds.slice(i, i + BATCH);
+        const { error: bErr } = await admin.from("cfm_noties").insert(chunk.map(makeRow));
+        if (bErr) {
+          console.error("Failed to broadcast admin noties", bErr.message);
+          break;
+        }
+      }
+
+      await notifyFollowers({
+        admin,
+        actorUserId: user.id,
+        type: "follow_post",
+        entityType: "post",
+        entityId: pid,
+        postId: pid,
+        commentId: null,
+        message: "posted",
+      });
+      await notifyMentionedUsers({
+        admin,
+        actorUserId: user.id,
+        text: content,
+        postId: pid,
+        commentId: null,
+      });
+      revalidatePath("/noties");
+    }
+  } catch {
+  }
 
   revalidatePath("/feed");
   revalidatePath("/admin");
@@ -161,15 +237,19 @@ export async function upsertMyDailyPost(formData: FormData) {
     return { ok: true as const, message: "Post updated." };
   }
 
-  const { error: insertErr } = await sb.from("cfm_feed_posts").insert({
-    title,
-    content,
-    post_type: "member",
-    author_user_id: user.id,
-    post_date: today,
-    media_url,
-    media_type,
-  });
+  const { data: insertedRow, error: insertErr } = await sb
+    .from("cfm_feed_posts")
+    .insert({
+      title,
+      content,
+      post_type: "member",
+      author_user_id: user.id,
+      post_date: today,
+      media_url,
+      media_type,
+    })
+    .select("id")
+    .maybeSingle();
 
   const msg = (insertErr?.message ?? "").toLowerCase();
   const wasDup = msg.includes("duplicate") || msg.includes("unique");
@@ -193,6 +273,41 @@ export async function upsertMyDailyPost(formData: FormData) {
         .eq("author_user_id", user.id)
         .eq("post_date", today);
       if (updateErr) throw new Error(updateErr.message);
+    }
+
+    revalidatePath("/feed");
+    revalidatePath("/hub");
+    return { ok: true as const, message: "Post saved." };
+  }
+
+  const pid = String(insertedRow?.id ?? "").trim();
+  if (pid) {
+    try {
+      const admin = supabaseAdminOrNull();
+      if (!admin) {
+        console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
+      }
+      if (admin) {
+        await notifyFollowers({
+          admin,
+          actorUserId: user.id,
+          type: "follow_post",
+          entityType: "post",
+          entityId: pid,
+          postId: pid,
+          commentId: null,
+          message: "posted",
+        });
+        await notifyMentionedUsers({
+          admin,
+          actorUserId: user.id,
+          text: content,
+          postId: pid,
+          commentId: null,
+        });
+        revalidatePath("/noties");
+      }
+    } catch {
     }
   }
 
@@ -220,7 +335,7 @@ export async function deleteMyDailyPost() {
 }
 
 function extractMentionUsernames(text: string) {
-  const matches = String(text ?? "").matchAll(/@([A-Za-z0-9_]+)/g);
+  const matches = String(text ?? "").matchAll(/@([A-Za-z0-9_]{2,30})/g);
   const out: string[] = [];
   for (const m of matches) {
     const u = String(m?.[1] ?? "").trim();
@@ -230,10 +345,110 @@ function extractMentionUsernames(text: string) {
   return Array.from(new Set(out)).slice(0, 10);
 }
 
+async function notifyMentionedUsers({
+  admin,
+  actorUserId,
+  text,
+  postId,
+  commentId,
+}: {
+  admin: AdminClient;
+  actorUserId: string;
+  text: string;
+  postId: string;
+  commentId: string | null;
+}) {
+  const usernames = extractMentionUsernames(text);
+  if (!usernames.length) return;
+
+  const mentionedUserIds = new Set<string>();
+  for (const uname of usernames) {
+    const { data: m } = await admin
+      .from("cfm_public_member_ids")
+      .select("user_id")
+      .ilike("favorited_username", uname)
+      .limit(1)
+      .maybeSingle();
+    const uid = String(((m as PublicMemberIdRow | null)?.user_id ?? "")).trim();
+    if (uid && uid !== actorUserId) mentionedUserIds.add(uid);
+  }
+
+  for (const uid of mentionedUserIds) {
+    const { error: notieErr } = await admin.from("cfm_noties").insert({
+      member_id: uid,
+      user_id: uid,
+      actor_user_id: actorUserId,
+      type: "mention",
+      entity_type: commentId ? "comment" : "post",
+      entity_id: commentId ? commentId : postId,
+      post_id: postId,
+      comment_id: commentId,
+      message: "mentioned you",
+      is_read: false,
+    });
+    if (notieErr) console.error("Failed to create mention notie", notieErr.message);
+  }
+}
+
+async function notifyFollowers({
+  admin,
+  actorUserId,
+  type,
+  entityType,
+  entityId,
+  postId,
+  commentId,
+  message,
+}: {
+  admin: AdminClient;
+  actorUserId: string;
+  type: string;
+  entityType: string;
+  entityId: string;
+  postId: string | null;
+  commentId: string | null;
+  message: string;
+}) {
+  const { data: followerRows } = await admin
+    .from("cfm_follows")
+    .select("follower_user_id")
+    .eq("followed_user_id", actorUserId)
+    .limit(1000);
+
+  const followerIds = Array.from(
+    new Set(
+      (followerRows ?? [])
+        .map((r) => String((r as FollowRow | null)?.follower_user_id ?? "").trim())
+        .filter((id) => id && id !== actorUserId),
+    ),
+  );
+
+  const CAP = 200;
+  const ids = followerIds.slice(0, CAP);
+  if (!ids.length) return;
+
+  const rows = ids.map((uid) => ({
+    member_id: uid,
+    user_id: uid,
+    actor_user_id: actorUserId,
+    type,
+    entity_type: entityType,
+    entity_id: entityId,
+    post_id: postId,
+    comment_id: commentId,
+    message,
+    is_read: false,
+  }));
+
+  const { error } = await admin.from("cfm_noties").insert(rows);
+  if (error) console.error("Failed to notify followers", error.message);
+}
+
 export async function toggleLike(postId: string, liked: boolean) {
   const user = await requireApprovedMember();
   const sb = await supabaseServer();
 
+  let insertedNew = false;
   if (liked) {
     const { error } = await sb
       .from("cfm_feed_likes")
@@ -247,6 +462,43 @@ export async function toggleLike(postId: string, liked: boolean) {
       user_id: user.id,
     });
     if (error) throw new Error(error.message);
+    insertedNew = true;
+  }
+
+  if (insertedNew) {
+    try {
+      const admin = supabaseAdminOrNull();
+      if (!admin) {
+        console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
+      }
+      if (admin) {
+        const { data: post } = await admin
+          .from("cfm_feed_posts")
+          .select("id,author_user_id")
+          .eq("id", String(postId))
+          .maybeSingle();
+        const p = (post ?? null) as FeedPostRow | null;
+        const ownerId = String(p?.author_user_id ?? "").trim();
+        const pid = String(p?.id ?? "").trim();
+        if (ownerId && pid && ownerId !== user.id) {
+          const { error: notieErr } = await admin.from("cfm_noties").insert({
+            member_id: ownerId,
+            user_id: ownerId,
+            actor_user_id: user.id,
+            type: "like",
+            entity_type: "post",
+            entity_id: pid,
+            post_id: pid,
+            comment_id: null,
+            message: "liked your post",
+            is_read: false,
+          });
+          if (notieErr) console.error("Failed to create like notie", notieErr.message);
+          revalidatePath("/noties");
+        }
+      }
+    } catch {
+    }
   }
 
   revalidatePath("/feed");
@@ -515,51 +767,49 @@ export async function addFeedComment(postId: string, content: string) {
         return { ok: true as const, message: "Comment posted.", commentId: insertedComment?.id ?? null };
       }
 
-      const usernames = extractMentionUsernames(text);
-      if (usernames.length) {
-        const mentionedUserIds = new Set<string>();
-        for (const uname of usernames) {
-          const { data: m } = await admin
-            .from("cfm_public_member_ids")
-            .select("user_id")
-            .ilike("favorited_username", uname)
-            .limit(1)
-            .maybeSingle();
-          const uid = String(((m as PublicMemberIdRow | null)?.user_id ?? "")).trim();
-          if (uid && uid !== user.id) mentionedUserIds.add(uid);
-        }
-
-        for (const uid of mentionedUserIds) {
-          const { error: notieErr } = await admin.from("cfm_noties").insert({
-            member_id: uid,
-            actor_user_id: user.id,
-            type: "mention",
-            post_id: pid,
-            comment_id: commentId,
-          });
-          if (notieErr) console.error("Failed to create mention notie", notieErr.message);
-        }
-      }
-
-      const { data: adminUsers } = await admin.from("cfm_admins").select("user_id");
-      const adminIds = Array.from(
-        new Set(
-          (adminUsers ?? [])
-            .map((r) => String(((r as AdminRow | null)?.user_id ?? "")).trim())
-            .filter((id) => id && id !== user.id),
-        ),
-      );
-
-      for (const aid of adminIds) {
+      const { data: post } = await admin
+        .from("cfm_feed_posts")
+        .select("id,author_user_id")
+        .eq("id", pid)
+        .maybeSingle();
+      const p = (post ?? null) as FeedPostRow | null;
+      const ownerId = String(p?.author_user_id ?? "").trim();
+      if (ownerId && ownerId !== user.id) {
         const { error: notieErr } = await admin.from("cfm_noties").insert({
-          member_id: aid,
+          member_id: ownerId,
+          user_id: ownerId,
           actor_user_id: user.id,
-          type: "new_comment",
+          type: "comment",
+          entity_type: "post",
+          entity_id: pid,
           post_id: pid,
           comment_id: commentId,
+          message: "commented on your post",
+          is_read: false,
         });
-        if (notieErr) console.error("Failed to create admin comment notie", notieErr.message);
+        if (notieErr) console.error("Failed to create comment notie", notieErr.message);
       }
+
+      await notifyFollowers({
+        admin,
+        actorUserId: user.id,
+        type: "follow_comment",
+        entityType: "comment",
+        entityId: commentId,
+        postId: pid,
+        commentId,
+        message: "commented",
+      });
+
+      await notifyMentionedUsers({
+        admin,
+        actorUserId: user.id,
+        text,
+        postId: pid,
+        commentId,
+      });
+
+      revalidatePath("/noties");
     } catch {
     }
   }
@@ -613,16 +863,23 @@ export async function toggleCommentUpvote(commentId: string, upvoted: boolean) {
       if (ownerId && ownerId !== user.id) {
         const { error: notieErr } = await admin.from("cfm_noties").insert({
           member_id: ownerId,
+          user_id: ownerId,
           actor_user_id: user.id,
           type: "comment_upvote",
+          entity_type: "comment",
+          entity_id: cid,
           post_id: postId || null,
           comment_id: cid,
+          message: "upvoted your comment",
+          is_read: false,
         });
         if (notieErr) console.error("Failed to create upvote notie", notieErr.message);
       }
     } catch {
     }
   }
+
+  revalidatePath("/noties");
 
   revalidatePath("/feed");
   return { ok: true as const, message: upvoted ? "Upvote removed." : "Upvoted." };

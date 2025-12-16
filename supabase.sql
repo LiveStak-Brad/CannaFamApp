@@ -284,6 +284,19 @@ create table if not exists public.cfm_noties (
   created_at timestamptz not null default now()
 );
 
+alter table public.cfm_noties add column if not exists user_id uuid;
+alter table public.cfm_noties add column if not exists entity_type text;
+alter table public.cfm_noties add column if not exists entity_id uuid;
+alter table public.cfm_noties add column if not exists message text;
+
+update public.cfm_noties
+set user_id = member_id
+where user_id is null;
+
+create index if not exists cfm_noties_user_id_idx on public.cfm_noties (user_id);
+create index if not exists cfm_noties_created_at_idx on public.cfm_noties (created_at desc);
+create index if not exists cfm_noties_is_read_idx on public.cfm_noties (user_id, is_read);
+
 create table if not exists public.cfm_monetization_settings (
   id uuid primary key default gen_random_uuid(),
   enable_post_gifts boolean not null default false,
@@ -564,18 +577,24 @@ for insert
 to authenticated
 with check (public.cfm_is_admin() or (public.cfm_is_approved_member() and user_id = auth.uid()));
 
+drop policy if exists "noties_select_own_or_admin" on public.cfm_noties;
+drop policy if exists "noties_update_own" on public.cfm_noties;
+
 create policy "noties_select_own_or_admin"
 on public.cfm_noties
 for select
 to authenticated
-using (public.cfm_is_admin() or member_id = auth.uid());
+using (public.cfm_is_admin() or coalesce(user_id, member_id) = auth.uid());
 
 create policy "noties_update_own"
 on public.cfm_noties
 for update
 to authenticated
-using (public.cfm_is_admin() or member_id = auth.uid())
-with check (public.cfm_is_admin() or member_id = auth.uid());
+using (public.cfm_is_admin() or coalesce(user_id, member_id) = auth.uid())
+with check (public.cfm_is_admin() or coalesce(user_id, member_id) = auth.uid());
+
+revoke update on public.cfm_noties from authenticated;
+grant update (is_read) on public.cfm_noties to authenticated;
 
 create policy "monetization_settings_select_anyone"
 on public.cfm_monetization_settings
