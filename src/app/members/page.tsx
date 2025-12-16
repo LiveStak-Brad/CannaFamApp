@@ -7,12 +7,12 @@ import { MembersClient } from "./ui";
 export const runtime = "nodejs";
 
 export default async function MembersPage() {
-  await requireUser();
+  const user = await requireUser();
   const sb = await supabaseServer();
   const { data, error } = await sb
-    .from("cfm_public_members")
-    .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
-    .order("created_at", { ascending: true });
+    .from("cfm_public_member_ids")
+    .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+    .order("favorited_username", { ascending: true });
 
   const { data: awards } = await sb
     .from("cfm_awards")
@@ -52,6 +52,7 @@ export default async function MembersPage() {
           members={(data ?? []) as any}
           awards={(awards ?? []) as any}
           leaderboard={(leaderboard ?? []) as any}
+          myUserId={user.id}
         />
       </div>
     </Container>

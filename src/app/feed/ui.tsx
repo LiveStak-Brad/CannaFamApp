@@ -29,6 +29,7 @@ import {
   type MiniProfilePointsRow,
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
+import { FollowInline } from "@/components/ui/follow-inline";
 
 export type FeedPost = {
   id: string;
@@ -482,6 +483,7 @@ function WhoLikedModal({
   likers,
   awards,
   leaderboard,
+  myUserId,
   onClose,
 }: {
   open: boolean;
@@ -489,6 +491,7 @@ function WhoLikedModal({
   likers: LikerProfile[];
   awards: MiniProfileAwardRow[];
   leaderboard: MiniProfilePointsRow[];
+  myUserId?: string | null;
   onClose: () => void;
 }) {
   if (!open) return null;
@@ -566,6 +569,7 @@ function WhoLikedModal({
         subject={selectedSubject}
         leaderboard={leaderboard}
         awards={awards}
+        myUserId={myUserId}
         onClose={() => setSelectedUserId(null)}
       />
     </div>
@@ -882,7 +886,10 @@ function CommentsModal({
                             <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
                           )}
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold truncate">{name}</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-sm font-semibold truncate">{name}</div>
+                              <FollowInline targetUserId={c.user_id} myUserId={myUserId} />
+                            </div>
                             {bio ? (
                               <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
                             ) : null}
@@ -1058,6 +1065,7 @@ function CommentsModal({
         subject={selected}
         awards={awards}
         leaderboard={leaderboard}
+        myUserId={myUserId}
         onClose={() => setSelectedUserId(null)}
       />
     </div>
@@ -1126,12 +1134,14 @@ export function LikeCountButton({
   likers,
   awards,
   leaderboard,
+  myUserId,
 }: {
   count: number;
   canOpen: boolean;
   likers: LikerProfile[];
   awards: MiniProfileAwardRow[];
   leaderboard: MiniProfilePointsRow[];
+  myUserId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1154,6 +1164,7 @@ export function LikeCountButton({
         likers={likers}
         awards={awards}
         leaderboard={leaderboard}
+        myUserId={myUserId}
         onClose={() => setOpen(false)}
       />
     </>
@@ -1414,6 +1425,7 @@ export function LikeButton({
   awards,
   leaderboard,
   canEarn = true,
+  myUserId,
 }: {
   postId: string;
   liked: boolean;
@@ -1422,6 +1434,7 @@ export function LikeButton({
   awards: MiniProfileAwardRow[];
   leaderboard: MiniProfilePointsRow[];
   canEarn?: boolean;
+  myUserId?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -1484,6 +1497,7 @@ export function LikeButton({
         likers={likers}
         awards={awards}
         leaderboard={leaderboard}
+        myUserId={myUserId}
         onClose={() => setOpenWhoLiked(false)}
       />
     </div>

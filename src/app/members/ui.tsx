@@ -9,9 +9,10 @@ import {
   type MiniProfilePointsRow,
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
+import { FollowInline } from "@/components/ui/follow-inline";
 
 type PublicMember = {
-  id: string;
+  user_id: string;
   favorited_username: string;
   photo_url: string | null;
   bio: string | null;
@@ -48,20 +49,23 @@ export function MembersClient({
   members,
   awards,
   leaderboard,
+  myUserId,
 }: {
   members: PublicMember[];
   awards: AwardRow[];
   leaderboard: LeaderboardRow[];
+  myUserId?: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = useMemo(
-    () => members.find((m) => m.id === selectedId) ?? null,
+    () => members.find((m) => m.user_id === selectedId) ?? null,
     [members, selectedId],
   );
 
   const subject: MiniProfileSubject | null = selected
     ? {
+        user_id: selected.user_id,
         favorited_username: selected.favorited_username,
         photo_url: selected.photo_url,
         bio: selected.bio,
@@ -79,10 +83,10 @@ export function MembersClient({
         {members.length ? (
           members.map((m) => (
             <button
-              key={m.id}
+              key={m.user_id}
               type="button"
               className="block w-full text-left"
-              onClick={() => setSelectedId(m.id)}
+              onClick={() => setSelectedId(m.user_id)}
             >
               <Card>
                 <div className="flex items-start gap-4">
@@ -100,7 +104,10 @@ export function MembersClient({
                     <div className="h-12 w-12 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
                   )}
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold">{m.favorited_username}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold">{m.favorited_username}</div>
+                      <FollowInline targetUserId={m.user_id} myUserId={myUserId} />
+                    </div>
                     {m.bio ? (
                       <div className="mt-1 text-sm text-[color:var(--muted)]">{m.bio}</div>
                     ) : null}
@@ -121,6 +128,7 @@ export function MembersClient({
         subject={subject}
         awards={awards as unknown as MiniProfileAwardRow[]}
         leaderboard={leaderboard as unknown as MiniProfilePointsRow[]}
+        myUserId={myUserId}
         onClose={() => setSelectedId(null)}
       />
     </>

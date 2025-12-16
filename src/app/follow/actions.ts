@@ -29,4 +29,24 @@ export async function setFollow(targetUserId: string, shouldFollow: boolean) {
 
   revalidatePath("/u");
   revalidatePath("/members");
+  revalidatePath("/leaderboard");
+  revalidatePath("/feed");
+}
+
+export async function getIsFollowing(targetUserId: string): Promise<boolean> {
+  const user = await requireUser();
+  const sb = await supabaseServer();
+
+  const target = String(targetUserId ?? "").trim();
+  if (!target) return false;
+  if (target === String(user.id)) return false;
+
+  const { data } = await sb
+    .from("cfm_follows")
+    .select("id")
+    .eq("follower_user_id", user.id)
+    .eq("followed_user_id", target)
+    .maybeSingle();
+
+  return !!data;
 }

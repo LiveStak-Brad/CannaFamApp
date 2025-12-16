@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FollowInline } from "@/components/ui/follow-inline";
 
 export type MiniProfileSubject = {
   user_id?: string | null;
@@ -49,12 +50,14 @@ export function MiniProfileModal({
   subject,
   leaderboard,
   awards,
+  myUserId,
   onClose,
 }: {
   open: boolean;
   subject: MiniProfileSubject | null;
   leaderboard: MiniProfilePointsRow[];
   awards: MiniProfileAwardRow[];
+  myUserId?: string | null;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -148,7 +151,12 @@ export function MiniProfileModal({
                     >
                       {subject.favorited_username}
                     </Link>
-                    <div className="text-xs text-[color:var(--muted)]">Mini profile</div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
+                      <span>Mini profile</span>
+                      {subject.user_id ? (
+                        <FollowInline targetUserId={String(subject.user_id)} myUserId={myUserId} />
+                      ) : null}
+                    </div>
                   </div>
                   {socials.length ? (
                     <div className="flex flex-wrap justify-end gap-2">

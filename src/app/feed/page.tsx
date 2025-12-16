@@ -532,6 +532,7 @@ export default async function FeedPage({
                         awards={(awards ?? []) as any}
                         leaderboard={(leaderboard ?? []) as any}
                         canEarn={canEarn}
+                        myUserId={user?.id ?? null}
                       />
                     </div>
                   </div>

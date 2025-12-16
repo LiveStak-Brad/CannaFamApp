@@ -14,7 +14,7 @@ import {
 export const runtime = "nodejs";
 
 export default async function LeaderboardPage() {
-  await requireUser();
+  const user = await requireUser();
   const sb = await supabaseServer();
 
   const { data, error } = await sb.rpc("cfm_leaderboard", { limit_n: 100 });
@@ -103,6 +103,7 @@ export default async function LeaderboardPage() {
             errorMessage={error?.message ?? null}
             profiles={typedProfiles}
             awards={typedAwards}
+            myUserId={user.id}
           />
         </Card>
       </div>

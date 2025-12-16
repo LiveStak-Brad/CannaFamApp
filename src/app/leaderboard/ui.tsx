@@ -7,6 +7,7 @@ import {
   type MiniProfilePointsRow,
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
+import { FollowInline } from "@/components/ui/follow-inline";
 
 export type PublicProfile = {
   favorited_username: string;
@@ -64,12 +65,14 @@ export function LeaderboardClient({
   errorMessage,
   profiles,
   awards,
+  myUserId,
 }: {
   rows: LeaderboardRow[];
   giftRows: GiftLeaderboardRow[];
   errorMessage?: string | null;
   profiles: PublicProfile[];
   awards: AwardRow[];
+  myUserId?: string | null;
 }) {
   const [mode, setMode] = useState<"points" | "gifts">("points");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -175,7 +178,8 @@ export function LeaderboardClient({
               <div className="flex items-center justify-between text-sm">
                 <div className="min-w-0">
                   <span className="text-[color:var(--muted)]">#{idx + 1}</span>{" "}
-                  <span className="font-semibold">{m.favorited_username}</span>
+                  <span className="font-semibold">{m.favorited_username}</span>{" "}
+                  <FollowInline targetUserId={m.user_id} myUserId={myUserId} />
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
                     <span>🔥 {m.streak_points ?? 0}</span>
                     <span>🔗 {m.share_points ?? 0}</span>
@@ -214,6 +218,7 @@ export function LeaderboardClient({
         subject={subject}
         leaderboard={rows as unknown as MiniProfilePointsRow[]}
         awards={awards as unknown as MiniProfileAwardRow[]}
+        myUserId={myUserId}
         onClose={() => setSelectedId(null)}
       />
     </>
