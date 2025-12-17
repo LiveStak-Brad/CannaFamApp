@@ -134,9 +134,9 @@ export function LiveClient({
   }
 
   const medal = (r: number) => {
-    if (r === 1) return { label: "#1", cls: "border-yellow-400/40 bg-yellow-400/15" };
-    if (r === 2) return { label: "#2", cls: "border-gray-300/40 bg-gray-300/15" };
-    if (r === 3) return { label: "#3", cls: "border-orange-400/40 bg-orange-400/15" };
+    if (r === 1) return { label: "🥇", cls: "border-yellow-400/40 bg-yellow-400/15" };
+    if (r === 2) return { label: "🥈", cls: "border-gray-300/40 bg-gray-300/15" };
+    if (r === 3) return { label: "🥉", cls: "border-orange-400/40 bg-orange-400/15" };
     return { label: `#${r}`, cls: "border-white/10 bg-white/5" };
   };
 
@@ -745,15 +745,13 @@ export function LiveClient({
                         key={String(g.profile_id)}
                         type="button"
                         onClick={() => openProfile(String(g.profile_id))}
-                        className={`flex items-center gap-2 rounded-2xl border px-2 py-1 text-left ${m.cls}`}
+                        className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-left ${m.cls}`}
                       >
-                        {renderAvatar(name, g.avatar_url, 26)}
+                        <span className="text-sm">{m.label}</span>
+                        {renderAvatar(name, g.avatar_url, 24)}
                         <div className="min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="max-w-[130px] truncate text-[12px] font-semibold text-white">{name}</div>
-                            <div className="shrink-0 text-[10px] font-semibold text-white/90">{m.label}</div>
-                          </div>
-                          <div className="text-[11px] text-white/80">{fmtAmount(g.total_amount ?? 0)}</div>
+                          <div className="max-w-[100px] truncate text-[11px] font-semibold text-white">{name}</div>
+                          <div className="text-[11px] font-bold text-green-400">{fmtAmount(g.total_amount ?? 0)}</div>
                         </div>
                       </button>
                     );
@@ -765,9 +763,10 @@ export function LiveClient({
                       setTopTab("today");
                       setTopModalOpen(true);
                     }}
-                    className="text-right text-[11px] font-semibold text-white/85"
+                    className="text-right text-lg"
+                    title="Top Gifters"
                   >
-                    Top Gifters
+                    🏆
                   </button>
                 </div>
               </div>
