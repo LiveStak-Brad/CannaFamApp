@@ -402,7 +402,7 @@ export function LiveClient({
             </div>
 
             <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-              <div className="flex h-[45%] min-h-[280px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
+              <div className="flex h-[62%] min-h-[360px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
                 <div className="border-b border-white/10 px-4 py-3">
                   <div className="text-center text-sm font-semibold text-white">CannaFam Chat</div>
                 </div>
