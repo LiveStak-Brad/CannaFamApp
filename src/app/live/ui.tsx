@@ -125,7 +125,7 @@ export function LiveClient({
           .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
           .eq("user_id", uid)
           .maybeSingle(),
-        sb.rpc("cfm_leaderboard", { row_limit: 500 }),
+        sb.rpc("cfm_leaderboard", { limit_n: 500 }),
         sb
           .from("cfm_awards")
           .select("id,user_id,award_type,week_start,week_end,notes,created_at")
