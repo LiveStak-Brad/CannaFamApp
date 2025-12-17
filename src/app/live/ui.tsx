@@ -200,6 +200,24 @@ export function LiveClient({
   const top3 = topToday.slice(0, 3);
   const modalRows = topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime;
 
+  // Map user IDs to their all-time rank (1, 2, or 3) for badge display
+  const allTimeRankByUserId = useMemo(() => {
+    const map: Record<string, number> = {};
+    topAllTime.slice(0, 3).forEach((g, i) => {
+      const uid = String(g.profile_id ?? "").trim();
+      if (uid) map[uid] = i + 1;
+    });
+    return map;
+  }, [topAllTime]);
+
+  const getBadge = (userId: string) => {
+    const rank = allTimeRankByUserId[userId];
+    if (rank === 1) return "🥇";
+    if (rank === 2) return "🥈";
+    if (rank === 3) return "🥉";
+    return "";
+  };
+
   const chatLiveId = useMemo(() => {
     const v = String((live as any)?.id ?? "").trim();
     if (v) return v;
@@ -884,6 +902,9 @@ export function LiveClient({
                         const t = r.type;
                         const msg = String(r.message ?? "");
                         const meta = r.metadata as any;
+                        const senderId = String(r.sender_user_id ?? "").trim();
+                        const senderName = String(nameByUserId[senderId] ?? "Member");
+                        const badge = getBadge(senderId);
                         const isJoin = t === "system" && meta?.event === "join";
                         const isGift = t === "tip" || (t === "system" && meta?.event === "gift");
                         
@@ -891,7 +912,7 @@ export function LiveClient({
                         if (isJoin) {
                           return (
                             <div key={r.id} className="text-[15px] text-green-400 font-semibold">
-                              {msg}
+                              {badge ? <span className="mr-1">{badge}</span> : null}{msg}
                             </div>
                           );
                         }
@@ -899,7 +920,7 @@ export function LiveClient({
                         if (isGift) {
                           return (
                             <div key={r.id} className="text-[15px] text-red-400 font-semibold">
-                              {msg}
+                              {badge ? <span className="mr-1">{badge}</span> : null}{msg}
                             </div>
                           );
                         }
@@ -908,7 +929,7 @@ export function LiveClient({
                         return (
                           <div key={r.id} className={`text-[15px] font-medium ${cls}`}>
                             <span className="text-white/70 font-semibold">
-                              {String(nameByUserId[String(r.sender_user_id ?? "").trim()] ?? "Member")}:
+                              {badge ? <span className="mr-1">{badge}</span> : null}{senderName}:
                             </span>{" "}
                             {msg}
                           </div>
