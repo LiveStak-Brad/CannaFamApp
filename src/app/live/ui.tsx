@@ -94,6 +94,7 @@ export function LiveClient({
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
   const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = !!myUserId;
 
@@ -297,6 +298,20 @@ export function LiveClient({
     }, 30000);
     return () => clearInterval(t);
   }, [sb]);
+
+  useEffect(() => {
+    try {
+      const el = chatEndRef.current;
+      if (!el) return;
+      setTimeout(() => {
+        try {
+          el.scrollIntoView({ behavior: "smooth", block: "end" });
+        } catch {
+        }
+      }, 0);
+    } catch {
+    }
+  }, [rows.length]);
 
   useEffect(() => {
     let cleanup: null | (() => void) = null;
@@ -654,7 +669,7 @@ export function LiveClient({
             </div>
 
             <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-              <div className="flex h-[46%] max-h-[380px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
+              <div className="flex h-[40%] max-h-[320px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
                 <div className="border-b border-white/10 px-4 py-3">
                   <div className="text-center text-sm font-semibold text-white">CannaFam Chat</div>
                 </div>
@@ -682,6 +697,7 @@ export function LiveClient({
                           </div>
                         );
                       })}
+                    <div ref={chatEndRef} />
                   </div>
                 </div>
 
