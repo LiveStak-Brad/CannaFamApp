@@ -177,6 +177,7 @@ export function LiveClient({
   type ViewerInfo = { id: string; name: string; joinedAt: number; isOnline: boolean };
   const [viewers, setViewers] = useState<ViewerInfo[]>([]);
   const viewerHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const agoraCleanupRef = useRef<(() => void) | null>(null);
   const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -376,6 +377,39 @@ export function LiveClient({
 
     return () => {
       mounted = false;
+    };
+  }, [sb, chatLiveId]);
+
+  // Subscribe to live state changes to auto-disconnect when stream ends
+  useEffect(() => {
+    const liveId = String(chatLiveId ?? "").trim();
+    if (!liveId) return;
+
+    const liveStateChannel = sb
+      .channel(`live-state-${liveId}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "UPDATE", schema: "public", table: "cfm_live_state", filter: `id=eq.${liveId}` },
+        (payload: any) => {
+          const row = payload.new as any;
+          if (row) {
+            setLive((prev) => ({ ...prev, ...row }));
+            // Auto-disconnect Agora when stream ends (is_live becomes false)
+            if (row.is_live === false && agoraCleanupRef.current) {
+              console.log("[LiveClient] Stream ended - auto-disconnecting Agora to stop billing");
+              agoraCleanupRef.current();
+              agoraCleanupRef.current = null;
+              setAgoraReady(false);
+              setHasRemoteVideo(false);
+              setRemoteUid(null);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      sb.removeChannel(liveStateChannel);
     };
   }, [sb, chatLiveId]);
 
@@ -582,6 +616,12 @@ export function LiveClient({
     (async () => {
       if (!videoRef.current) return;
 
+      // Don't connect to Agora if stream is not live (unless host mode)
+      if (!isHostMode && !live.is_live) {
+        console.log("[LiveClient] Stream not live - skipping Agora connection");
+        return;
+      }
+
       try {
         const res = await fetch("/api/agora/token", {
           method: "POST",
@@ -737,6 +777,9 @@ export function LiveClient({
         }
 
         setAgoraReady(true);
+        
+        // Store cleanup function in ref so it can be called when stream ends
+        agoraCleanupRef.current = cleanup;
       } catch {
       }
     })();
@@ -761,7 +804,7 @@ export function LiveClient({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (cleanup) cleanup();
     };
-  }, [isHostMode]);
+  }, [isHostMode, live.is_live]);
 
   const title = "CannaStreams";
 

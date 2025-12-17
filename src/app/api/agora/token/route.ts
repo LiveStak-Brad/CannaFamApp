@@ -76,6 +76,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // CRITICAL: Check if stream is live before issuing viewer tokens
+    // This prevents Agora minute usage when not streaming
+    if (!isHost) {
+      const { data: liveState } = await supabase.rpc("cfm_get_live_state");
+      const live = Array.isArray(liveState) ? liveState[0] : liveState;
+      const isLive = !!live?.is_live;
+      
+      if (!isLive) {
+        return NextResponse.json(
+          { error: "Stream is not live", isLive: false },
+          { status: 403 },
+        );
+      }
+    }
+
     const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
     const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
