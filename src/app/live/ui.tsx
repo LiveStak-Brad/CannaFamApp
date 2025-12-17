@@ -741,8 +741,24 @@ export function LiveClient({
       }
     })();
 
+    // Add beforeunload handler to cleanup on tab close/refresh
+    const handleBeforeUnload = () => {
+      if (cleanup) cleanup();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    // Add visibilitychange handler to cleanup when tab is hidden (optional - more aggressive)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && cleanup) {
+        cleanup();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (cleanup) cleanup();
     };
   }, [isHostMode]);
