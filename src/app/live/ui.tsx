@@ -400,91 +400,89 @@ export function LiveClient({
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="mx-auto mt-3 w-full max-w-[420px]">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/45 backdrop-blur">
-            <div className="border-b border-white/10 px-4 py-3">
-              <div className="text-sm font-semibold text-white">CannaFam Chat</div>
-            </div>
+            <div className="absolute inset-x-0 bottom-0 z-10 p-3">
+              <div className="flex h-[34%] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
+                <div className="border-b border-white/10 px-4 py-3">
+                  <div className="text-center text-sm font-semibold text-white">CannaFam Chat</div>
+                </div>
 
-            <div className="max-h-[34vh] overflow-auto px-4 py-4">
-              <div className="space-y-2">
-                {rows
-                  .filter((r) => !r.is_deleted)
-                  .slice(-80)
-                  .map((r) => {
-                    const t = r.type;
-                    const msg = String(r.message ?? "");
-                    const cls =
-                      t === "tip"
-                        ? "text-blue-200"
-                        : t === "system"
-                          ? "text-white/70"
-                          : "text-white";
-                    return (
-                      <div key={r.id} className={`text-sm ${cls}`}>
-                        {msg}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
+                <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
+                  <div className="space-y-2">
+                    {rows
+                      .filter((r) => !r.is_deleted)
+                      .slice(-80)
+                      .map((r) => {
+                        const t = r.type;
+                        const msg = String(r.message ?? "");
+                        const cls =
+                          t === "tip"
+                            ? "text-blue-200"
+                            : t === "system"
+                              ? "text-white/70"
+                              : "text-white";
+                        return (
+                          <div key={r.id} className={`text-sm ${cls}`}>
+                            {msg}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
 
-            <div className="border-t border-white/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex gap-2">
-                  {DEFAULT_EMOTES.map((e) => (
-                    <button
-                      key={e}
+                <div className="border-t border-white/10 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex gap-2">
+                      {DEFAULT_EMOTES.map((e) => (
+                        <button
+                          key={e}
+                          type="button"
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                          onClick={() => {
+                            if (!canChat) return;
+                            send("emote", e);
+                          }}
+                          disabled={!canChat || pending}
+                          aria-label={`Send ${e}`}
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button as="link" href="/support" variant="secondary">
+                        Tip
+                      </Button>
+                      <Button as="link" href="/live" variant="secondary">
+                        Share
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40"
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      placeholder={isLoggedIn ? "Message" : "Log in to comment & react"}
+                      disabled={!canChat || pending}
+                    />
+                    <Button
                       type="button"
-                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
                       onClick={() => {
                         if (!canChat) return;
-                        send("emote", e);
+                        send("chat", text);
                       }}
                       disabled={!canChat || pending}
-                      aria-label={`Send ${e}`}
                     >
-                      {e}
-                    </button>
-                  ))}
-                </div>
+                      Send
+                    </Button>
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <Button as="link" href="/support" variant="secondary">
-                    Tip
-                  </Button>
-                  <Button as="link" href="/live" variant="secondary">
-                    Share
-                  </Button>
+                  {!isLoggedIn ? <div className="mt-2 text-xs text-white/60">Log in to comment & react.</div> : null}
                 </div>
               </div>
-
-              <div className="mt-3 flex gap-2">
-                <input
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder={isLoggedIn ? "Message" : "Log in to comment & react"}
-                  disabled={!canChat || pending}
-                />
-                <Button
-                  type="button"
-                  onClick={() => {
-                    if (!canChat) return;
-                    send("chat", text);
-                  }}
-                  disabled={!canChat || pending}
-                >
-                  Send
-                </Button>
-              </div>
-
-              {!isLoggedIn ? (
-                <div className="mt-2 text-xs text-white/60">Log in to comment & react.</div>
-              ) : null}
             </div>
           </div>
         </div>
