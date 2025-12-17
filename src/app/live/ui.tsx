@@ -96,6 +96,8 @@ export function LiveClient({
   const videoRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  const [fallingEmotes, setFallingEmotes] = useState<{ id: string; emoji: string; leftPct: number }[]>([]);
+
   const isLoggedIn = !!myUserId;
 
   async function loadTopGifters() {
@@ -312,6 +314,37 @@ export function LiveClient({
     } catch {
     }
   }, [rows.length]);
+
+  const spawnEmote = (emoji: string) => {
+    try {
+      const id = crypto.randomUUID();
+      const leftPct = 8 + Math.random() * 84;
+      setFallingEmotes((prev) => [...prev, { id, emoji, leftPct }].slice(-30));
+      setTimeout(() => {
+        setFallingEmotes((prev) => prev.filter((e) => e.id !== id));
+      }, 2200);
+    } catch {
+    }
+  };
+
+  const shareLive = async () => {
+    try {
+      const url = `${window.location.origin}/live`;
+      const nav: any = navigator as any;
+      if (nav?.share) {
+        await nav.share({ url, title: "CannaStreams Live" });
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast("Link copied.", "success");
+        return;
+      }
+    } catch {
+    }
+
+    toast("Could not share.", "error");
+  };
 
   useEffect(() => {
     let cleanup: null | (() => void) = null;
@@ -579,6 +612,34 @@ export function LiveClient({
           <div className="relative aspect-[9/16] w-full overflow-hidden rounded-3xl border border-white/10 bg-black">
             <div ref={videoRef} className="absolute inset-0" />
 
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              {fallingEmotes.map((e) => (
+                <div
+                  key={e.id}
+                  className="absolute top-0 text-2xl"
+                  style={{ left: `${e.leftPct}%`, animation: "cfm-fall 2.2s linear forwards" }}
+                >
+                  {e.emoji}
+                </div>
+              ))}
+            </div>
+
+            <style jsx global>{`
+              @keyframes cfm-fall {
+                0% {
+                  transform: translateY(-10%) scale(1);
+                  opacity: 0;
+                }
+                8% {
+                  opacity: 1;
+                }
+                100% {
+                  transform: translateY(120%) scale(1.15);
+                  opacity: 0;
+                }
+              }
+            `}</style>
+
             {!agoraReady ? (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">Connecting...</div>
             ) : null}
@@ -708,9 +769,10 @@ export function LiveClient({
                         <button
                           key={e}
                           type="button"
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[13px] font-semibold text-white"
+                          className="px-1 py-1 text-[20px] font-semibold text-white"
                           onClick={() => {
                             if (!canChat) return;
+                            spawnEmote(e);
                             send("emote", e);
                           }}
                           disabled={!canChat || pending}
@@ -723,11 +785,16 @@ export function LiveClient({
 
                     <div className="flex items-center gap-2">
                       <Button as="link" href="/support" variant="secondary" className="px-3 py-2 text-xs">
-                        Tip
+                        Gift
                       </Button>
-                      <Button as="link" href="/live" variant="secondary" className="px-3 py-2 text-xs">
-                        Share
-                      </Button>
+                      <button
+                        type="button"
+                        onClick={shareLive}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white"
+                        aria-label="Share"
+                      >
+                        <span className="text-[18px] leading-none">↗</span>
+                      </button>
                     </div>
                   </div>
 
