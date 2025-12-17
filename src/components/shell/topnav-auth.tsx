@@ -83,19 +83,44 @@ export async function TopNavAuth() {
           </Button>
         ) : null}
         <NotiesNavButton userId={user.id} initialUnread={unread} className={navBtnClass} mode="desktop" />
-        <Button
-          as="link"
-          href="/account"
-          variant="secondary"
-          className={navBtnClass}
-        >
-          Account
-        </Button>
-        <form action={logout}>
-          <Button type="submit" variant="secondary" className={navBtnClass}>
-            Logout
-          </Button>
-        </form>
+        
+        <details className="relative">
+          <summary
+            aria-label="Open menu"
+            className={
+              "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[rgba(209,31,42,0.45)] list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+            }
+          >
+            <span>Account</span>
+            <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </summary>
+          <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[rgba(7,10,8,0.95)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
+            <Link href="/account" className={mobileMenuItemClass}>
+              Account
+            </Link>
+            <Link href="/me" className={mobileMenuItemClass}>
+              Edit Profile
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <Link href="/terms" className={mobileMenuItemClass}>
+              Terms of Service
+            </Link>
+            <Link href="/privacy" className={mobileMenuItemClass}>
+              Privacy Policy
+            </Link>
+            <Link href="/safety" className={mobileMenuItemClass}>
+              Community Guidelines
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <form action={logout}>
+              <button type="submit" className={mobileMenuItemClass + " text-left"}>
+                Logout
+              </button>
+            </form>
+          </div>
+        </details>
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
@@ -145,6 +170,20 @@ export async function TopNavAuth() {
             <Link href="/account" className={mobileMenuItemClass}>
               Account
             </Link>
+            <Link href="/me" className={mobileMenuItemClass}>
+              Edit Profile
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <Link href="/terms" className={mobileMenuItemClass}>
+              Terms of Service
+            </Link>
+            <Link href="/privacy" className={mobileMenuItemClass}>
+              Privacy Policy
+            </Link>
+            <Link href="/safety" className={mobileMenuItemClass}>
+              Community Guidelines
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
               <button type="submit" className={mobileMenuItemClass + " text-left"}>
                 Logout
