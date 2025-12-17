@@ -21,7 +21,7 @@ export default async function LivePage({
   let live: any = null;
   try {
     const { data } = await sb.rpc("cfm_get_live_state");
-    live = data as any;
+    live = Array.isArray(data) ? (data[0] as any) : (data as any);
   } catch {
     live = null;
   }

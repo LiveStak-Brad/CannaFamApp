@@ -177,7 +177,8 @@ export function LiveClient({
       try {
         const { data } = await sb.rpc("cfm_get_live_state");
         if (!mounted) return;
-        if (data) setLive(data as any);
+        const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+        if (row) setLive(row);
       } catch {
       }
 
@@ -454,7 +455,8 @@ export function LiveClient({
         const { error } = await sb.from("cfm_live_state").update(patch).eq("id", live.id);
         if (error) throw new Error(error.message);
         const { data: fresh } = await sb.rpc("cfm_get_live_state");
-        if (fresh) setLive(fresh as any);
+        const row = Array.isArray(fresh) ? (fresh[0] as any) : (fresh as any);
+        if (row) setLive(row);
       } catch (e) {
         toast(e instanceof Error ? e.message : "Could not update live state.", "error");
       }
@@ -465,9 +467,15 @@ export function LiveClient({
     const msg = String(message ?? "").trim();
     if (!msg) return;
 
+    const liveId = String((live as any)?.id ?? "").trim();
+    if (!liveId) {
+      toast("Live session not ready.", "error");
+      return;
+    }
+
     startTransition(async () => {
       const { error } = await sb.from("cfm_live_chat").insert({
-        live_id: live.id,
+        live_id: liveId,
         sender_user_id: myUserId,
         message: msg,
         type,
