@@ -51,6 +51,8 @@ export type GiftLeaderboardRow = {
   user_id: string;
   favorited_username: string;
   total_cents: number;
+  photo_url?: string | null;
+  rank?: number;
 };
 
 function formatUSD(cents: number) {
@@ -61,21 +63,28 @@ function formatUSD(cents: number) {
 
 export function LeaderboardClient({
   rows,
-  giftRows,
+  giftRowsToday,
+  giftRowsWeekly,
+  giftRowsAllTime,
   errorMessage,
   profiles,
   awards,
   myUserId,
 }: {
   rows: LeaderboardRow[];
-  giftRows: GiftLeaderboardRow[];
+  giftRowsToday: GiftLeaderboardRow[];
+  giftRowsWeekly: GiftLeaderboardRow[];
+  giftRowsAllTime: GiftLeaderboardRow[];
   errorMessage?: string | null;
   profiles: PublicProfile[];
   awards: AwardRow[];
   myUserId?: string | null;
 }) {
   const [mode, setMode] = useState<"points" | "gifts">("points");
+  const [giftPeriod, setGiftPeriod] = useState<"today" | "weekly" | "all_time">("all_time");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const giftRows = giftPeriod === "today" ? giftRowsToday : giftPeriod === "weekly" ? giftRowsWeekly : giftRowsAllTime;
   const selected = useMemo(() => {
     if (!selectedId) return null;
     if (mode === "gifts") {
@@ -144,70 +153,128 @@ export function LeaderboardClient({
           <div className="text-xs">{errorMessage}</div>
         </div>
       ) : mode === "gifts" ? (
-        giftRows.length ? (
-          <div className="space-y-2">
-            {giftRows.map((m, idx) => (
+        <>
+          <div className="mb-3 flex gap-2">
+            <button
+              type="button"
+              className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                giftPeriod === "today" ? "border-red-500 bg-red-600 text-white" : "border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)] hover:bg-[rgba(255,255,255,0.05)]"
+              }`}
+              onClick={() => setGiftPeriod("today")}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                giftPeriod === "weekly" ? "border-red-500 bg-red-600 text-white" : "border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)] hover:bg-[rgba(255,255,255,0.05)]"
+              }`}
+              onClick={() => setGiftPeriod("weekly")}
+            >
+              Weekly
+            </button>
+            <button
+              type="button"
+              className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                giftPeriod === "all_time" ? "border-red-500 bg-red-600 text-white" : "border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)] hover:bg-[rgba(255,255,255,0.05)]"
+              }`}
+              onClick={() => setGiftPeriod("all_time")}
+            >
+              All-Time
+            </button>
+          </div>
+          {giftRows.length ? (
+            <div className="space-y-2">
+              {giftRows.map((m, idx) => {
+                const rank = m.rank ?? idx + 1;
+                const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+                const bgClass = rank === 1 ? "bg-yellow-500/10 border-yellow-500/30" : rank === 2 ? "bg-gray-400/10 border-gray-400/30" : rank === 3 ? "bg-orange-500/10 border-orange-500/30" : "border-[color:var(--border)]";
+                return (
+                  <button
+                    key={m.user_id}
+                    type="button"
+                    onClick={() => setSelectedId(m.user_id)}
+                    className={`w-full rounded-xl border px-3 py-3 text-left transition hover:bg-[rgba(255,255,255,0.05)] ${bgClass}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 shrink-0 text-center">
+                        {medalEmoji ? (
+                          <span className="text-xl">{medalEmoji}</span>
+                        ) : (
+                          <span className="text-sm font-semibold text-[color:var(--muted)]">#{rank}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold">{m.favorited_username}</span>
+                      </div>
+                      <div className="font-bold text-green-500">{formatUSD(m.total_cents)}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 text-center">
+              <div className="text-3xl mb-2">💸</div>
+              <div className="text-sm text-[color:var(--muted)]">No gifts yet for this period.</div>
+            </div>
+          )}
+        </>
+      ) : rows.length ? (
+        <div className="space-y-2">
+          {rows.map((m, idx) => {
+            const rank = idx + 1;
+            const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+            const bgClass = rank === 1 ? "bg-yellow-500/10 border-yellow-500/30" : rank === 2 ? "bg-gray-400/10 border-gray-400/30" : rank === 3 ? "bg-orange-500/10 border-orange-500/30" : "border-[color:var(--border)]";
+            return (
               <button
                 key={m.user_id}
                 type="button"
                 onClick={() => setSelectedId(m.user_id)}
-                className="w-full rounded-xl px-2 py-2 text-left transition hover:bg-[rgba(255,255,255,0.03)]"
+                className={`w-full rounded-xl border px-3 py-3 text-left transition hover:bg-[rgba(255,255,255,0.05)] ${bgClass}`}
               >
-                <div className="flex items-center justify-between text-sm">
-                  <div className="min-w-0">
-                    <span className="text-[color:var(--muted)]">#{idx + 1}</span>{" "}
-                    <span className="font-semibold">{m.favorited_username}</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 shrink-0 text-center">
+                    {medalEmoji ? (
+                      <span className="text-xl">{medalEmoji}</span>
+                    ) : (
+                      <span className="text-sm font-semibold text-[color:var(--muted)]">#{rank}</span>
+                    )}
                   </div>
-                  <div className="font-semibold">{formatUSD(m.total_cents)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{m.favorited_username}</span>
+                      <FollowInline targetUserId={m.user_id} myUserId={myUserId} />
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+                      <span>🔥 {m.streak_points ?? 0}</span>
+                      <span>🔗 {m.share_points ?? 0}</span>
+                      <span>❤️ {m.like_points ?? 0}</span>
+                      {typeof m.comment_points !== "undefined" ? (
+                        <span>💬 {m.comment_points ?? 0}</span>
+                      ) : null}
+                      {typeof m.comment_upvote_points !== "undefined" ? (
+                        <span>⬆️ {m.comment_upvote_points ?? 0}</span>
+                      ) : null}
+                      <span>✅ {m.checkin_points ?? 0}</span>
+                      <span>🎁 {m.gift_bonus_points ?? 0}</span>
+                      <span>🎡 {m.spin_points ?? 0}</span>
+                      {typeof m.link_visit_points !== "undefined" ? (
+                        <span>🔎 {m.link_visit_points ?? 0}</span>
+                      ) : null}
+                      {typeof m.gift_dollar_points !== "undefined" ? (
+                        <span>💰 {m.gift_dollar_points ?? 0}</span>
+                      ) : null}
+                      {typeof m.follow_points !== "undefined" ? (
+                        <span>👥 {m.follow_points ?? 0}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="font-bold text-lg">{m.total_points ?? 0}</div>
                 </div>
               </button>
-            ))}
-          </div>
-        ) : (
-          <div className="text-sm text-[color:var(--muted)]">No gifts yet.</div>
-        )
-      ) : rows.length ? (
-        <div className="space-y-2">
-          {rows.map((m, idx) => (
-            <button
-              key={m.user_id}
-              type="button"
-              onClick={() => setSelectedId(m.user_id)}
-              className="w-full rounded-xl px-2 py-2 text-left transition hover:bg-[rgba(255,255,255,0.03)]"
-            >
-              <div className="flex items-center justify-between text-sm">
-                <div className="min-w-0">
-                  <span className="text-[color:var(--muted)]">#{idx + 1}</span>{" "}
-                  <span className="font-semibold">{m.favorited_username}</span>{" "}
-                  <FollowInline targetUserId={m.user_id} myUserId={myUserId} />
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
-                    <span>🔥 {m.streak_points ?? 0}</span>
-                    <span>🔗 {m.share_points ?? 0}</span>
-                    <span>❤️ {m.like_points ?? 0}</span>
-                    {typeof m.comment_points !== "undefined" ? (
-                      <span>💬 {m.comment_points ?? 0}</span>
-                    ) : null}
-                    {typeof m.comment_upvote_points !== "undefined" ? (
-                      <span>⬆️ {m.comment_upvote_points ?? 0}</span>
-                    ) : null}
-                    <span>✅ {m.checkin_points ?? 0}</span>
-                    <span>🎁 {m.gift_bonus_points ?? 0}</span>
-                    <span>🎡 {m.spin_points ?? 0}</span>
-                    {typeof m.link_visit_points !== "undefined" ? (
-                      <span>🔎 {m.link_visit_points ?? 0}</span>
-                    ) : null}
-                    {typeof m.gift_dollar_points !== "undefined" ? (
-                      <span>💰 {m.gift_dollar_points ?? 0}</span>
-                    ) : null}
-                    {typeof m.follow_points !== "undefined" ? (
-                      <span>👥 {m.follow_points ?? 0}</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="font-semibold">{m.total_points ?? 0}</div>
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="text-sm text-[color:var(--muted)]">No leaderboard entries yet.</div>

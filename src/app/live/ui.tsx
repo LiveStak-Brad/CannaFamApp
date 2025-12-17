@@ -874,24 +874,24 @@ export function LiveClient({
         </div>
 
         {topModalOpen ? (
-          <div className="fixed inset-0 z-[60] bg-white">
+          <div className="fixed inset-0 z-[60] bg-[#0b0b0c]">
             <div className="mx-auto flex h-full w-full max-w-xl flex-col">
-              <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-4">
-                <div className="text-base font-semibold">Top Gifters</div>
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+                <div className="text-lg font-bold text-white">💰 Top Gifters</div>
                 <button
                   type="button"
-                  className="rounded-full border border-[color:var(--border)] px-3 py-1 text-sm"
+                  className="rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
                   onClick={() => setTopModalOpen(false)}
                 >
                   Close
                 </button>
               </div>
 
-              <div className="flex gap-2 px-4 pt-3">
+              <div className="flex gap-2 px-4 pt-4">
                 <button
                   type="button"
-                  className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${
-                    topTab === "today" ? "bg-black text-white" : "bg-white"
+                  className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                    topTab === "today" ? "border-red-500 bg-red-600 text-white" : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
                   }`}
                   onClick={() => setTopTab("today")}
                 >
@@ -899,8 +899,8 @@ export function LiveClient({
                 </button>
                 <button
                   type="button"
-                  className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${
-                    topTab === "weekly" ? "bg-black text-white" : "bg-white"
+                  className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                    topTab === "weekly" ? "border-red-500 bg-red-600 text-white" : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
                   }`}
                   onClick={() => setTopTab("weekly")}
                 >
@@ -908,8 +908,8 @@ export function LiveClient({
                 </button>
                 <button
                   type="button"
-                  className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${
-                    topTab === "all_time" ? "bg-black text-white" : "bg-white"
+                  className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                    topTab === "all_time" ? "border-red-500 bg-red-600 text-white" : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
                   }`}
                   onClick={() => setTopTab("all_time")}
                 >
@@ -921,8 +921,10 @@ export function LiveClient({
                 <div className="space-y-2">
                   {modalRows.map((g) => {
                     const r = Number(g.rank ?? 0);
-                    const m = medal(r);
                     const name = String(g.display_name ?? "Member");
+                    const amount = Number(g.total_amount ?? 0);
+                    const medalEmoji = r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : null;
+                    const bgClass = r === 1 ? "bg-yellow-500/20 border-yellow-500/40" : r === 2 ? "bg-gray-400/20 border-gray-400/40" : r === 3 ? "bg-orange-500/20 border-orange-500/40" : "bg-white/5 border-white/10";
                     return (
                       <button
                         key={`${String(g.profile_id)}-${r}`}
@@ -931,22 +933,30 @@ export function LiveClient({
                           setTopModalOpen(false);
                           openProfile(String(g.profile_id));
                         }}
-                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left ${
-                          r <= 3 ? m.cls : "border-[color:var(--border)] bg-white"
-                        }`}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:bg-white/10 ${bgClass}`}
                       >
-                        <div className="w-10 shrink-0 text-sm font-semibold">{m.label}</div>
-                        {renderAvatar(name, g.avatar_url, 34)}
+                        <div className="w-10 shrink-0 text-center">
+                          {medalEmoji ? (
+                            <span className="text-2xl">{medalEmoji}</span>
+                          ) : (
+                            <span className="text-sm font-bold text-white/60">#{r}</span>
+                          )}
+                        </div>
+                        {renderAvatar(name, g.avatar_url, 40)}
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold">{name}</div>
-                          <div className="text-xs text-[color:var(--muted)]">{fmtAmount(g.total_amount ?? 0)}</div>
+                          <div className="truncate text-sm font-bold text-white">{name}</div>
+                          <div className="text-lg font-bold text-green-400">${amount.toFixed(2)}</div>
                         </div>
                       </button>
                     );
                   })}
 
                   {!modalRows.length ? (
-                    <div className="text-sm text-[color:var(--muted)]">No gifts yet.</div>
+                    <div className="py-8 text-center">
+                      <div className="text-4xl mb-2">💸</div>
+                      <div className="text-sm text-white/50">No gifts yet for this period.</div>
+                      <div className="text-xs text-white/30 mt-1">Be the first to gift!</div>
+                    </div>
                   ) : null}
                 </div>
               </div>

@@ -37,50 +37,34 @@ export default async function LeaderboardPage() {
   const typedProfiles = (profiles ?? []) as PublicProfile[];
   const typedAwards = (awards ?? []) as AwardRow[];
 
-  let giftRows: GiftLeaderboardRow[] = [];
+  // Use cfm_top_gifters RPC for consistent gift leaderboard data
+  let giftRowsToday: GiftLeaderboardRow[] = [];
+  let giftRowsWeekly: GiftLeaderboardRow[] = [];
+  let giftRowsAllTime: GiftLeaderboardRow[] = [];
+
   try {
-    const { data: gifts } = await sb
-      .from("cfm_post_gifts")
-      .select("gifter_user_id,amount_cents,status")
-      .eq("status", "paid")
-      .not("gifter_user_id", "is", null)
-      .limit(5000);
+    const [{ data: d1 }, { data: d2 }, { data: d3 }] = await Promise.all([
+      sb.rpc("cfm_top_gifters", { period: "today" }),
+      sb.rpc("cfm_top_gifters", { period: "weekly" }),
+      sb.rpc("cfm_top_gifters", { period: "all_time" }),
+    ]);
 
-    const totals = new Map<string, number>();
-    for (const g of (gifts ?? []) as any[]) {
-      const uid = String(g?.gifter_user_id ?? "").trim();
-      const cents = Number(g?.amount_cents ?? 0);
-      if (!uid || !Number.isFinite(cents) || cents <= 0) continue;
-      totals.set(uid, (totals.get(uid) ?? 0) + cents);
-    }
+    const mapRows = (data: any[]): GiftLeaderboardRow[] =>
+      (data ?? []).map((r: any) => ({
+        user_id: String(r.profile_id ?? ""),
+        favorited_username: String(r.display_name ?? "Member"),
+        total_cents: Math.round(Number(r.total_amount ?? 0) * 100),
+        photo_url: r.avatar_url ?? null,
+        rank: Number(r.rank ?? 0),
+      }));
 
-    if (totals.size) {
-      const userIds = Array.from(totals.keys());
-      const { data: gifterProfiles } = await sb
-        .from("cfm_public_member_ids")
-        .select("user_id,favorited_username")
-        .in("user_id", userIds)
-        .limit(2000);
-
-      const nameById = new Map<string, string>();
-      for (const p of (gifterProfiles ?? []) as any[]) {
-        const uid = String(p?.user_id ?? "").trim();
-        const uname = String(p?.favorited_username ?? "").trim();
-        if (!uid || !uname) continue;
-        nameById.set(uid, uname);
-      }
-
-      giftRows = userIds
-        .map((uid) => ({
-          user_id: uid,
-          favorited_username: nameById.get(uid) ?? "Member",
-          total_cents: totals.get(uid) ?? 0,
-        }))
-        .sort((a, b) => (b.total_cents ?? 0) - (a.total_cents ?? 0))
-        .slice(0, 100);
-    }
+    giftRowsToday = mapRows(d1 as any[]);
+    giftRowsWeekly = mapRows(d2 as any[]);
+    giftRowsAllTime = mapRows(d3 as any[]);
   } catch {
-    giftRows = [];
+    giftRowsToday = [];
+    giftRowsWeekly = [];
+    giftRowsAllTime = [];
   }
 
   return (
@@ -99,7 +83,9 @@ export default async function LeaderboardPage() {
         <Card>
           <LeaderboardClient
             rows={rows}
-            giftRows={giftRows}
+            giftRowsToday={giftRowsToday}
+            giftRowsWeekly={giftRowsWeekly}
+            giftRowsAllTime={giftRowsAllTime}
             errorMessage={error?.message ?? null}
             profiles={typedProfiles}
             awards={typedAwards}
