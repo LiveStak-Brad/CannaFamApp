@@ -205,7 +205,7 @@ function formatUSD(cents: number) {
   return `$${(n / 100).toFixed(2)}`;
 }
 
-function GiftModal({
+export function GiftModal({
   open,
   postId,
   pending,

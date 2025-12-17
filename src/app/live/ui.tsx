@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { GiftModal } from "@/app/feed/ui";
+import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
 
 const DEFAULT_EMOTES = ["🔥", "😂", "❤️", "👀", "😭"];
 
@@ -86,6 +88,17 @@ export function LiveClient({
   const [topAllTime, setTopAllTime] = useState<TopGifterRow[]>([]);
   const [topModalOpen, setTopModalOpen] = useState(false);
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
+
+  // Gift modal state
+  const [giftModalOpen, setGiftModalOpen] = useState(false);
+  const [giftPending, startGiftTransition] = useTransition();
+  const [giftPresets, setGiftPresets] = useState<number[]>([100, 300, 500, 1000, 2000]);
+  const [giftSettings, setGiftSettings] = useState<{ allowCustom: boolean; minCents: number; maxCents: number; enabled: boolean }>({
+    allowCustom: true,
+    minCents: 100,
+    maxCents: 20000,
+    enabled: true,
+  });
 
   const [agoraReady, setAgoraReady] = useState(false);
   const [remoteUid, setRemoteUid] = useState<string | null>(null);
@@ -812,7 +825,13 @@ export function LiveClient({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button as="link" href="/support" variant="secondary" className="px-3 py-2 text-xs">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        disabled={giftPending || !giftSettings.enabled}
+                        onClick={() => setGiftModalOpen(true)}
+                      >
                         Gift
                       </Button>
                       <button
@@ -946,6 +965,30 @@ export function LiveClient({
           </div>
         </div>
       ) : null}
+
+      {/* Gift Modal */}
+      <GiftModal
+        open={giftModalOpen}
+        postId="Live"
+        pending={giftPending}
+        presets={giftPresets}
+        allowCustom={giftSettings.allowCustom}
+        minCents={giftSettings.minCents}
+        maxCents={giftSettings.maxCents}
+        notice={!isLoggedIn ? "You can gift anonymously. Log in to appear on the gifter leaderboard." : null}
+        onClose={() => setGiftModalOpen(false)}
+        onStartCheckout={(amountCents) => {
+          startGiftTransition(async () => {
+            try {
+              const res = await createSiteGiftCheckoutSession(amountCents, "/live");
+              if (!res?.url) throw new Error("Checkout failed.");
+              window.location.href = res.url;
+            } catch (e) {
+              toast(e instanceof Error ? e.message : "Checkout failed", "error");
+            }
+          });
+        }}
+      />
     </div>
     </div>
   );
