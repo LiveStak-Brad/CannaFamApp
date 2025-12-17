@@ -90,6 +90,7 @@ export function LiveClient({
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [remoteCount, setRemoteCount] = useState(0);
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
+  const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = !!myUserId;
@@ -270,6 +271,8 @@ export function LiveClient({
         const role = String(json?.role ?? "viewer");
 
         if (!token || !appId || !channel) return;
+
+        setLocalRtc({ appId, channel, uid, role });
 
         const rtcMod: any = await import("agora-rtc-sdk-ng");
         const AgoraRTC = (rtcMod?.default ?? rtcMod) as any;
@@ -511,7 +514,15 @@ export function LiveClient({
             {agoraReady && !isHost && !hasRemoteVideo ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-white/70">
                 <div>Waiting for host video...</div>
-                <div className="text-[11px] text-white/50">Remote users: {remoteCount}{lastRtcEvent ? ` • ${lastRtcEvent}` : ""}</div>
+                <div className="text-[11px] text-white/50">
+                  Remote users: {remoteCount}
+                  {lastRtcEvent ? ` • ${lastRtcEvent}` : ""}
+                </div>
+                {localRtc ? (
+                  <div className="text-[11px] text-white/50">
+                    Local: {localRtc.uid || "(anon)"} • {localRtc.channel} • {localRtc.role} • {localRtc.appId.slice(0, 6)}…
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
