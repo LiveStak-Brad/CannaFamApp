@@ -26,8 +26,9 @@ export const runtime = "nodejs";
 export default async function FeedPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const qs = (await searchParams) ?? {};
   const sb = await supabaseServer();
 
   const user = await getAuthedUserOrNull();
@@ -60,7 +61,7 @@ export default async function FeedPage({
 
   const myDailyPost = (myDailyPostRow ?? null) as MyDailyPost | null;
 
-  const giftParam = typeof searchParams?.gift === "string" ? searchParams?.gift : null;
+  const giftParam = typeof qs.gift === "string" ? qs.gift : null;
   const giftNotice =
     giftParam === "success"
       ? "✅ Gift checkout completed. If payment succeeds, it will show up shortly."

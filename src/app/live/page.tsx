@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
 export default async function LivePage({
   searchParams,
 }: {
-  searchParams?: { next?: string };
+  searchParams?: Promise<{ next?: string }>;
 }) {
-  const next = String(searchParams?.next ?? "").trim();
+  const sp = (await searchParams) ?? {};
+  const next = String(sp?.next ?? "").trim();
 
   const user = await getAuthedUserOrNull();
   const sb = await supabaseServer();
