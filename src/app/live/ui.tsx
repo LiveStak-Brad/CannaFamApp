@@ -402,12 +402,12 @@ export function LiveClient({
             </div>
 
             <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-              <div className="flex h-[34%] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
+              <div className="flex h-[45%] min-h-[280px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
                 <div className="border-b border-white/10 px-4 py-3">
                   <div className="text-center text-sm font-semibold text-white">CannaFam Chat</div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
+                <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
                   <div className="space-y-2">
                     {rows
                       .filter((r) => !r.is_deleted)
@@ -437,7 +437,7 @@ export function LiveClient({
                         <button
                           key={e}
                           type="button"
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[13px] font-semibold text-white"
                           onClick={() => {
                             if (!canChat) return;
                             send("emote", e);
@@ -451,10 +451,10 @@ export function LiveClient({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button as="link" href="/support" variant="secondary">
+                      <Button as="link" href="/support" variant="secondary" className="px-3 py-2 text-xs">
                         Tip
                       </Button>
-                      <Button as="link" href="/live" variant="secondary">
+                      <Button as="link" href="/live" variant="secondary" className="px-3 py-2 text-xs">
                         Share
                       </Button>
                     </div>
@@ -475,6 +475,7 @@ export function LiveClient({
                         send("chat", text);
                       }}
                       disabled={!canChat || pending}
+                      className="px-4 py-2 text-xs"
                     >
                       Send
                     </Button>
