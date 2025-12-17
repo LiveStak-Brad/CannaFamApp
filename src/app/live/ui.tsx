@@ -772,13 +772,9 @@ export function LiveClient({
               </div>
             </div>
 
-            <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-              <div className="flex h-[40%] max-h-[320px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
-                <div className="border-b border-white/10 px-4 py-3">
-                  <div className="text-center text-sm font-semibold text-white">CannaFam Chat</div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+            <div className="absolute inset-x-0 bottom-0 z-10 p-2">
+              <div className="flex h-[35%] max-h-[280px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/35 backdrop-blur">
+                <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
                   <div className="space-y-2">
                     {rows
                       .filter((r) => !r.is_deleted)
@@ -805,8 +801,8 @@ export function LiveClient({
                   </div>
                 </div>
 
-                <div className="border-t border-white/10 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
+                <div className="border-t border-white/10 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex gap-2">
                       {DEFAULT_EMOTES.map((e) => (
                         <button
