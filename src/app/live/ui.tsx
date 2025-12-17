@@ -288,7 +288,9 @@ export function LiveClient({
     if (!liveId || !myUserId) return;
 
     // Join as viewer
-    sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }).catch(() => {});
+    (async () => {
+      try { await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }); } catch {}
+    })();
 
     // Load initial viewers
     const loadViewers = async () => {
@@ -309,8 +311,8 @@ export function LiveClient({
     loadViewers();
 
     // Heartbeat every 30 seconds
-    viewerHeartbeatRef.current = setInterval(() => {
-      sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId }).catch(() => {});
+    viewerHeartbeatRef.current = setInterval(async () => {
+      try { await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId }); } catch {}
       loadViewers(); // Refresh viewer list
     }, 30000);
 
@@ -318,7 +320,7 @@ export function LiveClient({
     const viewerChannel = sb
       .channel(`live-viewers-${liveId}`)
       .on(
-        "postgres_changes",
+        "postgres_changes" as any,
         { event: "*", schema: "public", table: "cfm_live_viewers", filter: `live_id=eq.${liveId}` },
         () => {
           loadViewers();
@@ -328,7 +330,9 @@ export function LiveClient({
 
     return () => {
       // Leave as viewer
-      sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }).catch(() => {});
+      (async () => {
+        try { await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }); } catch {}
+      })();
       if (viewerHeartbeatRef.current) {
         clearInterval(viewerHeartbeatRef.current);
       }
