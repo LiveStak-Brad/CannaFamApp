@@ -75,6 +75,8 @@ export function LiveClient({
   const [text, setText] = useState<string>("");
   const [pending, startTransition] = useTransition();
 
+  const [nameByUserId, setNameByUserId] = useState<Record<string, string>>({});
+
   const [hostPending, startHostTransition] = useTransition();
   const [isHost, setIsHost] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
@@ -170,6 +172,13 @@ export function LiveClient({
   const top3 = topToday.slice(0, 3);
   const modalRows = topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime;
 
+  const chatLiveId = useMemo(() => {
+    const v = String((live as any)?.id ?? "").trim();
+    if (v) return v;
+    const fallback = String((initialLive as any)?.id ?? "").trim();
+    return fallback;
+  }, [initialLive, live]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -184,11 +193,14 @@ export function LiveClient({
 
       await loadTopGifters();
 
+      const liveId = String(chatLiveId ?? "").trim();
+      if (!liveId) return;
+
       try {
         const { data } = await sb
           .from("cfm_live_chat")
           .select("id,live_id,sender_user_id,message,type,metadata,is_deleted,deleted_by,deleted_at,created_at")
-          .eq("live_id", (initialLive as any).id)
+          .eq("live_id", liveId)
           .order("created_at", { ascending: false })
           .limit(80);
         if (!mounted) return;
@@ -198,14 +210,14 @@ export function LiveClient({
 
       try {
         const channel = sb
-          .channel(`live-chat-${(initialLive as any).id}`)
+          .channel(`live-chat-${liveId}`)
           .on(
             "postgres_changes",
             {
               event: "INSERT",
               schema: "public",
               table: "cfm_live_chat",
-              filter: `live_id=eq.${(initialLive as any).id}`,
+              filter: `live_id=eq.${liveId}`,
             },
             (payload: any) => {
               const row = payload.new as any;
@@ -221,7 +233,7 @@ export function LiveClient({
               event: "UPDATE",
               schema: "public",
               table: "cfm_live_chat",
-              filter: `live_id=eq.${(initialLive as any).id}`,
+              filter: `live_id=eq.${liveId}`,
             },
             (payload: any) => {
               const row = payload.new as any;
@@ -240,7 +252,44 @@ export function LiveClient({
     return () => {
       mounted = false;
     };
-  }, [sb, initialLive]);
+  }, [sb, chatLiveId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const ids = Array.from(
+          new Set(
+            rows
+              .map((r) => String(r.sender_user_id ?? "").trim())
+              .filter(Boolean)
+              .filter((id) => !nameByUserId[id]),
+          ),
+        );
+        if (!ids.length) return;
+
+        const { data } = await sb.from("cfm_public_member_ids").select("user_id,favorited_username").in("user_id", ids);
+        if (cancelled) return;
+
+        const patch: Record<string, string> = {};
+        for (const row of (data ?? []) as any[]) {
+          const uid = String(row?.user_id ?? "").trim();
+          const uname = String(row?.favorited_username ?? "").trim();
+          if (uid && uname) patch[uid] = uname;
+        }
+
+        if (Object.keys(patch).length) {
+          setNameByUserId((prev) => ({ ...prev, ...patch }));
+        }
+      } catch {
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nameByUserId, rows, sb]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -467,7 +516,7 @@ export function LiveClient({
     const msg = String(message ?? "").trim();
     if (!msg) return;
 
-    const liveId = String((live as any)?.id ?? "").trim();
+    const liveId = String(chatLiveId ?? "").trim();
     if (!liveId) {
       toast("Live session not ready.", "error");
       return;
@@ -605,7 +654,7 @@ export function LiveClient({
             </div>
 
             <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-              <div className="flex h-[62%] min-h-[360px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
+              <div className="flex h-[46%] max-h-[380px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/35 backdrop-blur">
                 <div className="border-b border-white/10 px-4 py-3">
                   <div className="text-center text-sm font-semibold text-white">CannaFam Chat</div>
                 </div>
@@ -626,6 +675,9 @@ export function LiveClient({
                               : "text-white";
                         return (
                           <div key={r.id} className={`text-sm ${cls}`}>
+                            <span className="text-white/70">
+                              {String(nameByUserId[String(r.sender_user_id ?? "").trim()] ?? "Member")}:
+                            </span>{" "}
                             {msg}
                           </div>
                         );
