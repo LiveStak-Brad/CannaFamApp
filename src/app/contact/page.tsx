@@ -25,10 +25,10 @@ export default function ContactPage() {
               For general inquiries, account issues, or technical support:
             </p>
             <a
-              href="mailto:support@cannafam.com"
+              href="mailto:support@cannafamapp.com"
               className="inline-block rounded-lg bg-[color:var(--accent)] px-4 py-2 font-medium text-white hover:opacity-90"
             >
-              support@cannafam.com
+              support@cannafamapp.com
             </a>
           </div>
         </Card>
@@ -45,7 +45,7 @@ export default function ContactPage() {
               <li>Screenshots if possible</li>
             </ul>
             <a
-              href="mailto:bugs@cannafam.com?subject=Bug%20Report"
+              href="mailto:support@cannafamapp.com?subject=Bug%20Report"
               className="inline-block rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-medium hover:bg-white/10"
             >
               Report a Bug
@@ -59,7 +59,7 @@ export default function ContactPage() {
               Have an idea to make CannaFam better? We'd love to hear it!
             </p>
             <a
-              href="mailto:feedback@cannafam.com?subject=Feature%20Request"
+              href="mailto:support@cannafamapp.com?subject=Feature%20Request"
               className="inline-block rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-medium hover:bg-white/10"
             >
               Submit Feedback
@@ -77,7 +77,7 @@ export default function ContactPage() {
               , please email us with details about the content and why it should be reviewed.
             </p>
             <a
-              href="mailto:safety@cannafam.com?subject=Content%20Report"
+              href="mailto:support@cannafamapp.com?subject=Content%20Report"
               className="inline-block rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 font-medium text-red-400 hover:bg-red-500/20"
             >
               Report Content

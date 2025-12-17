@@ -123,5 +123,5 @@ Optional:
 
 - **Privacy Policy**: https://cannafam.com/privacy
 - **Terms of Service**: https://cannafam.com/terms
-- **Support/Contact**: https://cannafam.com/contact
-- **Support Email**: support@cannafam.com
+- **Support/Contact**: https://cannafamapp.com/contact
+- **Support Email**: support@cannafamapp.com

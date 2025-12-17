@@ -107,6 +107,46 @@ export function LiveClient({
   const [viewerListOpen, setViewerListOpen] = useState(false);
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
 
+  // Mini profile popup state
+  type MiniProfileData = { userId: string; name: string; avatarUrl: string | null; username: string | null };
+  const [miniProfile, setMiniProfile] = useState<MiniProfileData | null>(null);
+
+  async function showMiniProfile(userId: string) {
+    const uid = String(userId ?? "").trim();
+    if (!uid) return;
+    
+    try {
+      const { data } = await sb
+        .from("cfm_public_member_ids")
+        .select("user_id, favorited_username")
+        .eq("user_id", uid)
+        .maybeSingle();
+      
+      const username = String((data as any)?.favorited_username ?? "").trim() || null;
+      const name = nameByUserId[uid] || "Member";
+      
+      // Try to get avatar from top gifters data
+      let avatarUrl: string | null = null;
+      const allGifters = [...topToday, ...topWeekly, ...topAllTime];
+      const gifter = allGifters.find(g => g.profile_id === uid);
+      if (gifter) avatarUrl = gifter.avatar_url;
+      
+      setMiniProfile({ userId: uid, name, avatarUrl, username });
+    } catch {
+      setMiniProfile({ userId: uid, name: nameByUserId[uid] || "Member", avatarUrl: null, username: null });
+    }
+  }
+
+  function goToFullProfile() {
+    if (!miniProfile) return;
+    if (miniProfile.username) {
+      router.push(`/u/${encodeURIComponent(miniProfile.username)}`);
+    } else {
+      router.push("/members");
+    }
+    setMiniProfile(null);
+  }
+
   // Database-backed viewer tracking
   type ViewerInfo = { id: string; name: string; joinedAt: number; isOnline: boolean };
   const [viewers, setViewers] = useState<ViewerInfo[]>([]);
@@ -912,7 +952,13 @@ export function LiveClient({
                         if (isJoin) {
                           return (
                             <div key={r.id} className="text-[15px] text-green-400 font-semibold">
-                              {badge ? <span className="mr-1">{badge}</span> : null}{msg}
+                              <button
+                                type="button"
+                                className="hover:underline"
+                                onClick={() => senderId && showMiniProfile(senderId)}
+                              >
+                                {badge ? <span className="mr-1">{badge}</span> : null}{msg}
+                              </button>
                             </div>
                           );
                         }
@@ -920,7 +966,13 @@ export function LiveClient({
                         if (isGift) {
                           return (
                             <div key={r.id} className="text-[15px] text-red-400 font-semibold">
-                              {badge ? <span className="mr-1">{badge}</span> : null}{msg}
+                              <button
+                                type="button"
+                                className="hover:underline"
+                                onClick={() => senderId && showMiniProfile(senderId)}
+                              >
+                                {badge ? <span className="mr-1">{badge}</span> : null}{msg}
+                              </button>
                             </div>
                           );
                         }
@@ -928,9 +980,13 @@ export function LiveClient({
                         const cls = t === "system" ? "text-white/70" : "text-white";
                         return (
                           <div key={r.id} className={`text-[15px] font-medium ${cls}`}>
-                            <span className="text-white/70 font-semibold">
+                            <button
+                              type="button"
+                              className="text-white/70 font-semibold hover:underline"
+                              onClick={() => senderId && showMiniProfile(senderId)}
+                            >
                               {badge ? <span className="mr-1">{badge}</span> : null}{senderName}:
-                            </span>{" "}
+                            </button>{" "}
                             {msg}
                           </div>
                         );
@@ -1074,7 +1130,7 @@ export function LiveClient({
                         type="button"
                         onClick={() => {
                           setTopModalOpen(false);
-                          openProfile(String(g.profile_id));
+                          showMiniProfile(String(g.profile_id));
                         }}
                         className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:bg-white/10 ${bgClass}`}
                       >
@@ -1169,6 +1225,58 @@ export function LiveClient({
             <div className="mt-1 text-xs text-white/70">Watch-only preview. Chat and reactions are disabled.</div>
             <div className="mt-3 flex justify-center">
               <Button as="link" href={`/login?next=${encodeURIComponent("/live")}`}>Log in</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Mini Profile Popup */}
+      {miniProfile ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60" onClick={() => setMiniProfile(null)}>
+          <div
+            className="w-[280px] rounded-2xl border border-white/20 bg-[#111114] p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="absolute right-3 top-3 text-white/60 hover:text-white"
+              onClick={() => setMiniProfile(null)}
+            >
+              ✕
+            </button>
+            <div className="flex flex-col items-center gap-3">
+              <button type="button" onClick={goToFullProfile} className="group">
+                {miniProfile.avatarUrl ? (
+                  <img
+                    src={miniProfile.avatarUrl}
+                    alt={miniProfile.name}
+                    className="h-20 w-20 rounded-full object-cover object-top border-2 border-white/20 group-hover:border-white/40 transition"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/20 bg-white/10 text-2xl font-bold text-white group-hover:border-white/40 transition">
+                    {miniProfile.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={goToFullProfile}
+                className="text-lg font-bold text-white hover:underline"
+              >
+                {getBadge(miniProfile.userId) ? <span className="mr-1">{getBadge(miniProfile.userId)}</span> : null}
+                {miniProfile.name}
+              </button>
+              {miniProfile.username ? (
+                <div className="text-sm text-white/50">@{miniProfile.username}</div>
+              ) : null}
+              <button
+                type="button"
+                onClick={goToFullProfile}
+                className="mt-2 w-full rounded-xl bg-[color:var(--accent)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition"
+              >
+                View Full Profile
+              </button>
             </div>
           </div>
         </div>
