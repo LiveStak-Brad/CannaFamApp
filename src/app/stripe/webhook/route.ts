@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
       const { data: existing } = await admin
         .from("cfm_post_gifts")
-        .select("id,status,stripe_event_id")
+        .select("id,status,stripe_event_id,gifter_user_id,amount_cents,post_id")
         .eq("id", giftId)
         .maybeSingle();
 
@@ -63,6 +63,49 @@ export async function POST(req: Request) {
         .eq("id", giftId);
 
       if (error) return safeJson({ ok: false, error: error.message }, 500);
+
+      // If this is a site gift (post_id is "Live" or null), insert a chat message into the active live stream
+      const postId = existing?.post_id;
+      const isLiveGift = !postId || postId === "Live";
+      
+      if (isLiveGift) {
+        // Get the current active live stream
+        const { data: liveState } = await admin
+          .from("cfm_live_state")
+          .select("id,is_live")
+          .eq("is_live", true)
+          .maybeSingle();
+
+        if (liveState?.id) {
+          // Get gifter's display name
+          const gifterUserId = existing?.gifter_user_id;
+          let gifterName = "Anonymous";
+          
+          if (gifterUserId) {
+            const { data: profile } = await admin
+              .from("cfm_public_member_ids")
+              .select("favorited_username")
+              .eq("user_id", gifterUserId)
+              .maybeSingle();
+            if (profile?.favorited_username) {
+              gifterName = profile.favorited_username;
+            }
+          }
+
+          const amountCents = existing?.amount_cents ?? 0;
+          const amountDollars = (amountCents / 100).toFixed(2);
+
+          // Insert gift notification into live chat
+          await admin.from("cfm_live_chat").insert({
+            live_id: liveState.id,
+            sender_user_id: gifterUserId || null,
+            message: `🎁 ${gifterName} gifted $${amountDollars}!`,
+            type: "system",
+            metadata: { event: "gift", amount_cents: amountCents, gifter_name: gifterName },
+          });
+        }
+      }
+
       return safeJson({ ok: true });
     }
 
