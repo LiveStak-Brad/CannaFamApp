@@ -285,20 +285,16 @@ export function LiveClient({
   // Database-backed viewer tracking
   useEffect(() => {
     const liveId = String(chatLiveId ?? "").trim();
-    if (!liveId || !myUserId) return;
+    if (!liveId) return;
 
-    // Join as viewer
-    (async () => {
-      try { await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }); } catch {}
-    })();
-
-    // Load initial viewers
+    // Load viewers (works for all users)
     const loadViewers = async () => {
       try {
-        const { data } = await sb.rpc("cfm_get_live_viewers", { p_live_id: liveId });
-        if (data) {
+        const { data, error } = await sb.rpc("cfm_get_live_viewers", { p_live_id: liveId });
+        console.log("[loadViewers] data:", data, "error:", error);
+        if (data && Array.isArray(data)) {
           setViewers(
-            (data as any[]).map((v: any) => ({
+            data.map((v: any) => ({
               id: String(v.user_id),
               name: String(v.display_name ?? "Viewer"),
               joinedAt: new Date(v.joined_at).getTime(),
@@ -306,15 +302,32 @@ export function LiveClient({
             }))
           );
         }
-      } catch {}
+      } catch (e) {
+        console.error("[loadViewers] error:", e);
+      }
     };
+
+    // Join as viewer (only if logged in)
+    if (myUserId) {
+      (async () => {
+        try { await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }); } catch {}
+      })();
+    }
+
     loadViewers();
 
-    // Heartbeat every 30 seconds
-    viewerHeartbeatRef.current = setInterval(async () => {
-      try { await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId }); } catch {}
-      loadViewers(); // Refresh viewer list
-    }, 30000);
+    // Heartbeat every 30 seconds (only if logged in)
+    if (myUserId) {
+      viewerHeartbeatRef.current = setInterval(async () => {
+        try { await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId }); } catch {}
+        loadViewers();
+      }, 30000);
+    } else {
+      // Still refresh viewer list periodically for non-logged-in users
+      viewerHeartbeatRef.current = setInterval(() => {
+        loadViewers();
+      }, 15000);
+    }
 
     // Subscribe to realtime changes on cfm_live_viewers
     const viewerChannel = sb
@@ -329,10 +342,12 @@ export function LiveClient({
       .subscribe();
 
     return () => {
-      // Leave as viewer
-      (async () => {
-        try { await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }); } catch {}
-      })();
+      // Leave as viewer (only if logged in)
+      if (myUserId) {
+        (async () => {
+          try { await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }); } catch {}
+        })();
+      }
       if (viewerHeartbeatRef.current) {
         clearInterval(viewerHeartbeatRef.current);
       }
@@ -1063,7 +1078,7 @@ export function LiveClient({
               <div className="flex-1 overflow-auto p-4">
                 <div className="mb-4 flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex-1 text-center">
-                    <div className="text-2xl font-bold text-white">{remoteCount}</div>
+                    <div className="text-2xl font-bold text-white">{viewers.filter((v) => v.isOnline).length}</div>
                     <div className="text-xs text-white/60">👁️ Watching Now</div>
                   </div>
                   <div className="flex-1 text-center">

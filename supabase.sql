@@ -1577,10 +1577,10 @@ begin
     return json_build_object('error', 'Not authenticated');
   end if;
 
-  -- Get display name from profile
-  select display_name into v_display_name
-  from public.cfm_profiles
-  where id = v_user_id;
+  -- Get display name from cfm_public_member_ids (favorited_username)
+  select favorited_username into v_display_name
+  from public.cfm_public_member_ids
+  where user_id = v_user_id;
 
   -- Upsert viewer record
   insert into public.cfm_live_viewers (live_id, user_id, display_name, joined_at, last_seen_at, left_at)
@@ -1647,7 +1647,7 @@ as $$
   order by v.joined_at asc;
 $$;
 
-grant execute on function public.cfm_get_live_viewers(uuid) to authenticated;
+grant execute on function public.cfm_get_live_viewers(uuid) to anon, authenticated;
 
 -- Function to heartbeat (update last_seen_at)
 create or replace function public.cfm_viewer_heartbeat(p_live_id uuid)
