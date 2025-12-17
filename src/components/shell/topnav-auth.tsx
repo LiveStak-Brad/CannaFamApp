@@ -35,6 +35,7 @@ export async function TopNavAuth() {
             LIVE
           </Button>
         ) : null}
+        <ThemeToggle />
         <Button as="link" href="/login" variant="secondary" className={navBtnClass}>
           Login
         </Button>
