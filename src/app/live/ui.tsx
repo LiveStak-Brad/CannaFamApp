@@ -97,6 +97,8 @@ export function LiveClient({
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const [fallingEmotes, setFallingEmotes] = useState<{ id: string; emoji: string; leftPct: number }[]>([]);
+  const seenRemoteEmotesRef = useRef<Record<string, true>>({});
+  const lastLocalEmoteAtRef = useRef<number>(0);
 
   const isLoggedIn = !!myUserId;
 
@@ -322,10 +324,35 @@ export function LiveClient({
       setFallingEmotes((prev) => [...prev, { id, emoji, leftPct }].slice(-30));
       setTimeout(() => {
         setFallingEmotes((prev) => prev.filter((e) => e.id !== id));
-      }, 2200);
+      }, 6500);
     } catch {
     }
   };
+
+  useEffect(() => {
+    try {
+      const recent = (rows.slice(-12) as any[]).filter((r) => String(r?.type ?? "") === "emote");
+      if (!recent.length) return;
+
+      for (const r of recent) {
+        const id = String(r?.id ?? "").trim();
+        if (!id) continue;
+        if (seenRemoteEmotesRef.current[id]) continue;
+        seenRemoteEmotesRef.current[id] = true;
+
+        const emoji = String(r?.message ?? "").trim();
+        if (!emoji) continue;
+
+        const sender = String(r?.sender_user_id ?? "").trim();
+        if (sender && myUserId && sender === String(myUserId)) {
+          if (Date.now() - (lastLocalEmoteAtRef.current || 0) < 2000) continue;
+        }
+
+        spawnEmote(emoji);
+      }
+    } catch {
+    }
+  }, [myUserId, rows]);
 
   const shareLive = async () => {
     try {
@@ -617,7 +644,7 @@ export function LiveClient({
                 <div
                   key={e.id}
                   className="absolute top-0 text-2xl"
-                  style={{ left: `${e.leftPct}%`, animation: "cfm-fall 2.2s linear forwards" }}
+                  style={{ left: `${e.leftPct}%`, animation: "cfm-fall 6.5s linear forwards" }}
                 >
                   {e.emoji}
                 </div>
@@ -634,7 +661,7 @@ export function LiveClient({
                   opacity: 1;
                 }
                 100% {
-                  transform: translateY(120%) scale(1.15);
+                  transform: translateY(220%) scale(1.2);
                   opacity: 0;
                 }
               }
@@ -772,6 +799,7 @@ export function LiveClient({
                           className="px-1 py-1 text-[20px] font-semibold text-white"
                           onClick={() => {
                             if (!canChat) return;
+                            lastLocalEmoteAtRef.current = Date.now();
                             spawnEmote(e);
                             send("emote", e);
                           }}
