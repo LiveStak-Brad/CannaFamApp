@@ -117,15 +117,19 @@ export function LiveClient({
 
   async function loadTopGifters() {
     try {
-      const [{ data: d1 }, { data: d2 }, { data: d3 }] = await Promise.all([
+      const [r1, r2, r3] = await Promise.all([
         sb.rpc("cfm_top_gifters", { period: "today" }),
         sb.rpc("cfm_top_gifters", { period: "weekly" }),
         sb.rpc("cfm_top_gifters", { period: "all_time" }),
       ]);
-      setTopToday(((d1 ?? []) as any[]) as TopGifterRow[]);
-      setTopWeekly(((d2 ?? []) as any[]) as TopGifterRow[]);
-      setTopAllTime(((d3 ?? []) as any[]) as TopGifterRow[]);
-    } catch {
+      console.log("[loadTopGifters] today:", r1.data, r1.error);
+      console.log("[loadTopGifters] weekly:", r2.data, r2.error);
+      console.log("[loadTopGifters] all_time:", r3.data, r3.error);
+      setTopToday(((r1.data ?? []) as any[]) as TopGifterRow[]);
+      setTopWeekly(((r2.data ?? []) as any[]) as TopGifterRow[]);
+      setTopAllTime(((r3.data ?? []) as any[]) as TopGifterRow[]);
+    } catch (e) {
+      console.error("[loadTopGifters] error:", e);
     }
   }
 
