@@ -104,10 +104,14 @@ export function LiveClient({
   const [remoteUid, setRemoteUid] = useState<string | null>(null);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [remoteCount, setRemoteCount] = useState(0);
-  const [totalViewers, setTotalViewers] = useState(0);
   const [viewerListOpen, setViewerListOpen] = useState(false);
-  const seenViewersRef = useRef<Set<string>>(new Set());
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
+
+  // Presence-based viewer tracking
+  type ViewerInfo = { id: string; name: string; joinedAt: number };
+  const [currentViewers, setCurrentViewers] = useState<ViewerInfo[]>([]);
+  const [totalViewersSeen, setTotalViewersSeen] = useState<ViewerInfo[]>([]);
+  const seenViewerIdsRef = useRef<Set<string>>(new Set());
   const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -279,6 +283,65 @@ export function LiveClient({
     };
   }, [sb, chatLiveId]);
 
+  // Presence-based viewer tracking
+  useEffect(() => {
+    const liveId = String(chatLiveId ?? "").trim();
+    if (!liveId || !myUserId) return;
+
+    const presenceChannel = sb.channel(`live-presence-${liveId}`, {
+      config: { presence: { key: myUserId } },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        const viewers: ViewerInfo[] = [];
+        for (const [key, presences] of Object.entries(state)) {
+          const p = (presences as any[])[0];
+          if (p) {
+            const info: ViewerInfo = {
+              id: key,
+              name: String(p.name ?? "Viewer"),
+              joinedAt: Number(p.joinedAt ?? Date.now()),
+            };
+            viewers.push(info);
+            // Track total unique viewers
+            if (!seenViewerIdsRef.current.has(key)) {
+              seenViewerIdsRef.current.add(key);
+              setTotalViewersSeen((prev) => {
+                if (prev.some((v) => v.id === key)) return prev;
+                return [...prev, info];
+              });
+            }
+          }
+        }
+        setCurrentViewers(viewers);
+      })
+      .subscribe(async (status: string) => {
+        if (status === "SUBSCRIBED") {
+          // Get display name for current user
+          let displayName = "Viewer";
+          try {
+            const { data } = await sb
+              .from("cfm_profiles")
+              .select("display_name")
+              .eq("id", myUserId)
+              .single();
+            if (data?.display_name) displayName = data.display_name;
+          } catch {}
+          
+          await presenceChannel.track({
+            name: displayName,
+            joinedAt: Date.now(),
+          });
+        }
+      });
+
+    return () => {
+      presenceChannel.unsubscribe();
+    };
+  }, [sb, chatLiveId, myUserId]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -430,10 +493,6 @@ export function LiveClient({
             const uid = String(user?.uid ?? "");
             setLastRtcEvent(`user-joined:${uid}`);
             setRemoteCount(Number((client.remoteUsers ?? []).length));
-            if (uid && !seenViewersRef.current.has(uid)) {
-              seenViewersRef.current.add(uid);
-              setTotalViewers(seenViewersRef.current.size);
-            }
           } catch {
           }
         });
@@ -743,7 +802,7 @@ export function LiveClient({
                   >
                     <span>👁️ {remoteCount}</span>
                     <span className="text-white/60">|</span>
-                    <span>👥 {totalViewers}</span>
+                    <span>👥 {totalViewersSeen.length}</span>
                   </button>
                   <button
                     type="button"
@@ -1004,14 +1063,35 @@ export function LiveClient({
                     <div className="text-xs text-white/60">👁️ Watching Now</div>
                   </div>
                   <div className="flex-1 text-center">
-                    <div className="text-2xl font-bold text-white">{totalViewers}</div>
+                    <div className="text-2xl font-bold text-white">{totalViewersSeen.length}</div>
                     <div className="text-xs text-white/60">👥 Total Since Start</div>
                   </div>
                 </div>
 
-                <div className="text-sm text-white/50 text-center">
-                  {remoteCount === 0 ? "No viewers currently watching" : `${remoteCount} viewer${remoteCount === 1 ? "" : "s"} watching live`}
-                </div>
+                {totalViewersSeen.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="text-sm font-semibold text-white mb-2">Viewers</div>
+                    <div className="space-y-2 max-h-[300px] overflow-auto">
+                      {totalViewersSeen.map((v) => (
+                        <div key={v.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white">
+                            {v.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="text-sm text-white">{v.name}</div>
+                          {currentViewers.some((cv) => cv.id === v.id) ? (
+                            <span className="ml-auto text-xs text-green-400">● Online</span>
+                          ) : (
+                            <span className="ml-auto text-xs text-white/40">Offline</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-white/50 text-center">
+                    {currentViewers.length === 0 ? "No viewers yet" : `${currentViewers.length} viewer${currentViewers.length === 1 ? "" : "s"} watching`}
+                  </div>
+                )}
               </div>
             </div>
           </div>
