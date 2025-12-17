@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
     const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
-    const uid = user?.id ? uidFromUuid(user.id) : Math.floor(Math.random() * 2000000000) + 1;
+    const uid = isHost ? uidFromUuid(String(user?.id ?? "")) : Math.floor(Math.random() * 2000000000) + 1;
     const token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
 
     return NextResponse.json({
