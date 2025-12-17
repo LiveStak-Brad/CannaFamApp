@@ -926,6 +926,12 @@ export function LiveClient({
                       className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40"
                       value={text}
                       onChange={(e) => setText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && canChat && text.trim()) {
+                          e.preventDefault();
+                          send("chat", text);
+                        }
+                      }}
                       placeholder={isLoggedIn ? "Message" : "Log in to comment & react"}
                       disabled={!canChat || pending}
                     />
