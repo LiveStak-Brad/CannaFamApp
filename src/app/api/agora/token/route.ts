@@ -52,7 +52,6 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as ReqBody;
     const requestedRole = body.role === "host" ? "host" : "viewer";
-    const clientKind = body.client === "mobile" ? "mobile" : "web";
 
     const channel = "cannafam-live";
     const now = Math.floor(Date.now() / 1000);
@@ -65,15 +64,8 @@ export async function POST(request: NextRequest) {
     const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
     const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
-    let uid: any = null;
-    let token = "";
-    if (clientKind === "mobile") {
-      uid = user?.id ? uidFromUuid(user.id) : Math.floor(Math.random() * 2000000000) + 1;
-      token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
-    } else {
-      uid = user?.id ? String(user.id) : `anon-${crypto.randomUUID()}`;
-      token = RtcTokenBuilder.buildTokenWithAccount(appId, certificate, channel, uid, role, expire);
-    }
+    const uid = user?.id ? uidFromUuid(user.id) : Math.floor(Math.random() * 2000000000) + 1;
+    const token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
 
     return NextResponse.json({
       appId,

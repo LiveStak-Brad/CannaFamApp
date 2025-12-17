@@ -265,14 +265,14 @@ export function LiveClient({
         if (!res.ok) return;
         const json = (await res.json()) as any;
         const token = String(json?.token ?? "");
-        const uid = String(json?.uid ?? "");
+        const uidNum = Number(json?.uid ?? 0);
         const appId = String(json?.appId ?? "");
         const channel = String(json?.channel ?? "");
         const role = String(json?.role ?? "viewer");
 
         if (!token || !appId || !channel) return;
 
-        setLocalRtc({ appId, channel, uid, role });
+        setLocalRtc({ appId, channel, uid: uidNum ? String(uidNum) : "", role });
 
         const rtcMod: any = await import("agora-rtc-sdk-ng");
         const AgoraRTC = (rtcMod?.default ?? rtcMod) as any;
@@ -346,7 +346,7 @@ export function LiveClient({
           }
         });
 
-        await client.join(appId, channel, token, uid || null);
+        await client.join(appId, channel, token, uidNum || null);
         try {
           setRemoteCount(Number((client.remoteUsers ?? []).length));
           setLastRtcEvent(`joined:${channel}`);
