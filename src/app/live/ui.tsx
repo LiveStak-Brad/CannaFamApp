@@ -61,10 +61,23 @@ export function LiveClient({
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
 
+  const isHostMode = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return new URLSearchParams(window.location.search).get("host") === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+
   const [live, setLive] = useState<LiveState>(initialLive);
   const [rows, setRows] = useState<LiveChatRow[]>([]);
   const [text, setText] = useState<string>("");
   const [pending, startTransition] = useTransition();
+
+  const [hostPending, startHostTransition] = useTransition();
+  const [isHost, setIsHost] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
 
   const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
   const [topWeekly, setTopWeekly] = useState<TopGifterRow[]>([]);
@@ -241,7 +254,7 @@ export function LiveClient({
         const res = await fetch("/api/agora/token", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ role: "viewer" }),
+          body: JSON.stringify({ role: isHostMode ? "host" : "viewer" }),
         });
 
         if (!res.ok) return;
@@ -250,6 +263,7 @@ export function LiveClient({
         const uid = String(json?.uid ?? "");
         const appId = String(json?.appId ?? "");
         const channel = String(json?.channel ?? "");
+        const role = String(json?.role ?? "viewer");
 
         if (!token || !appId || !channel) return;
 
@@ -259,30 +273,67 @@ export function LiveClient({
 
         const client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
         await client.join(appId, channel, token, uid || null);
-        await client.setClientRole("audience");
 
-        client.on("user-published", async (user: any, mediaType: any) => {
-          await client.subscribe(user, mediaType);
-          if (mediaType === "video") {
-            user.videoTrack?.play(videoRef.current!);
-          }
-          if (mediaType === "audio") {
-            user.audioTrack?.play();
-          }
-        });
+        const canHost = isHostMode && role === "host";
+        setIsHost(canHost);
 
-        client.on("user-unpublished", () => {
-        });
+        if (canHost) {
+          await client.setClientRole("host");
+          const tracks = (await AgoraRTC.createMicrophoneAndCameraTracks()) as any[];
+          const mic = tracks?.[0];
+          const cam = tracks?.[1];
+          cam?.play(videoRef.current!);
+          await client.publish([mic, cam].filter(Boolean));
+          setBroadcasting(true);
+
+          cleanup = () => {
+            try {
+              setBroadcasting(false);
+              client.removeAllListeners();
+              try {
+                client.unpublish([mic, cam].filter(Boolean));
+              } catch {
+              }
+              try {
+                mic?.stop?.();
+                mic?.close?.();
+              } catch {
+              }
+              try {
+                cam?.stop?.();
+                cam?.close?.();
+              } catch {
+              }
+              client.leave();
+            } catch {
+            }
+          };
+        } else {
+          await client.setClientRole("audience");
+
+          client.on("user-published", async (user: any, mediaType: any) => {
+            await client.subscribe(user, mediaType);
+            if (mediaType === "video") {
+              user.videoTrack?.play(videoRef.current!);
+            }
+            if (mediaType === "audio") {
+              user.audioTrack?.play();
+            }
+          });
+
+          client.on("user-unpublished", () => {
+          });
+
+          cleanup = () => {
+            try {
+              client.removeAllListeners();
+              client.leave();
+            } catch {
+            }
+          };
+        }
 
         setAgoraReady(true);
-
-        cleanup = () => {
-          try {
-            client.removeAllListeners();
-            client.leave();
-          } catch {
-          }
-        };
       } catch {
       }
     })();
@@ -291,11 +342,49 @@ export function LiveClient({
       cancelled = true;
       if (cleanup) cleanup();
     };
-  }, []);
+  }, [isHostMode]);
 
   const title = "CannaStreams";
 
   const canChat = isLoggedIn;
+
+  async function setLiveState(nextIsLive: boolean) {
+    startHostTransition(async () => {
+      try {
+        const { data, error } = await sb.rpc("cfm_set_live", {
+          next_is_live: nextIsLive,
+          next_title: title,
+        } as any);
+
+        if (!error && data) {
+          setLive((prev) => ({ ...(prev as any), ...(data as any) }));
+          return;
+        }
+      } catch {
+      }
+
+      try {
+        const now = new Date().toISOString();
+        const patch: any = {
+          is_live: nextIsLive,
+          updated_at: now,
+        };
+        if (nextIsLive) {
+          patch.started_at = live.started_at ?? now;
+          patch.ended_at = null;
+        } else {
+          patch.ended_at = now;
+        }
+
+        const { error } = await sb.from("cfm_live_state").update(patch).eq("id", live.id);
+        if (error) throw new Error(error.message);
+        const { data: fresh } = await sb.rpc("cfm_get_live_state");
+        if (fresh) setLive(fresh as any);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Could not update live state.", "error");
+      }
+    });
+  }
 
   async function send(type: "chat" | "emote", message: string) {
     const msg = String(message ?? "").trim();
@@ -351,6 +440,16 @@ export function LiveClient({
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">LIVE</span>
                 <div className="text-sm font-semibold text-white">{title}</div>
+                {isHost ? (
+                  <button
+                    type="button"
+                    disabled={hostPending}
+                    onClick={() => setLiveState(!live.is_live)}
+                    className="ml-2 rounded-full border border-white/15 bg-black/35 px-3 py-1 text-[11px] font-semibold text-white"
+                  >
+                    {live.is_live ? "End Live" : "Go Live"}
+                  </button>
+                ) : null}
               </div>
 
               <div className="flex flex-col items-end gap-2">

@@ -478,6 +478,82 @@ $$;
 
 grant execute on function public.cfm_get_live_state() to anon, authenticated;
 
+create or replace function public.cfm_set_live(
+  next_is_live boolean,
+  next_title text default null
+)
+returns table (
+  id uuid,
+  is_live boolean,
+  channel_name text,
+  host_user_id uuid,
+  title text,
+  started_at timestamptz,
+  ended_at timestamptz,
+  updated_at timestamptz
+)
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  ls public.cfm_live_state%rowtype;
+  now_ts timestamptz := now();
+begin
+  select * into ls
+  from public.cfm_live_state
+  limit 1
+  for update;
+
+  if ls.id is null then
+    raise exception 'Live state not initialized';
+  end if;
+
+  if not (public.cfm_is_admin() or ls.host_user_id = auth.uid()) then
+    raise exception 'Not authorized to update live state';
+  end if;
+
+  update public.cfm_live_state
+  set
+    is_live = next_is_live,
+    title = coalesce(next_title, title),
+    started_at = case
+      when next_is_live and (started_at is null or ended_at is not null) then now_ts
+      else started_at
+    end,
+    ended_at = case
+      when next_is_live then null
+      else now_ts
+    end,
+    updated_at = now_ts
+  where id = ls.id
+  returning
+    cfm_live_state.id,
+    cfm_live_state.is_live,
+    cfm_live_state.channel_name,
+    cfm_live_state.host_user_id,
+    cfm_live_state.title,
+    cfm_live_state.started_at,
+    cfm_live_state.ended_at,
+    cfm_live_state.updated_at
+  into ls;
+
+  return query
+  select
+    ls.id,
+    ls.is_live,
+    ls.channel_name,
+    ls.host_user_id,
+    ls.title,
+    ls.started_at,
+    ls.ended_at,
+    ls.updated_at;
+end
+$$;
+
+grant execute on function public.cfm_set_live(boolean, text) to authenticated;
+
 create or replace function public.cfm_get_mod_list()
 returns table (
   moderator_user_id uuid,
