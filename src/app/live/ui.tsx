@@ -883,12 +883,28 @@ export function LiveClient({
                       .map((r) => {
                         const t = r.type;
                         const msg = String(r.message ?? "");
-                        const cls =
-                          t === "tip"
-                            ? "text-blue-200"
-                            : t === "system"
-                              ? "text-white/70"
-                              : "text-white";
+                        const meta = r.metadata as any;
+                        const isJoin = t === "system" && meta?.event === "join";
+                        const isGift = t === "tip" || (t === "system" && meta?.event === "gift");
+                        
+                        // Green for joins, red for gifts/tips, default for others
+                        if (isJoin) {
+                          return (
+                            <div key={r.id} className="text-sm text-green-400 font-medium">
+                              {msg}
+                            </div>
+                          );
+                        }
+                        
+                        if (isGift) {
+                          return (
+                            <div key={r.id} className="text-sm text-red-400 font-medium">
+                              {msg}
+                            </div>
+                          );
+                        }
+                        
+                        const cls = t === "system" ? "text-white/70" : "text-white";
                         return (
                           <div key={r.id} className={`text-sm ${cls}`}>
                             <span className="text-white/70">

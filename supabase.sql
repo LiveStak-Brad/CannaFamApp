@@ -1572,6 +1572,7 @@ declare
   v_user_id uuid := auth.uid();
   v_display_name text;
   v_live_exists boolean;
+  v_is_new_join boolean := false;
 begin
   if v_user_id is null then
     return json_build_object('error', 'Not authenticated');
@@ -1588,6 +1589,12 @@ begin
   from public.cfm_public_member_ids
   where user_id = v_user_id;
 
+  -- Check if this is a new join (not already in viewers or left_at is set)
+  select not exists(
+    select 1 from public.cfm_live_viewers 
+    where live_id = p_live_id and user_id = v_user_id and left_at is null
+  ) into v_is_new_join;
+
   -- Upsert viewer record
   insert into public.cfm_live_viewers (live_id, user_id, display_name, joined_at, last_seen_at, left_at)
   values (p_live_id, v_user_id, coalesce(v_display_name, 'Viewer'), now(), now(), null)
@@ -1596,6 +1603,12 @@ begin
     last_seen_at = now(),
     left_at = null,
     display_name = coalesce(excluded.display_name, cfm_live_viewers.display_name);
+
+  -- Insert join message to chat if this is a new join
+  if v_is_new_join then
+    insert into public.cfm_live_chat (live_id, sender_user_id, message, type, metadata)
+    values (p_live_id, v_user_id, coalesce(v_display_name, 'Viewer') || ' has joined', 'system', '{"event": "join"}'::jsonb);
+  end if;
 
   return json_build_object('success', true);
 exception
