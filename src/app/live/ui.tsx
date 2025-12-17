@@ -8,7 +8,6 @@ import { toast } from "@/components/ui/toast";
 import { GiftModal } from "@/app/feed/ui";
 import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
-import { cfmLeaderboard, type CfmLeaderboardRow, type CfmAward } from "@cannafam/shared";
 
 const DEFAULT_EMOTES = ["🔥", "😂", "❤️", "👀", "😭"];
 
@@ -126,7 +125,7 @@ export function LiveClient({
           .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
           .eq("user_id", uid)
           .maybeSingle(),
-        cfmLeaderboard(sb as any, 500),
+        sb.rpc("cfm_leaderboard", { row_limit: 500 }),
         sb
           .from("cfm_awards")
           .select("id,user_id,award_type,week_start,week_end,notes,created_at")
@@ -136,8 +135,8 @@ export function LiveClient({
       ]);
 
       const profile = (profileRes.data as any) ?? null;
-      const lbRows = ((lbRes as any)?.data ?? []) as CfmLeaderboardRow[];
-      const awards = ((awardsRes.data ?? []) as CfmAward[]);
+      const lbRows = ((lbRes.data ?? []) as MiniProfilePointsRow[]);
+      const awards = ((awardsRes.data ?? []) as MiniProfileAwardRow[]);
 
       if (profile) {
         setMiniProfileSubject({
@@ -158,8 +157,8 @@ export function LiveClient({
         });
       }
 
-      setMiniProfileLeaderboard(lbRows as MiniProfilePointsRow[]);
-      setMiniProfileAwards(awards as MiniProfileAwardRow[]);
+      setMiniProfileLeaderboard(lbRows);
+      setMiniProfileAwards(awards);
       setMiniProfileOpen(true);
     } catch {
       setMiniProfileSubject({
