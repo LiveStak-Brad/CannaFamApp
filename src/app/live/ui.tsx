@@ -254,7 +254,7 @@ export function LiveClient({
         const res = await fetch("/api/agora/token", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ role: isHostMode ? "host" : "viewer" }),
+          body: JSON.stringify({ role: isHostMode ? "host" : "viewer", client: "web" }),
         });
 
         if (!res.ok) return;

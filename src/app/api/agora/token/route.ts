@@ -5,7 +5,18 @@ export const runtime = "nodejs";
 
 type ReqBody = {
   role?: "viewer" | "host";
+  client?: "web" | "mobile";
 };
+
+function uidFromUuid(uuid: string) {
+  let h = 0;
+  const s = String(uuid ?? "");
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  const u = Math.abs(h) % 2147483647;
+  return u === 0 ? 1 : u;
+}
 
 function mustEnv(name: string) {
   const v = String(process.env[name] ?? "").trim();
@@ -40,6 +51,7 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as ReqBody;
   const requestedRole = body.role === "host" ? "host" : "viewer";
+  const clientKind = body.client === "mobile" ? "mobile" : "web";
 
   const channel = "cannafam-live";
   const now = Math.floor(Date.now() / 1000);
@@ -49,12 +61,18 @@ export async function POST(request: NextRequest) {
 
   const isHost = !!user && requestedRole === "host" && hostUserId && user.id === hostUserId;
 
-  const uid = user?.id ? String(user.id) : `anon-${crypto.randomUUID()}`;
-
   const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
-
   const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
-  const token = RtcTokenBuilder.buildTokenWithAccount(appId, certificate, channel, uid, role, expire);
+
+  let uid: any = null;
+  let token = "";
+  if (clientKind === "mobile") {
+    uid = user?.id ? uidFromUuid(user.id) : Math.floor(Math.random() * 2000000000) + 1;
+    token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
+  } else {
+    uid = user?.id ? String(user.id) : `anon-${crypto.randomUUID()}`;
+    token = RtcTokenBuilder.buildTokenWithAccount(appId, certificate, channel, uid, role, expire);
+  }
 
   return NextResponse.json({
     appId,
