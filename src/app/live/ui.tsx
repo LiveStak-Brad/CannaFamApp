@@ -890,7 +890,7 @@ export function LiveClient({
                         // Green for joins, red for gifts/tips, default for others
                         if (isJoin) {
                           return (
-                            <div key={r.id} className="text-sm text-green-400 font-medium">
+                            <div key={r.id} className="text-[15px] text-green-400 font-semibold">
                               {msg}
                             </div>
                           );
@@ -898,7 +898,7 @@ export function LiveClient({
                         
                         if (isGift) {
                           return (
-                            <div key={r.id} className="text-sm text-red-400 font-medium">
+                            <div key={r.id} className="text-[15px] text-red-400 font-semibold">
                               {msg}
                             </div>
                           );
@@ -906,8 +906,8 @@ export function LiveClient({
                         
                         const cls = t === "system" ? "text-white/70" : "text-white";
                         return (
-                          <div key={r.id} className={`text-sm ${cls}`}>
-                            <span className="text-white/70">
+                          <div key={r.id} className={`text-[15px] font-medium ${cls}`}>
+                            <span className="text-white/70 font-semibold">
                               {String(nameByUserId[String(r.sender_user_id ?? "").trim()] ?? "Member")}:
                             </span>{" "}
                             {msg}
