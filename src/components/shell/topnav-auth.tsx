@@ -4,6 +4,7 @@ import { logout } from "@/app/logout/actions";
 import { Button } from "@/components/ui/button";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NotiesNavButton } from "@/components/shell/noties-nav-button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export async function TopNavAuth() {
   const user = await getAuthedUserOrNull();
@@ -19,12 +20,12 @@ export async function TopNavAuth() {
 
   const navBtnClass = "px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm";
   const mobileMenuBtnClass =
-    "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[rgba(209,31,42,0.45)]";
+    "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)]";
   const mobileMenuItemClass =
-    "block w-full rounded-lg px-3 py-2 text-sm font-semibold text-[color:var(--foreground)] hover:bg-[rgba(255,255,255,0.04)]";
+    "block w-full rounded-lg px-3 py-2 text-sm font-semibold text-[color:var(--foreground)] hover:bg-[color:var(--border)]";
 
   const liveBtnClass =
-    "rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-none hover:bg-red-500 border border-red-500/40";
+    "rounded-full bg-gradient-to-r from-[color:var(--gradient-start)] to-[color:var(--gradient-end)] px-3 py-1.5 text-xs font-semibold text-white shadow-none hover:opacity-90 border border-[color:var(--accent)]/40";
 
   if (!user) {
     return (
@@ -83,12 +84,13 @@ export async function TopNavAuth() {
           </Button>
         ) : null}
         <NotiesNavButton userId={user.id} initialUnread={unread} className={navBtnClass} mode="desktop" />
+        <ThemeToggle />
         
         <details className="relative">
           <summary
             aria-label="Open menu"
             className={
-              "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[rgba(209,31,42,0.45)] list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+              "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)] list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
             }
           >
             <span>Account</span>
@@ -96,7 +98,7 @@ export async function TopNavAuth() {
               <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
             </svg>
           </summary>
-          <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[rgba(7,10,8,0.95)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
+          <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
             <Link href="/account" className={mobileMenuItemClass}>
               Account
             </Link>
@@ -161,7 +163,7 @@ export async function TopNavAuth() {
               <span>Menu</span>
             </span>
           </summary>
-          <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[color:var(--border)] bg-[rgba(7,10,8,0.95)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+          <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
             {isAdmin ? (
               <Link href="/admin" className={mobileMenuItemClass}>
                 Admin

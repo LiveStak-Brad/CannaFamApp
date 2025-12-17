@@ -7,7 +7,7 @@ export function TopNav({
   right?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-[color:var(--border)] bg-[rgba(7,10,8,0.80)] backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-[color:var(--border)] bg-[color:var(--card)] backdrop-blur">
       <div className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:py-4">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <div className="relative h-7 w-7 overflow-hidden rounded-lg sm:h-8 sm:w-8">
