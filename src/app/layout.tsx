@@ -4,6 +4,7 @@ import "./globals.css";
 import { TopNav } from "@/components/shell/topnav";
 import { TopNavAuth } from "@/components/shell/topnav-auth";
 import { BottomNav, type NavSessionState } from "@/components/shell/bottomnav";
+import { LiveIndicator } from "@/components/LiveIndicator";
 import { getAuthedUserOrNull } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -75,6 +76,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <TopNav right={<TopNavAuth />} />
+        <LiveIndicator />
         {children}
         <BottomNav state={navState} anonymousGiftTotalCents={anonymousGiftTotalCents} />
       </body>
