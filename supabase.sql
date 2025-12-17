@@ -514,29 +514,21 @@ begin
     raise exception 'Not authorized to update live state';
   end if;
 
-  update public.cfm_live_state
+  update public.cfm_live_state as s
   set
     is_live = next_is_live,
-    title = coalesce(next_title, title),
+    title = coalesce(next_title, s.title),
     started_at = case
-      when next_is_live and (started_at is null or ended_at is not null) then now_ts
-      else started_at
+      when next_is_live and (s.started_at is null or s.ended_at is not null) then now_ts
+      else s.started_at
     end,
     ended_at = case
       when next_is_live then null
       else now_ts
     end,
     updated_at = now_ts
-  where id = ls.id
-  returning
-    cfm_live_state.id,
-    cfm_live_state.is_live,
-    cfm_live_state.channel_name,
-    cfm_live_state.host_user_id,
-    cfm_live_state.title,
-    cfm_live_state.started_at,
-    cfm_live_state.ended_at,
-    cfm_live_state.updated_at
+  where s.id = ls.id
+  returning s.*
   into ls;
 
   return query

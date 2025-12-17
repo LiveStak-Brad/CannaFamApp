@@ -86,6 +86,8 @@ export function LiveClient({
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
 
   const [agoraReady, setAgoraReady] = useState(false);
+  const [remoteUid, setRemoteUid] = useState<string | null>(null);
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const videoRef = useRef<HTMLDivElement | null>(null);
 
   const isLoggedIn = !!myUserId;
@@ -272,6 +274,53 @@ export function LiveClient({
         if (cancelled) return;
 
         const client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+
+        const playRemoteIfPossible = async (user: any) => {
+          if (!videoRef.current) return;
+          try {
+            await client.subscribe(user, "video");
+            if (user?.videoTrack) {
+              user.videoTrack.play(videoRef.current!);
+              setRemoteUid(String(user.uid ?? ""));
+              setHasRemoteVideo(true);
+            }
+          } catch {
+          }
+
+          try {
+            await client.subscribe(user, "audio");
+            user?.audioTrack?.play?.();
+          } catch {
+          }
+        };
+
+        client.on("user-published", async (user: any, mediaType: any) => {
+          try {
+            await client.subscribe(user, mediaType);
+            if (!videoRef.current) return;
+            if (mediaType === "video") {
+              user.videoTrack?.play(videoRef.current!);
+              setRemoteUid(String(user.uid ?? ""));
+              setHasRemoteVideo(true);
+            }
+            if (mediaType === "audio") {
+              user.audioTrack?.play();
+            }
+          } catch {
+          }
+        });
+
+        client.on("user-unpublished", (user: any, mediaType: any) => {
+          try {
+            if (mediaType === "video") {
+              const uidStr = String(user?.uid ?? "");
+              setHasRemoteVideo(false);
+              setRemoteUid((prev) => (prev === uidStr ? null : prev));
+            }
+          } catch {
+          }
+        });
+
         await client.join(appId, channel, token, uid || null);
 
         const canHost = isHostMode && role === "host";
@@ -311,18 +360,13 @@ export function LiveClient({
         } else {
           await client.setClientRole("audience");
 
-          client.on("user-published", async (user: any, mediaType: any) => {
-            await client.subscribe(user, mediaType);
-            if (mediaType === "video") {
-              user.videoTrack?.play(videoRef.current!);
+          try {
+            const existing = (client.remoteUsers ?? []) as any[];
+            for (const u of existing) {
+              await playRemoteIfPossible(u);
             }
-            if (mediaType === "audio") {
-              user.audioTrack?.play();
-            }
-          });
-
-          client.on("user-unpublished", () => {
-          });
+          } catch {
+          }
 
           cleanup = () => {
             try {
@@ -434,6 +478,16 @@ export function LiveClient({
 
             {!agoraReady ? (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">Connecting...</div>
+            ) : null}
+
+            {agoraReady && !isHost && !hasRemoteVideo ? (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">Waiting for host video...</div>
+            ) : null}
+
+            {agoraReady && !isHost && hasRemoteVideo && remoteUid ? (
+              <div className="absolute bottom-3 left-3 rounded-full border border-white/15 bg-black/35 px-3 py-1 text-[11px] font-semibold text-white">
+                Host: {remoteUid}
+              </div>
             ) : null}
 
             <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">

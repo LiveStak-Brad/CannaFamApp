@@ -25,61 +25,66 @@ function mustEnv(name: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const appId = mustEnv("AGORA_APP_ID");
-  const certificate = mustEnv("AGORA_APP_CERTIFICATE");
+  try {
+    const appId = mustEnv("AGORA_APP_ID");
+    const certificate = mustEnv("AGORA_APP_CERTIFICATE");
 
-  const authHeader = String(request.headers.get("authorization") ?? "").trim();
-  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+    const authHeader = String(request.headers.get("authorization") ?? "").trim();
+    const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll() {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll() {
+          },
         },
       },
-    },
-  );
+    );
 
-  const {
-    data: { user },
-  } = await (bearer ? supabase.auth.getUser(bearer) : supabase.auth.getUser());
+    const {
+      data: { user },
+    } = await (bearer ? supabase.auth.getUser(bearer) : supabase.auth.getUser());
 
-  const body = (await request.json().catch(() => ({}))) as ReqBody;
-  const requestedRole = body.role === "host" ? "host" : "viewer";
-  const clientKind = body.client === "mobile" ? "mobile" : "web";
+    const body = (await request.json().catch(() => ({}))) as ReqBody;
+    const requestedRole = body.role === "host" ? "host" : "viewer";
+    const clientKind = body.client === "mobile" ? "mobile" : "web";
 
-  const channel = "cannafam-live";
-  const now = Math.floor(Date.now() / 1000);
-  const expire = now + 60 * 60;
+    const channel = "cannafam-live";
+    const now = Math.floor(Date.now() / 1000);
+    const expire = now + 60 * 60;
 
-  const hostUserId = String(process.env.CFM_LIVE_HOST_USER_ID ?? "").trim();
+    const hostUserId = String(process.env.CFM_LIVE_HOST_USER_ID ?? "").trim();
 
-  const isHost = !!user && requestedRole === "host" && hostUserId && user.id === hostUserId;
+    const isHost = !!user && requestedRole === "host" && hostUserId && user.id === hostUserId;
 
-  const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
-  const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+    const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
+    const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
-  let uid: any = null;
-  let token = "";
-  if (clientKind === "mobile") {
-    uid = user?.id ? uidFromUuid(user.id) : Math.floor(Math.random() * 2000000000) + 1;
-    token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
-  } else {
-    uid = user?.id ? String(user.id) : `anon-${crypto.randomUUID()}`;
-    token = RtcTokenBuilder.buildTokenWithAccount(appId, certificate, channel, uid, role, expire);
+    let uid: any = null;
+    let token = "";
+    if (clientKind === "mobile") {
+      uid = user?.id ? uidFromUuid(user.id) : Math.floor(Math.random() * 2000000000) + 1;
+      token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
+    } else {
+      uid = user?.id ? String(user.id) : `anon-${crypto.randomUUID()}`;
+      token = RtcTokenBuilder.buildTokenWithAccount(appId, certificate, channel, uid, role, expire);
+    }
+
+    return NextResponse.json({
+      appId,
+      channel,
+      uid,
+      token,
+      role: isHost ? "host" : "viewer",
+      expiresAt: expire,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({
-    appId,
-    channel,
-    uid,
-    token,
-    role: isHost ? "host" : "viewer",
-    expiresAt: expire,
-  });
 }
