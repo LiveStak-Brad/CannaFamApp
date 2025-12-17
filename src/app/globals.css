@@ -18,12 +18,12 @@
 
 /* Light mode */
 .light {
-  --background: #fefefe;
-  --foreground: #1a1520;
-  --card: rgba(255, 255, 255, 0.9);
-  --card-solid: #ffffff;
-  --border: rgba(140, 80, 160, 0.2);
-  --muted: rgba(26, 21, 32, 0.6);
+  --background: #faf5fc;
+  --foreground: #2d1f3d;
+  --card: rgba(255, 240, 255, 0.85);
+  --card-solid: #fff5ff;
+  --border: rgba(180, 100, 200, 0.25);
+  --muted: rgba(45, 31, 61, 0.6);
   --accent: #a21caf;
   --accent-2: #d946ef;
   --accent-pink: #db2777;
@@ -35,12 +35,12 @@
 /* System preference detection */
 @media (prefers-color-scheme: light) {
   :root:not(.dark) {
-    --background: #fefefe;
-    --foreground: #1a1520;
-    --card: rgba(255, 255, 255, 0.9);
-    --card-solid: #ffffff;
-    --border: rgba(140, 80, 160, 0.2);
-    --muted: rgba(26, 21, 32, 0.6);
+    --background: #faf5fc;
+    --foreground: #2d1f3d;
+    --card: rgba(255, 240, 255, 0.85);
+    --card-solid: #fff5ff;
+    --border: rgba(180, 100, 200, 0.25);
+    --muted: rgba(45, 31, 61, 0.6);
     --accent: #a21caf;
     --accent-2: #d946ef;
     --accent-pink: #db2777;

@@ -65,7 +65,7 @@ export function BottomNav({
   const items = ALL_ITEMS.filter((i) => shouldShow(i, state));
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--border)] bg-[rgba(7,10,8,0.90)] backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--border)] bg-[color:var(--card)] backdrop-blur">
       <div className="mx-auto w-full max-w-xl px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="flex items-stretch gap-1 overflow-x-auto overscroll-x-contain touch-pan-x snap-x snap-mandatory [-webkit-overflow-scrolling:touch]">
           {items.map((item) => {
@@ -73,8 +73,8 @@ export function BottomNav({
             const cls =
               "min-w-[76px] shrink-0 snap-start rounded-xl px-3 py-2 text-center text-[11px] font-semibold transition sm:min-w-[92px] sm:text-xs" +
               (active
-                ? " bg-[color:var(--card)] text-[color:var(--foreground)] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
-                : " text-[color:var(--muted)] hover:text-[color:var(--foreground)] hover:bg-[rgba(255,255,255,0.04)]");
+                ? " bg-[color:var(--accent)] text-white shadow-[0_0_0_1px_var(--accent-2)]"
+                : " text-[color:var(--foreground)] hover:text-[color:var(--accent)] hover:bg-[color:var(--border)]");
 
             return (
               <Link key={item.href} href={item.href} className={cls}>
