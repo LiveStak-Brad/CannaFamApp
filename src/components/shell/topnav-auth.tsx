@@ -8,15 +8,32 @@ import { NotiesNavButton } from "@/components/shell/noties-nav-button";
 export async function TopNavAuth() {
   const user = await getAuthedUserOrNull();
 
+  const sb = await supabaseServer();
+  let isLive = false;
+  try {
+    const { data } = await sb.rpc("cfm_get_live_state");
+    isLive = !!(data as any)?.is_live;
+  } catch {
+    isLive = false;
+  }
+
   const navBtnClass = "px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm";
   const mobileMenuBtnClass =
     "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[rgba(209,31,42,0.45)]";
   const mobileMenuItemClass =
     "block w-full rounded-lg px-3 py-2 text-sm font-semibold text-[color:var(--foreground)] hover:bg-[rgba(255,255,255,0.04)]";
 
+  const liveBtnClass =
+    "rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-none hover:bg-red-500 border border-red-500/40";
+
   if (!user) {
     return (
       <div className="flex items-center gap-2">
+        {isLive ? (
+          <Button as="link" href="/live" className={liveBtnClass}>
+            LIVE
+          </Button>
+        ) : null}
         <Button as="link" href="/login" variant="secondary" className={navBtnClass}>
           Login
         </Button>
@@ -27,7 +44,6 @@ export async function TopNavAuth() {
     );
   }
 
-  const sb = await supabaseServer();
   const { data: adminRow } = await sb
     .from("cfm_admins")
     .select("role")
@@ -51,6 +67,11 @@ export async function TopNavAuth() {
   return (
     <>
       <div className="hidden max-w-full flex-wrap items-center justify-end gap-1 sm:flex sm:gap-2">
+        {isLive ? (
+          <Button as="link" href="/live" className={liveBtnClass}>
+            LIVE
+          </Button>
+        ) : null}
         {isAdmin ? (
           <Button
             as="link"
@@ -78,6 +99,11 @@ export async function TopNavAuth() {
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
+        {isLive ? (
+          <Button as="link" href="/live" className={liveBtnClass}>
+            LIVE
+          </Button>
+        ) : null}
         <NotiesNavButton
           userId={user.id}
           initialUnread={unread}
