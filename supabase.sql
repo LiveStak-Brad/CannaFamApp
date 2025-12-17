@@ -1521,3 +1521,175 @@ on public.cfm_daily_spins
 for insert
 to authenticated
 with check (public.cfm_is_admin() or (public.cfm_is_approved_member() and user_id = auth.uid()));
+
+-- Live Viewers tracking
+create table if not exists public.cfm_live_viewers (
+  id uuid primary key default gen_random_uuid(),
+  live_id uuid references public.cfm_live_state(id) on delete cascade,
+  user_id uuid not null,
+  display_name text,
+  joined_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  left_at timestamptz,
+  unique (live_id, user_id)
+);
+
+create index if not exists cfm_live_viewers_live_id_idx
+  on public.cfm_live_viewers (live_id);
+
+create index if not exists cfm_live_viewers_last_seen_idx
+  on public.cfm_live_viewers (live_id, last_seen_at desc);
+
+alter table public.cfm_live_viewers enable row level security;
+
+create policy "viewers_select_all"
+on public.cfm_live_viewers
+for select
+to authenticated
+using (true);
+
+create policy "viewers_insert_own"
+on public.cfm_live_viewers
+for insert
+to authenticated
+with check (user_id = auth.uid());
+
+create policy "viewers_update_own"
+on public.cfm_live_viewers
+for update
+to authenticated
+using (user_id = auth.uid());
+
+-- Function to join as viewer (upsert)
+create or replace function public.cfm_join_live_viewer(p_live_id uuid)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_display_name text;
+  v_result json;
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  -- Get display name from profile
+  select display_name into v_display_name
+  from public.cfm_profiles
+  where id = v_user_id;
+
+  -- Upsert viewer record
+  insert into public.cfm_live_viewers (live_id, user_id, display_name, joined_at, last_seen_at, left_at)
+  values (p_live_id, v_user_id, coalesce(v_display_name, 'Viewer'), now(), now(), null)
+  on conflict (live_id, user_id)
+  do update set
+    last_seen_at = now(),
+    left_at = null,
+    display_name = coalesce(excluded.display_name, cfm_live_viewers.display_name);
+
+  return json_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.cfm_join_live_viewer(uuid) to authenticated;
+
+-- Function to leave as viewer
+create or replace function public.cfm_leave_live_viewer(p_live_id uuid)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  update public.cfm_live_viewers
+  set left_at = now()
+  where live_id = p_live_id and user_id = v_user_id;
+
+  return json_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.cfm_leave_live_viewer(uuid) to authenticated;
+
+-- Function to get current viewers for a live stream
+create or replace function public.cfm_get_live_viewers(p_live_id uuid)
+returns table (
+  user_id uuid,
+  display_name text,
+  joined_at timestamptz,
+  last_seen_at timestamptz,
+  is_online boolean
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    v.user_id,
+    v.display_name,
+    v.joined_at,
+    v.last_seen_at,
+    (v.left_at is null and v.last_seen_at > now() - interval '2 minutes') as is_online
+  from public.cfm_live_viewers v
+  where v.live_id = p_live_id
+  order by v.joined_at asc;
+$$;
+
+grant execute on function public.cfm_get_live_viewers(uuid) to authenticated;
+
+-- Function to heartbeat (update last_seen_at)
+create or replace function public.cfm_viewer_heartbeat(p_live_id uuid)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  update public.cfm_live_viewers
+  set last_seen_at = now()
+  where live_id = p_live_id and user_id = v_user_id;
+
+  return json_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.cfm_viewer_heartbeat(uuid) to authenticated;
+
+-- Add to realtime publication
+do $$
+begin
+  begin
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'cfm_live_viewers'
+    ) then
+      alter publication supabase_realtime add table public.cfm_live_viewers;
+    end if;
+  exception
+    when undefined_table then null;
+    when undefined_object then null;
+  end;
+end
+$$;
