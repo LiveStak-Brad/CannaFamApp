@@ -61,6 +61,21 @@ export async function POST(request: NextRequest) {
 
     const isHost = !!user && requestedRole === "host" && hostUserId && user.id === hostUserId;
 
+    if (requestedRole === "host" && !isHost) {
+      return NextResponse.json(
+        {
+          error: "Not authorized as live host",
+          details: {
+            expectedHostUserId: hostUserId || null,
+            authedUserId: user?.id ?? null,
+            hasUser: !!user,
+            bearerPresent: !!bearer,
+          },
+        },
+        { status: 403 },
+      );
+    }
+
     const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
     const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
