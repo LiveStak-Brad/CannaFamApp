@@ -582,5 +582,6 @@ export function LiveClient({
         </div>
       ) : null}
     </div>
+    </div>
   );
 }
