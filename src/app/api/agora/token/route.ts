@@ -17,6 +17,9 @@ export async function POST(request: NextRequest) {
   const appId = mustEnv("AGORA_APP_ID");
   const certificate = mustEnv("AGORA_APP_CERTIFICATE");
 
+  const authHeader = String(request.headers.get("authorization") ?? "").trim();
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await (bearer ? supabase.auth.getUser(bearer) : supabase.auth.getUser());
 
   const body = (await request.json().catch(() => ({}))) as ReqBody;
   const requestedRole = body.role === "host" ? "host" : "viewer";
