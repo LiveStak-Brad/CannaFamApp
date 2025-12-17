@@ -104,6 +104,9 @@ export function LiveClient({
   const [remoteUid, setRemoteUid] = useState<string | null>(null);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [remoteCount, setRemoteCount] = useState(0);
+  const [totalViewers, setTotalViewers] = useState(0);
+  const [viewerListOpen, setViewerListOpen] = useState(false);
+  const seenViewersRef = useRef<Set<string>>(new Set());
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
   const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
@@ -424,8 +427,13 @@ export function LiveClient({
 
         client.on("user-joined", (user: any) => {
           try {
-            setLastRtcEvent(`user-joined:${String(user?.uid ?? "")}`);
+            const uid = String(user?.uid ?? "");
+            setLastRtcEvent(`user-joined:${uid}`);
             setRemoteCount(Number((client.remoteUsers ?? []).length));
+            if (uid && !seenViewersRef.current.has(uid)) {
+              seenViewersRef.current.add(uid);
+              setTotalViewers(seenViewersRef.current.size);
+            }
           } catch {
           }
         });
@@ -726,15 +734,27 @@ export function LiveClient({
               </div>
 
               <div className="flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={exitLive}
-                  disabled={pending}
-                  aria-label="Exit Live"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white"
-                >
-                  <span className="text-xl leading-none">×</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewerListOpen(true)}
+                    className="flex items-center gap-1 rounded-full border border-white/20 bg-black/40 px-2 py-1 text-[11px] font-semibold text-white"
+                    title="Viewers"
+                  >
+                    <span>👁️ {remoteCount}</span>
+                    <span className="text-white/60">|</span>
+                    <span>👥 {totalViewers}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exitLive}
+                    disabled={pending}
+                    aria-label="Exit Live"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white"
+                  >
+                    <span className="text-xl leading-none">×</span>
+                  </button>
+                </div>
 
                 <div className="flex flex-col gap-2">
                   {top3.map((g) => {
@@ -957,6 +977,40 @@ export function LiveClient({
                       <div className="text-xs text-white/30 mt-1">Be the first to gift!</div>
                     </div>
                   ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {viewerListOpen ? (
+          <div className="fixed inset-0 z-[60] bg-[#0b0b0c]">
+            <div className="mx-auto flex h-full w-full max-w-xl flex-col">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+                <div className="text-lg font-semibold text-white">👥 Viewers</div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+                  onClick={() => setViewerListOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto p-4">
+                <div className="mb-4 flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex-1 text-center">
+                    <div className="text-2xl font-bold text-white">{remoteCount}</div>
+                    <div className="text-xs text-white/60">👁️ Watching Now</div>
+                  </div>
+                  <div className="flex-1 text-center">
+                    <div className="text-2xl font-bold text-white">{totalViewers}</div>
+                    <div className="text-xs text-white/60">👥 Total Since Start</div>
+                  </div>
+                </div>
+
+                <div className="text-sm text-white/50 text-center">
+                  {remoteCount === 0 ? "No viewers currently watching" : `${remoteCount} viewer${remoteCount === 1 ? "" : "s"} watching live`}
                 </div>
               </div>
             </div>
