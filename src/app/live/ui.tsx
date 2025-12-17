@@ -310,11 +310,18 @@ export function LiveClient({
     // Join as viewer (only if logged in)
     if (myUserId) {
       (async () => {
-        try { await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }); } catch {}
+        try { 
+          await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }); 
+          // Reload viewers after joining
+          setTimeout(loadViewers, 500);
+        } catch {}
       })();
     }
 
     loadViewers();
+    // Quick poll to catch new viewers faster
+    const quickPoll = setTimeout(loadViewers, 2000);
+    const quickPoll2 = setTimeout(loadViewers, 5000);
 
     // Heartbeat every 30 seconds (only if logged in)
     if (myUserId) {
@@ -351,6 +358,8 @@ export function LiveClient({
       if (viewerHeartbeatRef.current) {
         clearInterval(viewerHeartbeatRef.current);
       }
+      clearTimeout(quickPoll);
+      clearTimeout(quickPoll2);
       sb.removeChannel(viewerChannel);
     };
   }, [sb, chatLiveId, myUserId]);

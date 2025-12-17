@@ -1571,10 +1571,16 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_display_name text;
-  v_result json;
+  v_live_exists boolean;
 begin
   if v_user_id is null then
     return json_build_object('error', 'Not authenticated');
+  end if;
+
+  -- Check if live_id exists in cfm_live_state
+  select exists(select 1 from public.cfm_live_state where id = p_live_id) into v_live_exists;
+  if not v_live_exists then
+    return json_build_object('error', 'Live session not found');
   end if;
 
   -- Get display name from cfm_public_member_ids (favorited_username)
@@ -1592,6 +1598,11 @@ begin
     display_name = coalesce(excluded.display_name, cfm_live_viewers.display_name);
 
   return json_build_object('success', true);
+exception
+  when foreign_key_violation then
+    return json_build_object('error', 'Live session not found');
+  when others then
+    return json_build_object('error', 'Failed to join');
 end;
 $$;
 
