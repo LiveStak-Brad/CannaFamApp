@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { GiftModal } from "@/app/feed/ui";
 import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
+import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
+import { cfmLeaderboard, type CfmLeaderboardRow, type CfmAward } from "@cannafam/shared";
 
 const DEFAULT_EMOTES = ["🔥", "😂", "❤️", "👀", "😭"];
 
@@ -107,44 +109,65 @@ export function LiveClient({
   const [viewerListOpen, setViewerListOpen] = useState(false);
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
 
-  // Mini profile popup state
-  type MiniProfileData = { userId: string; name: string; avatarUrl: string | null; username: string | null };
-  const [miniProfile, setMiniProfile] = useState<MiniProfileData | null>(null);
+  // Mini profile popup state - using proper MiniProfileModal
+  const [miniProfileOpen, setMiniProfileOpen] = useState(false);
+  const [miniProfileSubject, setMiniProfileSubject] = useState<MiniProfileSubject | null>(null);
+  const [miniProfileLeaderboard, setMiniProfileLeaderboard] = useState<MiniProfilePointsRow[]>([]);
+  const [miniProfileAwards, setMiniProfileAwards] = useState<MiniProfileAwardRow[]>([]);
 
   async function showMiniProfile(userId: string) {
     const uid = String(userId ?? "").trim();
     if (!uid) return;
     
     try {
-      const { data } = await sb
-        .from("cfm_public_member_ids")
-        .select("user_id, favorited_username")
-        .eq("user_id", uid)
-        .maybeSingle();
-      
-      const username = String((data as any)?.favorited_username ?? "").trim() || null;
-      const name = nameByUserId[uid] || "Member";
-      
-      // Try to get avatar from top gifters data
-      let avatarUrl: string | null = null;
-      const allGifters = [...topToday, ...topWeekly, ...topAllTime];
-      const gifter = allGifters.find(g => g.profile_id === uid);
-      if (gifter) avatarUrl = gifter.avatar_url;
-      
-      setMiniProfile({ userId: uid, name, avatarUrl, username });
-    } catch {
-      setMiniProfile({ userId: uid, name: nameByUserId[uid] || "Member", avatarUrl: null, username: null });
-    }
-  }
+      const [profileRes, lbRes, awardsRes] = await Promise.all([
+        sb
+          .from("cfm_public_member_ids")
+          .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+          .eq("user_id", uid)
+          .maybeSingle(),
+        cfmLeaderboard(sb as any, 500),
+        sb
+          .from("cfm_awards")
+          .select("id,user_id,award_type,week_start,week_end,notes,created_at")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
 
-  function goToFullProfile() {
-    if (!miniProfile) return;
-    if (miniProfile.username) {
-      router.push(`/u/${encodeURIComponent(miniProfile.username)}`);
-    } else {
-      router.push("/members");
+      const profile = (profileRes.data as any) ?? null;
+      const lbRows = ((lbRes as any)?.data ?? []) as CfmLeaderboardRow[];
+      const awards = ((awardsRes.data ?? []) as CfmAward[]);
+
+      if (profile) {
+        setMiniProfileSubject({
+          user_id: profile.user_id,
+          favorited_username: profile.favorited_username ?? "Member",
+          photo_url: profile.photo_url,
+          bio: profile.bio,
+          public_link: profile.public_link,
+          instagram_link: profile.instagram_link,
+          x_link: profile.x_link,
+          tiktok_link: profile.tiktok_link,
+          youtube_link: profile.youtube_link,
+        });
+      } else {
+        setMiniProfileSubject({
+          user_id: uid,
+          favorited_username: nameByUserId[uid] || "Member",
+        });
+      }
+
+      setMiniProfileLeaderboard(lbRows as MiniProfilePointsRow[]);
+      setMiniProfileAwards(awards as MiniProfileAwardRow[]);
+      setMiniProfileOpen(true);
+    } catch {
+      setMiniProfileSubject({
+        user_id: uid,
+        favorited_username: nameByUserId[uid] || "Member",
+      });
+      setMiniProfileOpen(true);
     }
-    setMiniProfile(null);
   }
 
   // Database-backed viewer tracking
@@ -1230,57 +1253,18 @@ export function LiveClient({
         </div>
       ) : null}
 
-      {/* Mini Profile Popup */}
-      {miniProfile ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60" onClick={() => setMiniProfile(null)}>
-          <div
-            className="w-[280px] rounded-2xl border border-white/20 bg-[#111114] p-4 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="absolute right-3 top-3 text-white/60 hover:text-white"
-              onClick={() => setMiniProfile(null)}
-            >
-              ✕
-            </button>
-            <div className="flex flex-col items-center gap-3">
-              <button type="button" onClick={goToFullProfile} className="group">
-                {miniProfile.avatarUrl ? (
-                  <img
-                    src={miniProfile.avatarUrl}
-                    alt={miniProfile.name}
-                    className="h-20 w-20 rounded-full object-cover object-top border-2 border-white/20 group-hover:border-white/40 transition"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/20 bg-white/10 text-2xl font-bold text-white group-hover:border-white/40 transition">
-                    {miniProfile.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={goToFullProfile}
-                className="text-lg font-bold text-white hover:underline"
-              >
-                {getBadge(miniProfile.userId) ? <span className="mr-1">{getBadge(miniProfile.userId)}</span> : null}
-                {miniProfile.name}
-              </button>
-              {miniProfile.username ? (
-                <div className="text-sm text-white/50">@{miniProfile.username}</div>
-              ) : null}
-              <button
-                type="button"
-                onClick={goToFullProfile}
-                className="mt-2 w-full rounded-xl bg-[color:var(--accent)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition"
-              >
-                View Full Profile
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Mini Profile Modal */}
+      <MiniProfileModal
+        open={miniProfileOpen}
+        subject={miniProfileSubject}
+        leaderboard={miniProfileLeaderboard}
+        awards={miniProfileAwards}
+        myUserId={myUserId}
+        onClose={() => {
+          setMiniProfileOpen(false);
+          setMiniProfileSubject(null);
+        }}
+      />
 
       {/* Gift Modal */}
       <GiftModal
