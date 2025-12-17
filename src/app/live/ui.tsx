@@ -108,6 +108,10 @@ export function LiveClient({
   const [viewerListOpen, setViewerListOpen] = useState(false);
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
 
+  // Gift flash animation state
+  const [giftFlash, setGiftFlash] = useState<{ message: string; key: number } | null>(null);
+  const giftFlashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Mini profile popup state - using proper MiniProfileModal
   const [miniProfileOpen, setMiniProfileOpen] = useState(false);
   const [miniProfileSubject, setMiniProfileSubject] = useState<MiniProfileSubject | null>(null);
@@ -333,6 +337,19 @@ export function LiveClient({
                 const next = [...prev, row];
                 return next.slice(-200);
               });
+              
+              // Trigger gift flash animation for gift messages
+              const isGift = row.type === "tip" || (row.type === "system" && row.metadata?.event === "gift");
+              if (isGift) {
+                const msg = String(row.message ?? "");
+                if (giftFlashTimeoutRef.current) {
+                  clearTimeout(giftFlashTimeoutRef.current);
+                }
+                setGiftFlash({ message: msg, key: Date.now() });
+                giftFlashTimeoutRef.current = setTimeout(() => {
+                  setGiftFlash(null);
+                }, 5000);
+              }
             },
           )
           .on(
@@ -877,6 +894,35 @@ export function LiveClient({
                 Host: {remoteUid}
               </div>
             ) : null}
+
+            {/* Gift Flash Animation */}
+            {giftFlash ? (
+              <div
+                key={giftFlash.key}
+                className="pointer-events-none absolute inset-x-0 top-1/3 z-50 flex items-center justify-center animate-gift-flash"
+              >
+                <div className="rounded-2xl bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 px-8 py-4 shadow-2xl">
+                  <div
+                    className="text-center text-3xl font-black text-white drop-shadow-lg"
+                    style={{ fontFamily: "'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', cursive", textShadow: "2px 2px 4px rgba(0,0,0,0.5)" }}
+                  >
+                    {giftFlash.message}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <style>{`
+              @keyframes gift-flash {
+                0% { opacity: 0; transform: scale(0.5) translateY(20px); }
+                15% { opacity: 1; transform: scale(1.1) translateY(0); }
+                25% { transform: scale(1) translateY(0); }
+                85% { opacity: 1; transform: scale(1) translateY(0); }
+                100% { opacity: 0; transform: scale(0.9) translateY(-20px); }
+              }
+              .animate-gift-flash {
+                animation: gift-flash 5s ease-out forwards;
+              }
+            `}</style>
 
             <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
               <div className="flex items-center gap-2">
