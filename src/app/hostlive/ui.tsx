@@ -26,6 +26,21 @@ type LiveChatRow = {
   created_at: string;
 };
 
+type TopGifterRow = { 
+  profile_id: string; 
+  display_name: string; 
+  avatar_url: string | null; 
+  total_amount: number; 
+  rank: number;
+};
+
+type ViewerRow = {
+  user_id: string;
+  username: string | null;
+  is_online: boolean;
+  joined_at: string;
+};
+
 export function HostLiveClient({
   initialLive,
   myUserId,
@@ -41,6 +56,15 @@ export function HostLiveClient({
   const [agoraReady, setAgoraReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewerCount, setViewerCount] = useState(0);
+  const [totalViews, setTotalViews] = useState(0);
+
+  // Top gifters state
+  const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+
+  // Viewers state
+  const [viewers, setViewers] = useState<ViewerRow[]>([]);
+  const [viewerListOpen, setViewerListOpen] = useState(false);
 
   const videoRef = useRef<HTMLDivElement | null>(null);
   const agoraCleanupRef = useRef<(() => void) | null>(null);
@@ -52,6 +76,42 @@ export function HostLiveClient({
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const liveId = live?.id ?? "";
+
+  // Load top gifters
+  const loadTopGifters = useCallback(async () => {
+    try {
+      const { data } = await sb.rpc("cfm_top_gifters_today");
+      if (data) setTopToday(data as TopGifterRow[]);
+    } catch {}
+  }, [sb]);
+
+  // Load viewers
+  const loadViewers = useCallback(async () => {
+    if (!liveId) return;
+    try {
+      const { data } = await sb
+        .from("cfm_live_viewers")
+        .select("user_id,username,is_online,joined_at")
+        .eq("live_id", liveId);
+      if (data) {
+        setViewers(data as ViewerRow[]);
+        setTotalViews(data.length);
+        setViewerCount(data.filter((v: any) => v.is_online).length);
+      }
+    } catch {}
+  }, [sb, liveId]);
+
+  // Load data on mount and periodically
+  useEffect(() => {
+    loadTopGifters();
+    loadViewers();
+    const t1 = setInterval(loadTopGifters, 30000);
+    const t2 = setInterval(loadViewers, 10000);
+    return () => {
+      clearInterval(t1);
+      clearInterval(t2);
+    };
+  }, [loadTopGifters, loadViewers]);
 
   // Auto-start live on mount
   useEffect(() => {
@@ -244,10 +304,13 @@ export function HostLiveClient({
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Viewer count */}
-                <span className="rounded-full border border-white/20 bg-black/40 px-2 py-1 text-[11px] font-semibold text-white">
-                  👁️ {viewerCount}
-                </span>
+                {/* Viewer count - clickable to open modal */}
+                <button
+                  onClick={() => setViewerListOpen(true)}
+                  className="rounded-full border border-white/20 bg-black/40 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/20"
+                >
+                  👁️ {viewerCount} | 👥 {totalViews}
+                </button>
                 {/* Close button */}
                 <button
                   type="button"
@@ -258,6 +321,38 @@ export function HostLiveClient({
                 </button>
               </div>
             </div>
+
+            {/* Top 3 Gifters - positioned on right side below close button */}
+            {topToday.length > 0 ? (
+              <div className="absolute right-3 top-16 z-20 flex flex-col gap-1">
+                {topToday.slice(0, 3).map((g) => {
+                  const rank = Number(g.rank ?? 0);
+                  const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+                  const bgColor = rank === 1 ? "rgba(234,179,8,0.25)" : rank === 2 ? "rgba(156,163,175,0.25)" : "rgba(249,115,22,0.25)";
+                  const borderColor = rank === 1 ? "rgba(234,179,8,0.5)" : rank === 2 ? "rgba(156,163,175,0.5)" : "rgba(249,115,22,0.5)";
+                  return (
+                    <div
+                      key={`${g.profile_id}-${rank}`}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] text-white"
+                      style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
+                    >
+                      <span>{medalEmoji}</span>
+                      {g.avatar_url ? (
+                        <img src={g.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[9px] font-bold">
+                          {g.display_name?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex flex-col">
+                        <span className="font-semibold truncate max-w-[60px]">{g.display_name}</span>
+                        <span className="text-[9px] text-white/70">${g.total_amount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {/* Status messages */}
             {!agoraReady && !error ? (
@@ -318,7 +413,7 @@ export function HostLiveClient({
             <div ref={chatEndRef} />
           </div>
 
-          {/* Controls - Flip Camera & Filters */}
+          {/* Controls - Flip Camera, Filters, Trophy */}
           <div className="border-t border-white/10 p-2">
             <div className="flex justify-center gap-4">
               <button
@@ -335,10 +430,87 @@ export function HostLiveClient({
               >
                 🪄
               </button>
+              <button
+                onClick={() => setLeaderboardOpen(true)}
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl hover:bg-white/20"
+                title="Leaderboard"
+              >
+                🏆
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Viewer List Modal */}
+      {viewerListOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setViewerListOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Viewers</h3>
+              <button onClick={() => setViewerListOpen(false)} className="text-2xl text-white/60 hover:text-white">×</button>
+            </div>
+            <div className="mb-4 flex gap-4">
+              <div className="flex-1 rounded-xl bg-white/10 p-3 text-center">
+                <div className="text-2xl font-bold text-white">{viewerCount}</div>
+                <div className="text-xs text-white/60">👁️ Watching Now</div>
+              </div>
+              <div className="flex-1 rounded-xl bg-white/10 p-3 text-center">
+                <div className="text-2xl font-bold text-white">{totalViews}</div>
+                <div className="text-xs text-white/60">👥 Total Joined</div>
+              </div>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {viewers.map((v) => (
+                <div key={v.user_id} className="flex items-center gap-2 border-b border-white/10 py-2">
+                  <div className={`h-2 w-2 rounded-full ${v.is_online ? "bg-green-500" : "bg-gray-500"}`} />
+                  <span className="text-sm text-white">{v.username || "Member"}</span>
+                </div>
+              ))}
+              {viewers.length === 0 ? (
+                <div className="text-center text-sm text-white/50">No viewers yet</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Leaderboard Modal */}
+      {leaderboardOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setLeaderboardOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">🏆 Top Gifters Today</h3>
+              <button onClick={() => setLeaderboardOpen(false)} className="text-2xl text-white/60 hover:text-white">×</button>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {topToday.map((g) => {
+                const rank = Number(g.rank ?? 0);
+                const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
+                return (
+                  <div key={g.profile_id} className="flex items-center gap-3 border-b border-white/10 py-3">
+                    <span className="w-8 text-center text-lg">{medalEmoji}</span>
+                    {g.avatar_url ? (
+                      <img src={g.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-sm font-bold text-white">
+                        {g.display_name?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="font-semibold text-white">{g.display_name}</div>
+                      <div className="text-sm text-green-400">${g.total_amount.toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {topToday.length === 0 ? (
+                <div className="text-center text-sm text-white/50">No gifters yet today</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
