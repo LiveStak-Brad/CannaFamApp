@@ -2187,3 +2187,38 @@ end;
 $$;
 
 grant execute on function public.cfm_remove_content(text, uuid, text) to authenticated;
+
+-- Function for users to disable their own account
+create or replace function public.cfm_disable_my_account()
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  -- Mark the member profile as disabled
+  update public.cfm_member_profiles
+  set is_disabled = true,
+      disabled_at = now()
+  where user_id = v_user_id;
+
+  return json_build_object('success', true);
+exception
+  when others then
+    return json_build_object('error', 'Failed to disable account');
+end;
+$$;
+
+grant execute on function public.cfm_disable_my_account() to authenticated;
+
+-- Add is_disabled column to member profiles if not exists
+alter table public.cfm_member_profiles 
+add column if not exists is_disabled boolean default false,
+add column if not exists disabled_at timestamptz;

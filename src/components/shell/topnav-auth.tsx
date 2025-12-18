@@ -127,9 +127,6 @@ export async function TopNavAuth() {
             <Link href="/account" className={mobileMenuItemClass}>
               ⚙️ Account Settings
             </Link>
-            <Link href="/account/disable" className={mobileMenuItemClass + " text-red-400"}>
-              🚫 Disable Account
-            </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
               <button type="submit" className={mobileMenuItemClass + " text-left"}>
@@ -209,9 +206,6 @@ export async function TopNavAuth() {
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/account" className={mobileMenuItemClass}>
               ⚙️ Account Settings
-            </Link>
-            <Link href="/account/disable" className={mobileMenuItemClass + " text-red-400"}>
-              🚫 Disable Account
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
