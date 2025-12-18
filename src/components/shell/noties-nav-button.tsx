@@ -85,7 +85,7 @@ export function NotiesNavButton({
         </span>
         <span className="sr-only">Noties</span>
         {unread > 0 ? (
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[rgba(209,31,42,0.95)]" />
+          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[color:var(--accent)]" />
         ) : null}
       </Button>
     );
@@ -97,7 +97,7 @@ export function NotiesNavButton({
         <span>Noties</span>
         <span aria-hidden>🔔</span>
         {unread > 0 ? (
-          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[rgba(209,31,42,0.9)] px-2 py-[1px] text-[11px] font-semibold text-white">
+          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-[color:var(--accent)] px-2 py-[1px] text-[11px] font-semibold text-white">
             {unread > 99 ? "99+" : unread}
           </span>
         ) : null}

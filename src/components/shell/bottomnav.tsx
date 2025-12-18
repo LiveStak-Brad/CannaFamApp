@@ -64,9 +64,12 @@ export function BottomNav({
               }
 
               return (
-                <Link key={item.href} href={liveHref} className={cls}>
-                  <span className="text-lg">{isLive ? "🔴" : item.icon}</span>
+                <Link key={item.href} href={liveHref} className={cls + " relative"}>
+                  <span className="text-lg">{item.icon}</span>
                   <span className="text-[10px] font-semibold">{liveLabel}</span>
+                  {isLive && !isHost ? (
+                    <span className="absolute top-0 right-1 h-2.5 w-2.5 rounded-full bg-[color:var(--accent)]" />
+                  ) : null}
                 </Link>
               );
             }
