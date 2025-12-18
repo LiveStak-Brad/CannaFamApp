@@ -8,50 +8,16 @@ export type NavSessionState = "guest" | "unapproved" | "member" | "admin";
 type NavItem = {
   href: string;
   label: string;
-  requiresAuth?: boolean;
-  requiresApproval?: boolean;
-  adminOnly?: boolean;
+  icon: string;
 };
 
-const ALL_ITEMS: NavItem[] = [
-  { href: "/", label: "Home" },
-  { href: "/members", label: "Members" },
-  { href: "/feed", label: "Feed" },
-  { href: "/support", label: "Support" },
-  { href: "/hub", label: "Hub" },
-  {
-    href: "/leaderboard",
-    label: "Leaderboard",
-  },
-  { href: "/awards", label: "Awards" },
-  { href: "/admin", label: "Admin", requiresAuth: true, adminOnly: true },
-  { href: "/login", label: "Login" },
-  { href: "/signup", label: "Sign up" },
+const NAV_ITEMS: NavItem[] = [
+  { href: "/", label: "Home", icon: "🏠" },
+  { href: "/feed", label: "Feed", icon: "🔥" },
+  { href: "/live", label: "Live", icon: "▶️" },
+  { href: "/awards", label: "Awards", icon: "🎖️" },
+  { href: "/support", label: "Support", icon: "🔗" },
 ];
-
-function shouldShow(item: NavItem, state: NavSessionState) {
-  if (state === "guest") {
-    return [
-      "/",
-      "/members",
-      "/feed",
-      "/support",
-      "/leaderboard",
-      "/awards",
-      "/hub",
-      "/login",
-      "/signup",
-    ].includes(
-      item.href,
-    );
-  }
-
-  if (item.href === "/login") return false;
-  if (item.href === "/signup") return false;
-  if (item.adminOnly) return state === "admin";
-  if (item.requiresApproval) return state === "member" || state === "admin";
-  return true;
-}
 
 export function BottomNav({
   state,
@@ -62,23 +28,22 @@ export function BottomNav({
 }) {
   const pathname = usePathname();
 
-  const items = ALL_ITEMS.filter((i) => shouldShow(i, state));
-
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--border)] bg-[color:var(--card)] backdrop-blur">
       <div className="mx-auto w-full max-w-xl px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="flex items-stretch gap-1 overflow-x-auto overscroll-x-contain touch-pan-x snap-x snap-mandatory [-webkit-overflow-scrolling:touch]">
-          {items.map((item) => {
-            const active = pathname === item.href;
+        <div className="flex items-stretch justify-around gap-1">
+          {NAV_ITEMS.map((item) => {
+            const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             const cls =
-              "min-w-[76px] shrink-0 snap-start rounded-xl px-3 py-2 text-center text-[11px] font-semibold transition sm:min-w-[92px] sm:text-xs" +
+              "flex flex-col items-center justify-center rounded-xl px-2 py-1.5 text-center transition min-w-[56px]" +
               (active
-                ? " bg-[color:var(--accent)] text-white shadow-[0_0_0_1px_var(--accent-2)]"
+                ? " bg-[color:var(--accent)] text-white"
                 : " text-[color:var(--foreground)] hover:text-[color:var(--accent)] hover:bg-[color:var(--border)]");
 
             return (
               <Link key={item.href} href={item.href} className={cls}>
-                {item.label}
+                <span className="text-lg">{item.icon}</span>
+                <span className="text-[10px] font-semibold">{item.label}</span>
               </Link>
             );
           })}

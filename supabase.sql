@@ -1717,3 +1717,473 @@ begin
   end;
 end
 $$;
+
+-- Reports table for flagging content
+create table if not exists public.cfm_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_user_id uuid,
+  report_type text not null,
+  target_type text not null,
+  target_id text,
+  target_user_id uuid,
+  reason text not null,
+  details text,
+  status text not null default 'pending',
+  reviewed_by uuid,
+  reviewed_at timestamptz,
+  admin_notes text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.cfm_reports
+add constraint cfm_reports_report_type_check
+check (report_type in ('harassment', 'hate', 'sexual', 'violence', 'spam', 'impersonation', 'child_safety', 'other'));
+
+alter table public.cfm_reports
+add constraint cfm_reports_target_type_check
+check (target_type in ('post', 'comment', 'profile', 'live_chat', 'live_stream'));
+
+alter table public.cfm_reports
+add constraint cfm_reports_status_check
+check (status in ('pending', 'reviewed', 'actioned', 'dismissed'));
+
+create index if not exists cfm_reports_status_idx
+  on public.cfm_reports (status);
+
+create index if not exists cfm_reports_created_at_idx
+  on public.cfm_reports (created_at desc);
+
+create index if not exists cfm_reports_target_idx
+  on public.cfm_reports (target_type, target_id);
+
+alter table public.cfm_reports enable row level security;
+
+-- Anyone can submit a report
+create policy "reports_insert_authenticated"
+on public.cfm_reports
+for insert
+to authenticated
+with check (reporter_user_id = auth.uid());
+
+-- Only admins can view reports
+create policy "reports_select_admin_only"
+on public.cfm_reports
+for select
+to authenticated
+using (public.cfm_is_admin());
+
+-- Only admins can update reports
+create policy "reports_update_admin_only"
+on public.cfm_reports
+for update
+to authenticated
+using (public.cfm_is_admin())
+with check (public.cfm_is_admin());
+
+-- Function to submit a report
+create or replace function public.cfm_submit_report(
+  p_report_type text,
+  p_target_type text,
+  p_target_id text default null,
+  p_target_user_id uuid default null,
+  p_reason text default 'other',
+  p_details text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_report_id uuid;
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  if not public.cfm_is_approved_member() then
+    return json_build_object('error', 'Only members can submit reports');
+  end if;
+
+  -- Validate report_type
+  if p_report_type not in ('harassment', 'hate', 'sexual', 'violence', 'spam', 'impersonation', 'child_safety', 'other') then
+    return json_build_object('error', 'Invalid report type');
+  end if;
+
+  -- Validate target_type
+  if p_target_type not in ('post', 'comment', 'profile', 'live_chat', 'live_stream') then
+    return json_build_object('error', 'Invalid target type');
+  end if;
+
+  -- Insert the report
+  insert into public.cfm_reports (
+    reporter_user_id,
+    report_type,
+    target_type,
+    target_id,
+    target_user_id,
+    reason,
+    details,
+    status
+  ) values (
+    v_user_id,
+    p_report_type,
+    p_target_type,
+    p_target_id,
+    p_target_user_id,
+    coalesce(p_reason, 'other'),
+    p_details,
+    'pending'
+  )
+  returning id into v_report_id;
+
+  return json_build_object('success', true, 'report_id', v_report_id);
+exception
+  when others then
+    return json_build_object('error', 'Failed to submit report');
+end;
+$$;
+
+grant execute on function public.cfm_submit_report(text, text, text, uuid, text, text) to authenticated;
+
+-- Function to list reports (admin only)
+create or replace function public.cfm_list_reports(
+  p_status text default null,
+  p_limit int default 50
+)
+returns table (
+  id uuid,
+  reporter_user_id uuid,
+  reporter_username text,
+  report_type text,
+  target_type text,
+  target_id text,
+  target_user_id uuid,
+  target_username text,
+  reason text,
+  details text,
+  status text,
+  reviewed_by uuid,
+  reviewed_at timestamptz,
+  admin_notes text,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  if not public.cfm_is_admin() then
+    raise exception 'Not authorized';
+  end if;
+
+  return query
+  select
+    r.id,
+    r.reporter_user_id,
+    coalesce(pm1.favorited_username, 'Unknown') as reporter_username,
+    r.report_type,
+    r.target_type,
+    r.target_id,
+    r.target_user_id,
+    coalesce(pm2.favorited_username, 'Unknown') as target_username,
+    r.reason,
+    r.details,
+    r.status,
+    r.reviewed_by,
+    r.reviewed_at,
+    r.admin_notes,
+    r.created_at
+  from public.cfm_reports r
+  left join public.cfm_public_member_ids pm1 on pm1.user_id = r.reporter_user_id
+  left join public.cfm_public_member_ids pm2 on pm2.user_id = r.target_user_id
+  where (p_status is null or r.status = p_status)
+  order by r.created_at desc
+  limit greatest(1, p_limit);
+end;
+$$;
+
+grant execute on function public.cfm_list_reports(text, int) to authenticated;
+
+-- Function to update report status (admin only)
+create or replace function public.cfm_update_report_status(
+  p_report_id uuid,
+  p_status text,
+  p_admin_notes text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if not public.cfm_is_admin() then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  if p_status not in ('pending', 'reviewed', 'actioned', 'dismissed') then
+    return json_build_object('error', 'Invalid status');
+  end if;
+
+  update public.cfm_reports
+  set
+    status = p_status,
+    reviewed_by = v_user_id,
+    reviewed_at = now(),
+    admin_notes = coalesce(p_admin_notes, admin_notes)
+  where id = p_report_id;
+
+  return json_build_object('success', true);
+exception
+  when others then
+    return json_build_object('error', 'Failed to update report');
+end;
+$$;
+
+grant execute on function public.cfm_update_report_status(uuid, text, text) to authenticated;
+
+-- User bans/timeouts table
+create table if not exists public.cfm_user_bans (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  ban_type text not null default 'timeout',
+  reason text,
+  banned_by uuid,
+  expires_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.cfm_user_bans
+add constraint cfm_user_bans_type_check
+check (ban_type in ('timeout', 'ban'));
+
+create index if not exists cfm_user_bans_user_id_idx
+  on public.cfm_user_bans (user_id);
+
+create index if not exists cfm_user_bans_expires_at_idx
+  on public.cfm_user_bans (expires_at);
+
+alter table public.cfm_user_bans enable row level security;
+
+create policy "bans_select_admin_only"
+on public.cfm_user_bans
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "bans_insert_admin_only"
+on public.cfm_user_bans
+for insert
+to authenticated
+with check (public.cfm_is_admin());
+
+create policy "bans_update_admin_only"
+on public.cfm_user_bans
+for update
+to authenticated
+using (public.cfm_is_admin())
+with check (public.cfm_is_admin());
+
+create policy "bans_delete_admin_only"
+on public.cfm_user_bans
+for delete
+to authenticated
+using (public.cfm_is_admin());
+
+-- Function to check if a user is banned or timed out
+create or replace function public.cfm_is_user_banned(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.cfm_user_bans b
+    where b.user_id = p_user_id
+      and (b.expires_at is null or b.expires_at > now())
+  );
+$$;
+
+grant execute on function public.cfm_is_user_banned(uuid) to authenticated;
+
+-- Function to timeout a user (admin only)
+create or replace function public.cfm_timeout_user(
+  p_user_id uuid,
+  p_duration_minutes int default 60,
+  p_reason text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_admin_id uuid := auth.uid();
+  v_ban_id uuid;
+begin
+  if not public.cfm_is_admin() then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  insert into public.cfm_user_bans (user_id, ban_type, reason, banned_by, expires_at)
+  values (p_user_id, 'timeout', p_reason, v_admin_id, now() + (p_duration_minutes || ' minutes')::interval)
+  returning id into v_ban_id;
+
+  return json_build_object('success', true, 'ban_id', v_ban_id);
+exception
+  when others then
+    return json_build_object('error', 'Failed to timeout user');
+end;
+$$;
+
+grant execute on function public.cfm_timeout_user(uuid, int, text) to authenticated;
+
+-- Function to ban a user permanently (admin only)
+create or replace function public.cfm_ban_user(
+  p_user_id uuid,
+  p_reason text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_admin_id uuid := auth.uid();
+  v_ban_id uuid;
+begin
+  if not public.cfm_is_admin() then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  insert into public.cfm_user_bans (user_id, ban_type, reason, banned_by, expires_at)
+  values (p_user_id, 'ban', p_reason, v_admin_id, null)
+  returning id into v_ban_id;
+
+  return json_build_object('success', true, 'ban_id', v_ban_id);
+exception
+  when others then
+    return json_build_object('error', 'Failed to ban user');
+end;
+$$;
+
+grant execute on function public.cfm_ban_user(uuid, text) to authenticated;
+
+-- Function to unban a user (admin only)
+create or replace function public.cfm_unban_user(p_user_id uuid)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+begin
+  if not public.cfm_is_admin() then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  delete from public.cfm_user_bans
+  where user_id = p_user_id;
+
+  return json_build_object('success', true);
+exception
+  when others then
+    return json_build_object('error', 'Failed to unban user');
+end;
+$$;
+
+grant execute on function public.cfm_unban_user(uuid) to authenticated;
+
+-- Function to list banned users (admin only)
+create or replace function public.cfm_list_bans(p_limit int default 100)
+returns table (
+  id uuid,
+  user_id uuid,
+  username text,
+  ban_type text,
+  reason text,
+  banned_by uuid,
+  banned_by_username text,
+  expires_at timestamptz,
+  created_at timestamptz,
+  is_active boolean
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  if not public.cfm_is_admin() then
+    return;
+  end if;
+
+  return query
+  select
+    b.id,
+    b.user_id,
+    coalesce(pm1.favorited_username, 'Unknown') as username,
+    b.ban_type,
+    b.reason,
+    b.banned_by,
+    coalesce(pm2.favorited_username, 'Admin') as banned_by_username,
+    b.expires_at,
+    b.created_at,
+    (b.expires_at is null or b.expires_at > now()) as is_active
+  from public.cfm_user_bans b
+  left join public.cfm_public_member_ids pm1 on pm1.user_id = b.user_id
+  left join public.cfm_public_member_ids pm2 on pm2.user_id = b.banned_by
+  order by b.created_at desc
+  limit greatest(1, p_limit);
+end;
+$$;
+
+grant execute on function public.cfm_list_bans(int) to authenticated;
+
+-- Function to remove content (hide post or comment) - admin only
+create or replace function public.cfm_remove_content(
+  p_content_type text,
+  p_content_id uuid,
+  p_reason text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+begin
+  if not public.cfm_is_admin() then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  if p_content_type = 'post' then
+    update public.cfm_feed_posts
+    set is_hidden = true
+    where id = p_content_id;
+  elsif p_content_type = 'comment' then
+    update public.cfm_feed_comments
+    set is_hidden = true
+    where id = p_content_id;
+  else
+    return json_build_object('error', 'Invalid content type');
+  end if;
+
+  return json_build_object('success', true);
+exception
+  when others then
+    return json_build_object('error', 'Failed to remove content');
+end;
+$$;
+
+grant execute on function public.cfm_remove_content(text, uuid, text) to authenticated;

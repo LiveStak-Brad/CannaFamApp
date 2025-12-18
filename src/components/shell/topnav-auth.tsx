@@ -105,6 +105,13 @@ export async function TopNavAuth() {
               Edit Profile
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
+            <Link href="/leaderboard" className={mobileMenuItemClass}>
+              🏆 Leaderboard
+            </Link>
+            <Link href="/members" className={mobileMenuItemClass}>
+              👥 Members
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
             <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
@@ -113,7 +120,7 @@ export async function TopNavAuth() {
             <Link href="/privacy" className={mobileMenuItemClass}>
               Privacy Policy
             </Link>
-            <Link href="/safety" className={mobileMenuItemClass}>
+            <Link href="/community-guidelines" className={mobileMenuItemClass}>
               Community Guidelines
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
@@ -177,6 +184,13 @@ export async function TopNavAuth() {
               Edit Profile
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
+            <Link href="/leaderboard" className={mobileMenuItemClass}>
+              🏆 Leaderboard
+            </Link>
+            <Link href="/members" className={mobileMenuItemClass}>
+              👥 Members
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
             <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
@@ -185,7 +199,7 @@ export async function TopNavAuth() {
             <Link href="/privacy" className={mobileMenuItemClass}>
               Privacy Policy
             </Link>
-            <Link href="/safety" className={mobileMenuItemClass}>
+            <Link href="/community-guidelines" className={mobileMenuItemClass}>
               Community Guidelines
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
