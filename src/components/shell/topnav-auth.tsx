@@ -152,6 +152,9 @@ export async function TopNavAuth() {
             LIVE
           </Button>
         ) : null}
+        <Button as="link" href="/leaderboard" variant="secondary" className={navBtnClass}>
+          🏆
+        </Button>
         <NotiesNavButton
           userId={user.id}
           initialUnread={unread}
