@@ -665,8 +665,13 @@ export function LiveClient({
           body: JSON.stringify({ role: isHostMode ? "host" : "viewer", client: "web" }),
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          console.error("[LiveClient] Token request failed:", res.status, errText);
+          return;
+        }
         const json = (await res.json()) as any;
+        console.log("[LiveClient] Token response:", { role: json?.role, isHostMode });
         const token = String(json?.token ?? "");
         const uidNum = Number(json?.uid ?? 0);
         const appId = String(json?.appId ?? "");
@@ -975,6 +980,20 @@ export function LiveClient({
 
             {!agoraReady ? (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">Connecting...</div>
+            ) : null}
+
+            {/* Host broadcasting indicator */}
+            {agoraReady && isHost && broadcasting ? (
+              <div className="absolute top-3 left-3 flex items-center gap-2">
+                <span className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-semibold text-white animate-pulse">🔴 BROADCASTING</span>
+              </div>
+            ) : null}
+
+            {/* Host waiting to broadcast */}
+            {agoraReady && isHost && !broadcasting ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-white/70">
+                <div>Starting broadcast...</div>
+              </div>
             ) : null}
 
             {agoraReady && !isHost && !hasRemoteVideo ? (
