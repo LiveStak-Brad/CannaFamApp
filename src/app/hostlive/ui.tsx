@@ -73,6 +73,10 @@ export function HostLiveClient({
   const [giftFlash, setGiftFlash] = useState<{ message: string; key: number } | null>(null);
   const giftFlashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Falling emotes state
+  const [fallingEmotes, setFallingEmotes] = useState<{ id: string; emoji: string; leftPct: number }[]>([]);
+  const seenEmoteIdsRef = useRef<Record<string, boolean>>({});
+
   const videoRef = useRef<HTMLDivElement | null>(null);
   const agoraCleanupRef = useRef<(() => void) | null>(null);
   const autoStartedRef = useRef(false);
@@ -290,6 +294,23 @@ export function HostLiveClient({
               setGiftFlash(null);
             }, 5000);
           }
+
+          // Spawn falling emote for emote messages
+          if (row.type === "emote") {
+            const rid = String(row.id ?? "");
+            if (rid && !seenEmoteIdsRef.current[rid]) {
+              seenEmoteIdsRef.current[rid] = true;
+              const emoji = String(row.message ?? "");
+              if (emoji) {
+                const id = `${Date.now()}-${Math.random()}`;
+                const leftPct = 8 + Math.random() * 84;
+                setFallingEmotes((prev) => [...prev, { id, emoji, leftPct }].slice(-30));
+                setTimeout(() => {
+                  setFallingEmotes((prev) => prev.filter((e) => e.id !== id));
+                }, 6500);
+              }
+            }
+          }
         }
       )
       .subscribe();
@@ -328,6 +349,26 @@ export function HostLiveClient({
       <div className="relative h-full w-full max-w-[420px] max-h-[90vh] overflow-hidden rounded-3xl border border-white/10 bg-black">
         {/* Video fills entire container */}
         <div ref={videoRef} className="absolute inset-0" />
+
+        {/* Falling emotes overlay */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden z-30">
+          {fallingEmotes.map((e) => (
+            <div
+              key={e.id}
+              className="absolute top-0 text-2xl"
+              style={{ left: `${e.leftPct}%`, animation: "cfm-host-fall 6.5s linear forwards" }}
+            >
+              {e.emoji}
+            </div>
+          ))}
+        </div>
+        <style>{`
+          @keyframes cfm-host-fall {
+            0% { transform: translateY(-10%) scale(1); opacity: 0; }
+            8% { opacity: 1; }
+            100% { transform: translateY(220%) scale(1.2); opacity: 0; }
+          }
+        `}</style>
 
         {/* Top overlay */}
         <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">

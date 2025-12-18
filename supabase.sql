@@ -531,6 +531,11 @@ begin
   returning s.*
   into ls;
 
+  -- Clear chat history when stream ends (for fresh chat each live)
+  if not next_is_live then
+    delete from public.cfm_live_chat where live_id = ls.id;
+  end if;
+
   return query
   select
     ls.id,
