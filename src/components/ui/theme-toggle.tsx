@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 
-type Theme = "light" | "dark" | "system";
+type Theme = "light" | "dark";
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("system");
+export function useThemeState() {
+  const [theme, setTheme] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     const stored = localStorage.getItem("theme") as Theme | null;
-    if (stored) {
+    if (stored === "light" || stored === "dark") {
       setTheme(stored);
       applyTheme(stored);
     }
@@ -20,49 +20,46 @@ export function ThemeToggle() {
   const applyTheme = (t: Theme) => {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
-
-    if (t === "system") {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (!prefersDark) {
-        root.classList.add("light");
-      }
-    } else if (t === "light") {
+    if (t === "light") {
       root.classList.add("light");
     } else {
       root.classList.add("dark");
     }
   };
 
-  const cycleTheme = () => {
-    const next: Theme = theme === "dark" ? "light" : theme === "light" ? "system" : "dark";
+  const toggleTheme = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
     localStorage.setItem("theme", next);
     applyTheme(next);
   };
 
+  return { theme, toggleTheme, mounted };
+}
+
+export function ThemeToggleMenuItem({ className }: { className?: string }) {
+  const { theme, toggleTheme, mounted } = useThemeState();
+
   if (!mounted) {
     return (
-      <button
-        className="inline-flex items-center justify-center rounded-xl px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-semibold transition bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)]"
-        aria-label="Toggle theme"
-      >
-        <span className="w-4 h-4" />
+      <button className={className} disabled>
+        <span>🌙</span>
+        <span>Loading...</span>
       </button>
     );
   }
 
-  const icon = theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🖥️";
-  const label = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "Auto";
+  const icon = theme === "dark" ? "🌙" : "☀️";
+  const label = theme === "dark" ? "Dark Mode" : "Light Mode";
 
   return (
     <button
-      onClick={cycleTheme}
-      className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)]"
-      aria-label={`Current theme: ${label}. Click to change.`}
-      title={`Theme: ${label}`}
+      onClick={toggleTheme}
+      className={className}
     >
       <span>{icon}</span>
-      <span className="hidden sm:inline">{label}</span>
+      <span>{label}</span>
+      <span className="ml-auto text-xs text-[color:var(--muted)]">Tap to switch</span>
     </button>
   );
 }

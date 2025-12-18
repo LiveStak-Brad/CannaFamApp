@@ -878,6 +878,14 @@ export function LiveClient({
 
   async function exitLive() {
     try {
+      // If host is live, end the stream first
+      if (isHost && live.is_live) {
+        await sb.rpc("cfm_set_live", {
+          next_is_live: false,
+          next_title: null,
+        });
+      }
+      
       const res = await fetch("/api/live/exit", {
         method: "POST",
         headers: { "content-type": "application/json" },

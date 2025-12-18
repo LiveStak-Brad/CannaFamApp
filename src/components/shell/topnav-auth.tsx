@@ -4,7 +4,7 @@ import { logout } from "@/app/logout/actions";
 import { Button } from "@/components/ui/button";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NotiesNavButton } from "@/components/shell/noties-nav-button";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { ThemeToggleMenuItem } from "@/components/ui/theme-toggle";
 
 export async function TopNavAuth() {
   const user = await getAuthedUserOrNull();
@@ -35,7 +35,6 @@ export async function TopNavAuth() {
             LIVE
           </Button>
         ) : null}
-        <ThemeToggle />
         <Button as="link" href="/login" variant="secondary" className={navBtnClass}>
           Login
         </Button>
@@ -85,7 +84,6 @@ export async function TopNavAuth() {
           </Button>
         ) : null}
         <NotiesNavButton userId={user.id} initialUnread={unread} className={navBtnClass} mode="desktop" />
-        <ThemeToggle />
         
         <details className="relative">
           <summary
@@ -106,6 +104,8 @@ export async function TopNavAuth() {
             <Link href="/me" className={mobileMenuItemClass}>
               Edit Profile
             </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
               Terms of Service
@@ -176,6 +176,8 @@ export async function TopNavAuth() {
             <Link href="/me" className={mobileMenuItemClass}>
               Edit Profile
             </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
               Terms of Service
