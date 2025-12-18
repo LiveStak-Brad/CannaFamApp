@@ -46,9 +46,8 @@ export function HostLiveClient({
   const agoraCleanupRef = useRef<(() => void) | null>(null);
   const autoStartedRef = useRef(false);
 
-  // Chat state
+  // Chat state (read-only display)
   const [chatRows, setChatRows] = useState<LiveChatRow[]>([]);
-  const [chatText, setChatText] = useState("");
   const [nameByUserId, setNameByUserId] = useState<Record<string, string>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -220,20 +219,6 @@ export function HostLiveClient({
     })();
   }, [chatRows, sb]);
 
-  // Send chat message
-  async function sendChat() {
-    const msg = chatText.trim();
-    if (!msg || !liveId) return;
-    setChatText("");
-
-    await sb.from("cfm_live_chat").insert({
-      live_id: liveId,
-      sender_user_id: myUserId,
-      message: msg,
-      type: "chat",
-    });
-  }
-
   // Scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -295,35 +280,60 @@ export function HostLiveClient({
           </div>
         </div>
 
-        {/* Chat Section */}
+        {/* Chat Display (read-only) + Controls */}
         <div className="mt-3 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/50">
           <div className="flex-1 overflow-y-auto p-3">
-            {chatRows.map((row) => (
-              <div key={row.id} className="mb-2 text-sm">
-                <span className="font-semibold text-purple-400">
-                  {nameByUserId[row.sender_user_id ?? ""] || "Member"}:
-                </span>{" "}
-                <span className="text-white/90">{row.message}</span>
-              </div>
-            ))}
+            {chatRows.length === 0 ? (
+              <div className="text-sm text-white/50">No chat yet...</div>
+            ) : null}
+            {chatRows.map((row) => {
+              const kind = row.type;
+              const isGift = kind === "tip" || (kind === "system" && (row.metadata as any)?.event === "gift");
+              const isJoin = kind === "system" && (row.metadata as any)?.event === "join";
+              
+              if (isJoin) {
+                return (
+                  <div key={row.id} className="mb-1 text-xs text-green-400/70">
+                    {row.message}
+                  </div>
+                );
+              }
+              if (isGift) {
+                return (
+                  <div key={row.id} className="mb-1 text-sm font-semibold text-yellow-400">
+                    🎁 {row.message}
+                  </div>
+                );
+              }
+              
+              return (
+                <div key={row.id} className="mb-1 text-sm">
+                  <span className="font-semibold text-purple-400">
+                    {nameByUserId[row.sender_user_id ?? ""] || "Member"}:
+                  </span>{" "}
+                  <span className="text-white/90">{row.message}</span>
+                </div>
+              );
+            })}
             <div ref={chatEndRef} />
           </div>
 
+          {/* Controls - Flip Camera & Filters */}
           <div className="border-t border-white/10 p-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatText}
-                onChange={(e) => setChatText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                placeholder="Send a message..."
-                className="flex-1 rounded-full bg-white/10 px-4 py-2 text-sm text-white placeholder-white/50 outline-none focus:ring-2 focus:ring-purple-500"
-              />
+            <div className="flex justify-center gap-4">
               <button
-                onClick={sendChat}
-                className="rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+                onClick={() => toast("Flip camera not available on web", "info")}
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl hover:bg-white/20"
+                title="Flip Camera"
               >
-                Send
+                🔄
+              </button>
+              <button
+                onClick={() => toast("Filters not available on web", "info")}
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl hover:bg-white/20"
+                title="Filters"
+              >
+                🪄
               </button>
             </div>
           </div>
