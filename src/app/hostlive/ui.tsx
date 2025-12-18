@@ -406,8 +406,8 @@ export function HostLiveClient({
 
         {/* Chat Display (read-only) - overlaying bottom of video like mobile */}
         <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col p-3">
-          {/* Chat messages - same styling as mobile/web view */}
-          <div className="max-h-48 overflow-y-auto space-y-1.5">
+          {/* Chat messages - with slight black background for readability */}
+          <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-2xl bg-black/35 backdrop-blur-sm p-3">
             {chatRows.slice(-30).map((row) => {
               const kind = row.type;
               const msg = String(row.message ?? "");
