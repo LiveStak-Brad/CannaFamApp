@@ -83,6 +83,9 @@ export async function TopNavAuth() {
             Admin
           </Button>
         ) : null}
+        <Button as="link" href="/leaderboard" variant="secondary" className={navBtnClass}>
+          🏆
+        </Button>
         <NotiesNavButton userId={user.id} initialUnread={unread} className={navBtnClass} mode="desktop" />
         
         <details className="relative">
@@ -98,16 +101,13 @@ export async function TopNavAuth() {
             </svg>
           </summary>
           <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
-            <Link href="/account" className={mobileMenuItemClass}>
-              Account
+            <Link href="/u/me" className={mobileMenuItemClass}>
+              👤 View Profile
             </Link>
             <Link href="/me" className={mobileMenuItemClass}>
-              Edit Profile
+              ✏️ Edit Profile
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
-            <Link href="/leaderboard" className={mobileMenuItemClass}>
-              🏆 Leaderboard
-            </Link>
             <Link href="/members" className={mobileMenuItemClass}>
               👥 Members
             </Link>
@@ -122,6 +122,13 @@ export async function TopNavAuth() {
             </Link>
             <Link href="/community-guidelines" className={mobileMenuItemClass}>
               Community Guidelines
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <Link href="/account" className={mobileMenuItemClass}>
+              ⚙️ Account Settings
+            </Link>
+            <Link href="/account/disable" className={mobileMenuItemClass + " text-red-400"}>
+              🚫 Disable Account
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
@@ -177,16 +184,13 @@ export async function TopNavAuth() {
                 Admin
               </Link>
             ) : null}
-            <Link href="/account" className={mobileMenuItemClass}>
-              Account
+            <Link href="/u/me" className={mobileMenuItemClass}>
+              👤 View Profile
             </Link>
             <Link href="/me" className={mobileMenuItemClass}>
-              Edit Profile
+              ✏️ Edit Profile
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
-            <Link href="/leaderboard" className={mobileMenuItemClass}>
-              🏆 Leaderboard
-            </Link>
             <Link href="/members" className={mobileMenuItemClass}>
               👥 Members
             </Link>
@@ -201,6 +205,13 @@ export async function TopNavAuth() {
             </Link>
             <Link href="/community-guidelines" className={mobileMenuItemClass}>
               Community Guidelines
+            </Link>
+            <div className="my-1 border-t border-[color:var(--border)]" />
+            <Link href="/account" className={mobileMenuItemClass}>
+              ⚙️ Account Settings
+            </Link>
+            <Link href="/account/disable" className={mobileMenuItemClass + " text-red-400"}>
+              🚫 Disable Account
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
