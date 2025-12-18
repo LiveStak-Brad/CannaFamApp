@@ -84,30 +84,41 @@ export function HostLiveClient({
   const loadTopGifters = useCallback(async () => {
     try {
       const [r1, r2, r3] = await Promise.all([
-        sb.rpc("cfm_top_gifters_today"),
-        sb.rpc("cfm_top_gifters_weekly"),
-        sb.rpc("cfm_top_gifters_all_time"),
+        sb.rpc("cfm_top_gifters", { period: "today" }),
+        sb.rpc("cfm_top_gifters", { period: "weekly" }),
+        sb.rpc("cfm_top_gifters", { period: "all_time" }),
       ]);
+      console.log("[HostLive loadTopGifters] today:", r1.data, r1.error);
+      console.log("[HostLive loadTopGifters] weekly:", r2.data, r2.error);
+      console.log("[HostLive loadTopGifters] all_time:", r3.data, r3.error);
       setTopToday(((r1.data ?? []) as any[]) as TopGifterRow[]);
       setTopWeekly(((r2.data ?? []) as any[]) as TopGifterRow[]);
       setTopAllTime(((r3.data ?? []) as any[]) as TopGifterRow[]);
-    } catch {}
+    } catch (e) {
+      console.error("[HostLive loadTopGifters] error:", e);
+    }
   }, [sb]);
 
-  // Load viewers
+  // Load viewers using RPC function
   const loadViewers = useCallback(async () => {
     if (!liveId) return;
     try {
-      const { data } = await sb
-        .from("cfm_live_viewers")
-        .select("user_id,display_name,is_online,joined_at")
-        .eq("live_id", liveId);
+      const { data, error } = await sb.rpc("cfm_get_live_viewers", { p_live_id: liveId });
+      console.log("[HostLive loadViewers]", data, error);
       if (data) {
-        setViewers(data as ViewerRow[]);
-        setTotalViews(data.length);
-        setViewerCount(data.filter((v: any) => v.is_online).length);
+        const rows = (data as any[]).map((v: any) => ({
+          user_id: v.user_id,
+          display_name: v.display_name,
+          is_online: v.is_online,
+          joined_at: v.joined_at,
+        }));
+        setViewers(rows as ViewerRow[]);
+        setTotalViews(rows.length);
+        setViewerCount(rows.filter((v) => v.is_online).length);
       }
-    } catch {}
+    } catch (e) {
+      console.error("[HostLive loadViewers] error:", e);
+    }
   }, [sb, liveId]);
 
   // Load data on mount and periodically
