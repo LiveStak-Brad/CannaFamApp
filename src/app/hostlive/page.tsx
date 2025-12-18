@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { getAuthedUserOrNull } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { LiveClient } from "@/app/live/ui";
+import { HostLiveClient } from "./ui";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,5 +49,5 @@ export default async function HostLivePage() {
     );
   }
 
-  return <LiveClient initialLive={live} myUserId={user.id} nextPath="" forceHostMode={true} />;
+  return <HostLiveClient initialLive={live} myUserId={user.id} />;
 }
