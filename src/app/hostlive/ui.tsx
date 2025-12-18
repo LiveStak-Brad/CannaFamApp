@@ -285,103 +285,98 @@ export function HostLiveClient({
   }, [chatRows.length]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black">
-      <div className="mx-auto flex h-full w-full max-w-xl flex-col px-3 pb-3 pt-3">
-        {/* Video Preview */}
-        <div className="mx-auto w-full max-w-[420px]">
-          <div className="relative aspect-[9/16] w-full overflow-hidden rounded-3xl border border-white/10 bg-black">
-            <div ref={videoRef} className="absolute inset-0" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+      {/* Phone-sized container with video filling it and chat overlaying */}
+      <div className="relative h-full w-full max-w-[420px] max-h-[90vh] overflow-hidden rounded-3xl border border-white/10 bg-black">
+        {/* Video fills entire container */}
+        <div ref={videoRef} className="absolute inset-0" />
 
-            {/* Top overlay */}
-            <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
-              <div className="flex items-center gap-2">
-                {broadcasting ? (
-                  <span className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-semibold text-white animate-pulse">🔴 LIVE</span>
-                ) : (
-                  <span className="rounded-full bg-gray-600 px-2 py-1 text-[11px] font-semibold text-white">PREVIEW</span>
-                )}
-                <span className="text-sm font-semibold text-white">CannaStreams</span>
-              </div>
+        {/* Top overlay */}
+        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
+          <div className="flex items-center gap-2">
+            {broadcasting ? (
+              <span className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-semibold text-white animate-pulse">🔴 LIVE</span>
+            ) : (
+              <span className="rounded-full bg-gray-600 px-2 py-1 text-[11px] font-semibold text-white">PREVIEW</span>
+            )}
+            <span className="text-sm font-semibold text-white">CannaStreams</span>
+          </div>
 
-              <div className="flex items-center gap-2">
-                {/* Viewer count - clickable to open modal */}
-                <button
-                  onClick={() => setViewerListOpen(true)}
-                  className="rounded-full border border-white/20 bg-black/40 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/20"
-                >
-                  👁️ {viewerCount} | 👥 {totalViews}
-                </button>
-                {/* Close button */}
-                <button
-                  type="button"
-                  onClick={stopBroadcast}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white hover:bg-red-600"
-                >
-                  <span className="text-xl leading-none">×</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Top 3 Gifters - positioned on right side below close button */}
-            {topToday.length > 0 ? (
-              <div className="absolute right-3 top-16 z-20 flex flex-col gap-1">
-                {topToday.slice(0, 3).map((g) => {
-                  const rank = Number(g.rank ?? 0);
-                  const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
-                  const bgColor = rank === 1 ? "rgba(234,179,8,0.25)" : rank === 2 ? "rgba(156,163,175,0.25)" : "rgba(249,115,22,0.25)";
-                  const borderColor = rank === 1 ? "rgba(234,179,8,0.5)" : rank === 2 ? "rgba(156,163,175,0.5)" : "rgba(249,115,22,0.5)";
-                  return (
-                    <div
-                      key={`${g.profile_id}-${rank}`}
-                      className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] text-white"
-                      style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
-                    >
-                      <span>{medalEmoji}</span>
-                      {g.avatar_url ? (
-                        <img src={g.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
-                      ) : (
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[9px] font-bold">
-                          {g.display_name?.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex flex-col">
-                        <span className="font-semibold truncate max-w-[60px]">{g.display_name}</span>
-                        <span className="text-[9px] text-white/70">${g.total_amount.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {/* Status messages */}
-            {!agoraReady && !error ? (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
-                Starting broadcast...
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-red-400">
-                <div>Error: {error}</div>
-                <button
-                  onClick={() => { setError(null); startBroadcast(); }}
-                  className="rounded-full bg-white/10 px-4 py-2 text-white hover:bg-white/20"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : null}
+          <div className="flex items-center gap-2">
+            {/* Viewer count - clickable to open modal */}
+            <button
+              onClick={() => setViewerListOpen(true)}
+              className="rounded-full border border-white/20 bg-black/40 px-2 py-1 text-[11px] font-semibold text-white hover:bg-white/20"
+            >
+              👁️ {viewerCount} | 👥 {totalViews}
+            </button>
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={stopBroadcast}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white hover:bg-red-600"
+            >
+              <span className="text-xl leading-none">×</span>
+            </button>
           </div>
         </div>
 
-        {/* Chat Display (read-only) + Controls */}
-        <div className="mt-3 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/50">
-          <div className="flex-1 overflow-y-auto p-3">
-            {chatRows.length === 0 ? (
-              <div className="text-sm text-white/50">No chat yet...</div>
-            ) : null}
-            {chatRows.map((row) => {
+        {/* Top 3 Gifters - positioned on right side below close button */}
+        {topToday.length > 0 ? (
+          <div className="absolute right-3 top-16 z-20 flex flex-col gap-1">
+            {topToday.slice(0, 3).map((g) => {
+              const rank = Number(g.rank ?? 0);
+              const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+              const bgColor = rank === 1 ? "rgba(234,179,8,0.25)" : rank === 2 ? "rgba(156,163,175,0.25)" : "rgba(249,115,22,0.25)";
+              const borderColor = rank === 1 ? "rgba(234,179,8,0.5)" : rank === 2 ? "rgba(156,163,175,0.5)" : "rgba(249,115,22,0.5)";
+              return (
+                <div
+                  key={`${g.profile_id}-${rank}`}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] text-white"
+                  style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
+                >
+                  <span>{medalEmoji}</span>
+                  {g.avatar_url ? (
+                    <img src={g.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[9px] font-bold">
+                      {g.display_name?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex flex-col">
+                    <span className="font-semibold truncate max-w-[60px]">{g.display_name}</span>
+                    <span className="text-[9px] text-white/70">${g.total_amount.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* Status messages */}
+        {!agoraReady && !error ? (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
+            Starting broadcast...
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-red-400">
+            <div>Error: {error}</div>
+            <button
+              onClick={() => { setError(null); startBroadcast(); }}
+              className="rounded-full bg-white/10 px-4 py-2 text-white hover:bg-white/20"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+
+        {/* Chat Display (read-only) - overlaying bottom of video */}
+        <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col">
+          {/* Chat messages */}
+          <div className="max-h-40 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent p-3">
+            {chatRows.slice(-20).map((row) => {
               const kind = row.type;
               const isGift = kind === "tip" || (kind === "system" && (row.metadata as any)?.event === "gift");
               const isJoin = kind === "system" && (row.metadata as any)?.event === "join";
@@ -414,7 +409,7 @@ export function HostLiveClient({
           </div>
 
           {/* Controls - Flip Camera, Filters, Trophy */}
-          <div className="border-t border-white/10 p-2">
+          <div className="bg-black/60 p-2">
             <div className="flex justify-center gap-4">
               <button
                 onClick={() => toast("Flip camera not available on web", "info")}
