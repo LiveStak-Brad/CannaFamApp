@@ -52,6 +52,13 @@ export async function TopNavAuth() {
     .maybeSingle();
   const isAdmin = !!adminRow?.role;
 
+  const { data: memberRow } = await sb
+    .from("cfm_members")
+    .select("favorited_username")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const username = memberRow?.favorited_username ?? null;
+
   let unread = 0;
   try {
     const { count, error } = await sb
@@ -101,9 +108,11 @@ export async function TopNavAuth() {
             </svg>
           </summary>
           <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
-            <Link href="/u/me" className={mobileMenuItemClass}>
-              👤 View Profile
-            </Link>
+            {username ? (
+              <Link href={`/u/${username}`} className={mobileMenuItemClass}>
+                👤 View Profile
+              </Link>
+            ) : null}
             <Link href="/me" className={mobileMenuItemClass}>
               ✏️ Edit Profile
             </Link>
@@ -181,9 +190,11 @@ export async function TopNavAuth() {
                 Admin
               </Link>
             ) : null}
-            <Link href="/u/me" className={mobileMenuItemClass}>
-              👤 View Profile
-            </Link>
+            {username ? (
+              <Link href={`/u/${username}`} className={mobileMenuItemClass}>
+                👤 View Profile
+              </Link>
+            ) : null}
             <Link href="/me" className={mobileMenuItemClass}>
               ✏️ Edit Profile
             </Link>

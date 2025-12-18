@@ -2188,6 +2188,11 @@ $$;
 
 grant execute on function public.cfm_remove_content(text, uuid, text) to authenticated;
 
+-- Add is_disabled column to members table if not exists
+alter table public.cfm_members 
+add column if not exists is_disabled boolean default false,
+add column if not exists disabled_at timestamptz;
+
 -- Function for users to disable their own account
 create or replace function public.cfm_disable_my_account()
 returns json
@@ -2203,8 +2208,8 @@ begin
     return json_build_object('error', 'Not authenticated');
   end if;
 
-  -- Mark the member profile as disabled
-  update public.cfm_member_profiles
+  -- Mark the member as disabled
+  update public.cfm_members
   set is_disabled = true,
       disabled_at = now()
   where user_id = v_user_id;
@@ -2217,8 +2222,3 @@ end;
 $$;
 
 grant execute on function public.cfm_disable_my_account() to authenticated;
-
--- Add is_disabled column to member profiles if not exists
-alter table public.cfm_member_profiles 
-add column if not exists is_disabled boolean default false,
-add column if not exists disabled_at timestamptz;
