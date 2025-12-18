@@ -16,6 +16,7 @@ import {
   type FeedPost,
   type GiftTopGifter,
   type LikerProfile,
+  type MentionCandidate,
   type MyDailyPost,
 } from "./ui";
 import Link from "next/link";
@@ -470,7 +471,7 @@ export default async function FeedPage({
 
         {canEditPosts ? <AdminPostComposer title="Post to the feed (admin)" /> : null}
 
-        <MyDailyPostComposer canPost={canEarn} existing={myDailyPost} />
+        <MyDailyPostComposer canPost={canEarn} existing={myDailyPost} mentionCandidates={mentionCandidates} />
 
         <div className="space-y-3">
           {filteredPosts?.length ? (
