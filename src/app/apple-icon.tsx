@@ -17,27 +17,16 @@ export default function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#070A08",
-          borderRadius: 40,
         }}
       >
-        <div
-          style={{
-            width: 150,
-            height: 150,
-            borderRadius: 75,
-            background: "#D11F2A",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#ffffff",
-            fontSize: 92,
-            fontWeight: 900,
-            lineHeight: 1,
-          }}
-        >
-          C
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://cannafamapp.com/favicon.png"
+          alt="CF"
+          width={180}
+          height={180}
+          style={{ borderRadius: 36 }}
+        />
       </div>
     ),
     {

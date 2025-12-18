@@ -17,27 +17,16 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#070A08",
-          borderRadius: 8,
         }}
       >
-        <div
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            background: "#D11F2A",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#ffffff",
-            fontSize: 16,
-            fontWeight: 800,
-            lineHeight: 1,
-          }}
-        >
-          C
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://cannafamapp.com/favicon.png"
+          alt="CF"
+          width={32}
+          height={32}
+          style={{ borderRadius: 6 }}
+        />
       </div>
     ),
     {
