@@ -478,23 +478,34 @@ export default async function FeedPage({
             filteredPosts.map((p: any) => (
               <Card key={p.id} title={p.title ?? ""}>
                 <div id={p.id} className="space-y-3">
-                  <div className="text-xs text-[color:var(--muted)]">
-                    {p.post_type ? p.post_type.toUpperCase() : ""}{" "}
-                    {p.created_at ? ` • ${new Date(p.created_at).toLocaleString()}` : ""}
+                  <div className="flex items-center gap-2 text-xs text-[color:var(--muted)]">
                     {p.author_user_id ? (() => {
                       const uid = String(p.author_user_id ?? "").trim();
                       const info = uid ? authorById.get(uid) ?? null : null;
                       const uname = String(info?.favorited_username ?? "").trim();
-                      if (!uname) return "";
+                      const photo = info?.photo_url ?? null;
+                      if (!uname) return null;
                       return (
-                        <>
-                          {" • "}
-                          <Link className="underline underline-offset-4" href={`/u/${encodeURIComponent(uname)}`}>
-                            @{uname}
-                          </Link>
-                        </>
+                        <Link href={`/u/${encodeURIComponent(uname)}`} className="flex items-center gap-2 hover:opacity-80">
+                          {photo ? (
+                            <img
+                              src={photo}
+                              alt={uname}
+                              className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover object-top"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--border)] text-[10px] font-semibold">
+                              {uname[0]?.toUpperCase() ?? "?"}
+                            </div>
+                          )}
+                          <span className="font-semibold text-[color:var(--foreground)]">@{uname}</span>
+                        </Link>
                       );
                     })() : null}
+                    {p.created_at ? (
+                      <span>{new Date(p.created_at).toLocaleString()}</span>
+                    ) : null}
                   </div>
                   <FeedAdminPostControls post={p as FeedPost} isAdmin={canEditPosts} />
                   <div className="text-sm text-[color:var(--foreground)] whitespace-pre-wrap">
