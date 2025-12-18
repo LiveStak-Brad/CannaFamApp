@@ -100,10 +100,6 @@ export async function TopNavAuth() {
               ✏️ Edit Profile
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
-            <Link href="/members" className={mobileMenuItemClass}>
-              👥 Members
-            </Link>
-            <div className="my-1 border-t border-[color:var(--border)]" />
             <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
@@ -184,10 +180,6 @@ export async function TopNavAuth() {
             ) : null}
             <Link href="/me" className={mobileMenuItemClass}>
               ✏️ Edit Profile
-            </Link>
-            <div className="my-1 border-t border-[color:var(--border)]" />
-            <Link href="/members" className={mobileMenuItemClass}>
-              👥 Members
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
