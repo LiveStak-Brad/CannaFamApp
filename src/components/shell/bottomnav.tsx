@@ -43,7 +43,7 @@ export function BottomNav({
             // Special handling for Live button
             if (isLiveItem) {
               const liveHref = isHost ? "/live-host" : "/live";
-              const liveLabel = isHost ? (isLive ? "Streaming" : "Go Live") : (isLive ? "Live" : "Live Soon");
+              const liveLabel = isHost ? (isLive ? "Streaming" : "Go Live") : (isLive ? "Join Live" : "Live Soon");
               const disabled = !isHost && !isLive;
               
               const cls =
