@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NotiesNavButton } from "@/components/shell/noties-nav-button";
 import { ThemeToggleMenuItem } from "@/components/ui/theme-toggle";
+import { DropdownMenu } from "@/components/shell/dropdown-menu";
 
 export async function TopNavAuth() {
   const user = await getAuthedUserOrNull();
@@ -95,18 +96,21 @@ export async function TopNavAuth() {
         </Button>
         <NotiesNavButton userId={user.id} initialUnread={unread} className={navBtnClass} mode="desktop" />
         
-        <details className="relative">
-          <summary
-            aria-label="Open menu"
-            className={
-              "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)] list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
-            }
-          >
-            <span>Account</span>
-            <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </summary>
+        <DropdownMenu
+          trigger={
+            <summary
+              aria-label="Open menu"
+              className={
+                "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)] list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+              }
+            >
+              <span>Account</span>
+              <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </summary>
+          }
+        >
           <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
             {username ? (
               <Link href={`/u/${username}`} className={mobileMenuItemClass}>
@@ -143,7 +147,7 @@ export async function TopNavAuth() {
               </button>
             </form>
           </div>
-        </details>
+        </DropdownMenu>
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
@@ -162,31 +166,34 @@ export async function TopNavAuth() {
           mode="mobile"
         />
 
-        <details className="relative">
-          <summary
-            aria-label="Open menu"
-            className={
-              mobileMenuBtnClass +
-              " list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
-            }
-          >
-            <span className="inline-flex items-center gap-2">
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <path d="M4 6h16" />
-                <path d="M4 12h16" />
-                <path d="M4 18h16" />
-              </svg>
-              <span>Menu</span>
-            </span>
-          </summary>
+        <DropdownMenu
+          trigger={
+            <summary
+              aria-label="Open menu"
+              className={
+                mobileMenuBtnClass +
+                " list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+              }
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M4 6h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 18h16" />
+                </svg>
+                <span>Menu</span>
+              </span>
+            </summary>
+          }
+        >
           <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
             {isAdmin ? (
               <Link href="/admin" className={mobileMenuItemClass}>
@@ -228,7 +235,7 @@ export async function TopNavAuth() {
               </button>
             </form>
           </div>
-        </details>
+        </DropdownMenu>
       </div>
     </>
   );
