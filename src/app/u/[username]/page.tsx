@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { AdminPostComposer } from "@/components/ui/admin-post-composer";
-import { DailyPostComposer, type DailyPostDraft } from "@/components/ui/daily-post-composer";
+import { DailyPostComposer, type DailyPostDraft, type MentionCandidate } from "@/components/ui/daily-post-composer";
 import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
@@ -308,6 +308,16 @@ export default async function UserProfilePage({
   if (profile?.tiktok_link) socials.push({ label: "TikTok", href: profile.tiktok_link });
   if (profile?.youtube_link) socials.push({ label: "YouTube", href: profile.youtube_link });
 
+  // Fetch mention candidates for tagging
+  let mentionCandidates: MentionCandidate[] = [];
+  if (isOwnProfile) {
+    const { data: mentionCandidatesRaw } = await sb
+      .from("cfm_public_member_ids")
+      .select("user_id,favorited_username,photo_url")
+      .limit(2000);
+    mentionCandidates = (mentionCandidatesRaw ?? []) as MentionCandidate[];
+  }
+
   return (
     <Container>
       <div className="space-y-4">
@@ -453,7 +463,7 @@ export default async function UserProfilePage({
         </Card>
 
         {isOwnProfile ? (
-          <DailyPostComposer title="Post to your profile" existing={myDailyPostToday} />
+          <DailyPostComposer title="Post to your profile" existing={myDailyPostToday} mentionCandidates={mentionCandidates} />
         ) : null}
 
         {isOwnProfile && canAdminPost ? (
