@@ -16,6 +16,7 @@ export function LiveIndicator() {
     const sb = supabaseBrowser();
     let cancelled = false;
 
+    // Initial check
     async function checkLive() {
       try {
         const { data } = await sb.rpc("cfm_get_live_state");
@@ -28,11 +29,24 @@ export function LiveIndicator() {
     }
 
     checkLive();
-    const interval = setInterval(checkLive, 10000);
+
+    // Subscribe to realtime changes instead of polling
+    const channel = sb
+      .channel("live-indicator")
+      .on(
+        "postgres_changes" as any,
+        { event: "UPDATE", schema: "public", table: "cfm_live_state" },
+        (payload: any) => {
+          if (!cancelled) {
+            setIsLive(!!payload.new?.is_live);
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      sb.removeChannel(channel);
     };
   }, []);
 
