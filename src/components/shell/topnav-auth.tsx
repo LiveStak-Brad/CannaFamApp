@@ -12,12 +12,16 @@ export async function TopNavAuth() {
 
   const sb = await supabaseServer();
   let isLive = false;
+  let hostUserId: string | null = null;
   try {
     const { data } = await sb.rpc("cfm_get_live_state");
     isLive = !!(data as any)?.is_live;
+    hostUserId = (data as any)?.host_user_id ?? null;
   } catch {
     isLive = false;
+    hostUserId = null;
   }
+  const isHost = !!user && !!hostUserId && user.id === hostUserId;
 
   const navBtnClass = "px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm";
   const mobileMenuBtnClass =
@@ -27,6 +31,9 @@ export async function TopNavAuth() {
 
   const liveBtnClass =
     "rounded-full bg-gradient-to-r from-[color:var(--gradient-start)] to-[color:var(--gradient-end)] px-3 py-1.5 text-xs font-semibold text-white shadow-none hover:opacity-90 border border-[color:var(--accent)]/40";
+
+  const liveSoonBtnClass =
+    "rounded-full bg-[color:var(--card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--muted)] border border-[color:var(--border)]";
 
   if (!user) {
     return (
@@ -76,11 +83,23 @@ export async function TopNavAuth() {
   return (
     <>
       <div className="hidden max-w-full flex-wrap items-center justify-end gap-1 sm:flex sm:gap-2">
-        {isLive ? (
+        {isHost ? (
+          isLive ? (
+            <Button as="link" href="/live-host" className={liveBtnClass}>
+              STREAMING
+            </Button>
+          ) : (
+            <Button as="link" href="/live-host" className={liveSoonBtnClass}>
+              GO LIVE
+            </Button>
+          )
+        ) : isLive ? (
           <Button as="link" href="/live" className={liveBtnClass}>
             LIVE
           </Button>
-        ) : null}
+        ) : (
+          <span className={liveSoonBtnClass}>Live Soon!</span>
+        )}
         {isAdmin ? (
           <Button
             as="link"
@@ -151,11 +170,23 @@ export async function TopNavAuth() {
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
-        {isLive ? (
+        {isHost ? (
+          isLive ? (
+            <Button as="link" href="/live-host" className={liveBtnClass}>
+              STREAMING
+            </Button>
+          ) : (
+            <Button as="link" href="/live-host" className={liveSoonBtnClass}>
+              GO LIVE
+            </Button>
+          )
+        ) : isLive ? (
           <Button as="link" href="/live" className={liveBtnClass}>
             LIVE
           </Button>
-        ) : null}
+        ) : (
+          <span className={liveSoonBtnClass}>Live Soon!</span>
+        )}
         <Button as="link" href="/leaderboard" variant="secondary" className={navBtnClass}>
           🏆
         </Button>
