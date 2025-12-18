@@ -111,6 +111,65 @@ export function LiveClient({
   const [viewerListOpen, setViewerListOpen] = useState(false);
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
 
+  const [streamEnded, setStreamEnded] = useState(false);
+
+  const rtcClientRef = useRef<any>(null);
+  const rtcLocalTracksRef = useRef<{ mic?: any; cam?: any } | null>(null);
+  const rtcTokenRefreshRef = useRef<NodeJS.Timeout | null>(null);
+  const rtcJoinInFlightRef = useRef(false);
+  const rtcLeftRef = useRef(false);
+  const rtcSessionKeyRef = useRef<string>("");
+
+  const rtcDebugEnabled = process.env.NODE_ENV !== "production";
+  const rtcLog = useCallback((...args: any[]) => {
+    if (!rtcDebugEnabled) return;
+    try { console.log("[RTC]", ...args); } catch {}
+  }, [rtcDebugEnabled]);
+
+  const hardLeaveRtcSession = useCallback(async (reason: string) => {
+    if (rtcLeftRef.current) return;
+    rtcLeftRef.current = true;
+    rtcJoinInFlightRef.current = false;
+    rtcLog("leave", { reason, at: new Date().toISOString(), sessionKey: rtcSessionKeyRef.current });
+
+    const client = rtcClientRef.current;
+    const tracks = rtcLocalTracksRef.current;
+
+    try {
+      if (rtcTokenRefreshRef.current) {
+        clearInterval(rtcTokenRefreshRef.current);
+        rtcTokenRefreshRef.current = null;
+      }
+
+      try { client?.removeAllListeners?.(); } catch {}
+
+      try {
+        if (tracks?.mic || tracks?.cam) {
+          try { await client?.unpublish?.([tracks.mic, tracks.cam].filter(Boolean)); } catch {}
+        }
+      } catch {}
+
+      try { tracks?.mic?.stop?.(); } catch {}
+      try { tracks?.mic?.close?.(); } catch {}
+      try { tracks?.cam?.stop?.(); } catch {}
+      try { tracks?.cam?.close?.(); } catch {}
+
+      try { await client?.leave?.(); } catch {}
+    } finally {
+      rtcLocalTracksRef.current = null;
+      rtcClientRef.current = null;
+      rtcSessionKeyRef.current = "";
+
+      setBroadcasting(false);
+      setAgoraReady(false);
+      setHasRemoteVideo(false);
+      setRemoteUid(null);
+      setLocalRtc(null);
+      setRemoteCount(0);
+      setLastRtcEvent(`left:${reason}`);
+    }
+  }, [rtcLog]);
+
   const [idlePaused, setIdlePaused] = useState(false);
   const [idleEpoch, setIdleEpoch] = useState(0);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -147,17 +206,8 @@ export function LiveClient({
       if (!live.is_live) return;
       const last = lastActivityAtRef.current || Date.now();
       if (Date.now() - last >= 5 * 60 * 1000) {
-        console.log("[LiveClient] Viewer idle timeout - disconnecting Agora to stop billing");
-        try {
-          if (agoraCleanupRef.current) {
-            agoraCleanupRef.current();
-            agoraCleanupRef.current = null;
-          }
-        } catch {
-        }
-        setAgoraReady(false);
-        setHasRemoteVideo(false);
-        setRemoteUid(null);
+        rtcLog("idle_timeout");
+        void hardLeaveRtcSession("idle_timeout");
         setIdlePaused(true);
       }
     };
@@ -171,7 +221,7 @@ export function LiveClient({
       if (idleTimerRef.current) clearInterval(idleTimerRef.current);
       idleTimerRef.current = null;
     };
-  }, [idlePaused, isHostMode, live.is_live]);
+  }, [hardLeaveRtcSession, idlePaused, isHostMode, live.is_live, rtcLog]);
 
   // Gift flash animation state
   const [giftFlash, setGiftFlash] = useState<{ message: string; key: number } | null>(null);
@@ -393,16 +443,7 @@ export function LiveClient({
     let cancelled = false;
 
     const disconnect = () => {
-      try {
-        if (agoraCleanupRef.current) {
-          agoraCleanupRef.current();
-          agoraCleanupRef.current = null;
-        }
-      } catch {
-      }
-      setAgoraReady(false);
-      setHasRemoteVideo(false);
-      setRemoteUid(null);
+      void hardLeaveRtcSession("kicked");
     };
 
     (async () => {
@@ -582,14 +623,15 @@ export function LiveClient({
           const row = payload.new as any;
           if (row) {
             setLive((prev) => ({ ...prev, ...row }));
-            // Auto-disconnect Agora when stream ends (is_live becomes false)
-            if (row.is_live === false && agoraCleanupRef.current) {
-              console.log("[LiveClient] Stream ended - auto-disconnecting Agora to stop billing");
-              agoraCleanupRef.current();
-              agoraCleanupRef.current = null;
-              setAgoraReady(false);
-              setHasRemoteVideo(false);
-              setRemoteUid(null);
+            if (row.is_live === false) {
+              setStreamEnded(true);
+              hardLeaveRtcSession("stream_end");
+              if (!isHostMode) {
+                try {
+                  router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/");
+                  router.refresh();
+                } catch {}
+              }
             }
           }
         }
@@ -599,7 +641,7 @@ export function LiveClient({
     return () => {
       sb.removeChannel(liveStateChannel);
     };
-  }, [sb, chatLiveId]);
+  }, [hardLeaveRtcSession, isHostMode, nextPath, router, sb, chatLiveId]);
 
   // Database-backed viewer tracking
   useEffect(() => {
@@ -799,34 +841,28 @@ export function LiveClient({
   };
 
   useEffect(() => {
-    let cleanup: null | (() => void) = null;
     let cancelled = false;
-    let tokenRefresh: NodeJS.Timeout | null = null;
+
+    const shouldConnect =
+      !!videoRef.current &&
+      !streamEnded &&
+      (isHostMode || (live.is_live && isLoggedIn && !kicked && !idlePaused));
+
+    if (!shouldConnect) {
+      if (rtcClientRef.current || rtcJoinInFlightRef.current) {
+        hardLeaveRtcSession("gated");
+      }
+      return;
+    }
+
+    if (rtcClientRef.current || rtcJoinInFlightRef.current) return;
+
+    rtcLeftRef.current = false;
+    rtcJoinInFlightRef.current = true;
+
+    rtcLog("join_start", { isHostMode, isLoggedIn, at: new Date().toISOString() });
 
     (async () => {
-      if (!videoRef.current) return;
-
-      // Don't connect to Agora if stream is not live (unless host mode)
-      if (!isHostMode && !live.is_live) {
-        console.log("[LiveClient] Stream not live - skipping Agora connection");
-        return;
-      }
-
-      if (!isHostMode && !isLoggedIn) {
-        console.log("[LiveClient] Login required - skipping Agora connection");
-        return;
-      }
-
-      if (!isHostMode && kicked) {
-        console.log("[LiveClient] Viewer kicked - skipping Agora connection");
-        return;
-      }
-
-      if (!isHostMode && idlePaused) {
-        console.log("[LiveClient] Viewer paused - skipping Agora connection");
-        return;
-      }
-
       try {
         const res = await fetch("/api/agora/token", {
           method: "POST",
@@ -839,19 +875,22 @@ export function LiveClient({
 
         if (!res.ok) {
           const errText = await res.text().catch(() => "");
-          console.error("[LiveClient] Token request failed:", res.status, errText);
+          rtcLog("token_fail", { status: res.status, errText });
           return;
         }
+
         const json = (await res.json()) as any;
-        console.log("[LiveClient] Token response:", { role: json?.role, isHostMode });
         const token = String(json?.token ?? "");
         const uidNum = Number(json?.uid ?? 0);
         const appId = String(json?.appId ?? "");
         const channel = String(json?.channel ?? "");
         const role = String(json?.role ?? "viewer");
+        const sessionKeyStr = `${role}:${channel}:${uidNum}`;
 
         if (!token || !appId || !channel) return;
+        if (cancelled) return;
 
+        rtcSessionKeyRef.current = sessionKeyStr;
         setLocalRtc({ appId, channel, uid: uidNum ? String(uidNum) : "", role });
 
         const rtcMod: any = await import("agora-rtc-sdk-ng");
@@ -859,6 +898,11 @@ export function LiveClient({
         if (cancelled) return;
 
         const client = AgoraRTC.createClient({ mode: "live", codec: "h264" });
+        rtcClientRef.current = client;
+
+        client.on("connection-state-change", (cur: any, prev: any, reason: any) => {
+          rtcLog("conn", { prev, cur, reason });
+        });
 
         client.on("user-joined", (user: any) => {
           try {
@@ -876,26 +920,6 @@ export function LiveClient({
           } catch {
           }
         });
-
-        const playRemoteIfPossible = async (user: any) => {
-          if (!videoRef.current) return;
-          try {
-            await client.subscribe(user, "video");
-            if (user?.videoTrack) {
-              user.videoTrack.play(videoRef.current!);
-              setRemoteUid(String(user.uid ?? ""));
-              setHasRemoteVideo(true);
-              setLastRtcEvent(`subscribed-video:${String(user?.uid ?? "")}`);
-            }
-          } catch {
-          }
-
-          try {
-            await client.subscribe(user, "audio");
-            user?.audioTrack?.play?.();
-          } catch {
-          }
-        };
 
         client.on("user-published", async (user: any, mediaType: any) => {
           try {
@@ -928,11 +952,10 @@ export function LiveClient({
         });
 
         await client.join(appId, channel, token, uidNum || null);
-        try {
-          setRemoteCount(Number((client.remoteUsers ?? []).length));
-          setLastRtcEvent(`joined:${channel}`);
-        } catch {
-        }
+
+        rtcLog("join_ok", { channel, uid: uidNum, role });
+        setRemoteCount(Number((client.remoteUsers ?? []).length));
+        setLastRtcEvent(`joined:${channel}`);
 
         const canHost = isHostMode && role === "host";
         setIsHost(canHost);
@@ -942,97 +965,70 @@ export function LiveClient({
           const tracks = (await AgoraRTC.createMicrophoneAndCameraTracks()) as any[];
           const mic = tracks?.[0];
           const cam = tracks?.[1];
+          rtcLocalTracksRef.current = { mic, cam };
           cam?.play(videoRef.current!);
           await client.publish([mic, cam].filter(Boolean));
           setBroadcasting(true);
-
-          cleanup = () => {
-            try {
-              setBroadcasting(false);
-              if (tokenRefresh) clearInterval(tokenRefresh);
-              client.removeAllListeners();
-              try {
-                client.unpublish([mic, cam].filter(Boolean));
-              } catch {
-              }
-              try {
-                mic?.stop?.();
-                mic?.close?.();
-              } catch {
-              }
-              try {
-                cam?.stop?.();
-                cam?.close?.();
-              } catch {
-              }
-              client.leave();
-            } catch {
-            }
-          };
         } else {
           await client.setClientRole("audience");
 
-          try {
-            const existing = (client.remoteUsers ?? []) as any[];
-            for (const u of existing) {
-              await playRemoteIfPossible(u);
-            }
-            setRemoteCount(Number((client.remoteUsers ?? []).length));
-          } catch {
-          }
-
-          tokenRefresh = setInterval(async () => {
+          rtcTokenRefreshRef.current = setInterval(async () => {
             try {
               if (cancelled) return;
-              if (!live.is_live) return;
-              if (idlePaused) return;
-              if (!isLoggedIn) return;
+              if (document.visibilityState !== "visible") {
+                hardLeaveRtcSession("tab_hidden");
+                return;
+              }
+              if (!live.is_live) {
+                hardLeaveRtcSession("stream_end");
+                return;
+              }
+              if (idlePaused || !isLoggedIn) {
+                hardLeaveRtcSession("gated");
+                return;
+              }
 
               const rr = await fetch("/api/agora/token", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                  role: "viewer",
-                  client: "web",
-                }),
+                body: JSON.stringify({ role: "viewer", client: "web" }),
               });
-              if (!rr.ok) return;
+              if (!rr.ok) {
+                hardLeaveRtcSession(`token_refresh_fail:${rr.status}`);
+                return;
+              }
               const j = (await rr.json().catch(() => null)) as any;
               const nextToken = String(j?.token ?? "");
-              if (!nextToken) return;
+              if (!nextToken) {
+                hardLeaveRtcSession("token_refresh_empty");
+                return;
+              }
               await client.renewToken(nextToken);
             } catch {
+              hardLeaveRtcSession("token_refresh_exception");
             }
-          }, 4 * 60 * 1000);
-
-          cleanup = () => {
-            try {
-              if (tokenRefresh) clearInterval(tokenRefresh);
-              client.removeAllListeners();
-              client.leave();
-            } catch {
-            }
-          };
+          }, 10 * 60 * 1000);
         }
 
         setAgoraReady(true);
-        
-        // Store cleanup function in ref so it can be called when stream ends
-        agoraCleanupRef.current = cleanup;
+        agoraCleanupRef.current = () => {
+          void hardLeaveRtcSession("agoraCleanupRef");
+        };
       } catch {
+        await hardLeaveRtcSession("join_exception");
+      } finally {
+        rtcJoinInFlightRef.current = false;
       }
     })();
 
-    // Add beforeunload handler to cleanup on tab close/refresh
     const handleBeforeUnload = () => {
-      if (cleanup) cleanup();
+      void hardLeaveRtcSession("beforeunload");
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Add visibilitychange handler to cleanup when tab is hidden (optional - more aggressive)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && cleanup) {
-        cleanup();
+      if (document.visibilityState === "hidden") {
+        void hardLeaveRtcSession("visibility_hidden");
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -1041,9 +1037,9 @@ export function LiveClient({
       cancelled = true;
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (cleanup) cleanup();
+      void hardLeaveRtcSession("effect_cleanup");
     };
-  }, [idleEpoch, idlePaused, isHostMode, live.is_live, myUserId]);
+  }, [hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, rtcLog, streamEnded]);
 
   const title = "CannaStreams";
 

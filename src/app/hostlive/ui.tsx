@@ -78,8 +78,16 @@ export function HostLiveClient({
   const seenEmoteIdsRef = useRef<Record<string, boolean>>({});
 
   const videoRef = useRef<HTMLDivElement | null>(null);
-  const agoraCleanupRef = useRef<(() => void) | null>(null);
+  const rtcClientRef = useRef<any>(null);
+  const rtcLocalTracksRef = useRef<{ mic?: any; cam?: any } | null>(null);
+  const rtcLeftRef = useRef(false);
   const autoStartedRef = useRef(false);
+
+  const rtcDebugEnabled = process.env.NODE_ENV !== "production";
+  const rtcLog = useCallback((...args: any[]) => {
+    if (!rtcDebugEnabled) return;
+    try { console.log("[RTC][host]", ...args); } catch {}
+  }, [rtcDebugEnabled]);
 
   // Chat state (read-only display)
   const [chatRows, setChatRows] = useState<LiveChatRow[]>([]);
@@ -148,15 +156,6 @@ export function HostLiveClient({
     startBroadcast();
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (agoraCleanupRef.current) {
-        agoraCleanupRef.current();
-      }
-    };
-  }, []);
-
   // Set live state in database
   async function setLiveState(nextIsLive: boolean) {
     try {
@@ -171,6 +170,47 @@ export function HostLiveClient({
       console.error("Failed to set live state:", e);
     }
   }
+
+  const hardLeaveRtcSession = useCallback(async (reason: string) => {
+    if (rtcLeftRef.current) return;
+    rtcLeftRef.current = true;
+    rtcLog("leave", { reason, at: new Date().toISOString() });
+
+    const client = rtcClientRef.current;
+    const tracks = rtcLocalTracksRef.current;
+
+    try {
+      try { client?.removeAllListeners?.(); } catch {}
+
+      try {
+        if (tracks?.mic || tracks?.cam) {
+          try { await client?.unpublish?.([tracks.mic, tracks.cam].filter(Boolean)); } catch {}
+        }
+      } catch {}
+
+      try { tracks?.mic?.stop?.(); } catch {}
+      try { tracks?.mic?.close?.(); } catch {}
+      try { tracks?.cam?.stop?.(); } catch {}
+      try { tracks?.cam?.close?.(); } catch {}
+
+      try { await client?.leave?.(); } catch {}
+    } finally {
+      rtcLocalTracksRef.current = null;
+      rtcClientRef.current = null;
+
+      setBroadcasting(false);
+      setAgoraReady(false);
+
+      try { await setLiveState(false); } catch {}
+    }
+  }, [rtcLog]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      void hardLeaveRtcSession("unmount");
+    };
+  }, [hardLeaveRtcSession]);
 
   // Start broadcasting
   async function startBroadcast() {
@@ -208,6 +248,12 @@ export function HostLiveClient({
       const AgoraRTC = rtcMod?.default ?? rtcMod;
 
       const client = AgoraRTC.createClient({ mode: "live", codec: "h264" });
+      rtcClientRef.current = client;
+      rtcLeftRef.current = false;
+
+      client.on("connection-state-change", (cur: any, prev: any, reason: any) => {
+        rtcLog("conn", { prev, cur, reason });
+      });
 
       // Join channel
       await client.join(appId, channel, token, uid);
@@ -216,6 +262,7 @@ export function HostLiveClient({
       // Create and publish tracks
       const tracks = await AgoraRTC.createMicrophoneAndCameraTracks();
       const [mic, cam] = tracks;
+      rtcLocalTracksRef.current = { mic, cam };
 
       // Play local video
       cam?.play(videoRef.current!);
@@ -234,30 +281,36 @@ export function HostLiveClient({
         setViewerCount(client.remoteUsers?.length ?? 0);
       });
 
-      // Cleanup function
-      agoraCleanupRef.current = async () => {
-        try {
-          setBroadcasting(false);
-          await setLiveState(false);
-          try { client.unpublish([mic, cam].filter(Boolean)); } catch {}
-          try { mic?.stop?.(); mic?.close?.(); } catch {}
-          try { cam?.stop?.(); cam?.close?.(); } catch {}
-          try { client.leave(); } catch {}
-        } catch {}
-      };
-
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      await hardLeaveRtcSession("start_error");
     }
   }
 
   // Stop broadcasting and exit
   async function stopBroadcast() {
-    if (agoraCleanupRef.current) {
-      await agoraCleanupRef.current();
-    }
+    await hardLeaveRtcSession("stop_button");
     router.push("/");
   }
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      void hardLeaveRtcSession("beforeunload");
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        void hardLeaveRtcSession("visibility_hidden");
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [hardLeaveRtcSession]);
 
   // Load chat messages
   useEffect(() => {

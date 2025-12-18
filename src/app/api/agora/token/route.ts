@@ -62,9 +62,7 @@ export async function POST(request: NextRequest) {
     const expire =
       requestedRole === "host"
         ? now + 60 * 60
-        : body.client === "web"
-          ? now + 5 * 60
-          : now + 60 * 60;
+        : now + 15 * 60;
 
     const hostUserId = String(process.env.CFM_LIVE_HOST_USER_ID ?? "").trim();
 
