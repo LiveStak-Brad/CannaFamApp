@@ -8,6 +8,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { todayISODate } from "@/lib/utils";
 import { HomeLinkVisits } from "./ui";
 import { SiteGiftButton } from "@/app/feed/ui";
+import { HubCheckInButton, HubSpinButton } from "@/app/hub/ui";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,38 @@ export default async function Home() {
       discordJoined = false;
     }
   }
+
+  // Fetch daily spin and check-in status
+  let checkedToday = false;
+  let spunToday = false;
+  let spunPointsToday: number | null = null;
+  if (canEarn) {
+    const today = todayISODate();
+    try {
+      const { data: checkin } = await sb
+        .from("cfm_checkins")
+        .select("id")
+        .eq("user_id", user!.id)
+        .eq("checkin_date", today)
+        .maybeSingle();
+      checkedToday = !!checkin;
+    } catch {
+      checkedToday = false;
+    }
+
+    try {
+      const { data: spin } = await sb
+        .from("cfm_daily_spins")
+        .select("id, points_awarded")
+        .eq("user_id", user!.id)
+        .eq("spin_date", today)
+        .maybeSingle();
+      spunToday = !!spin;
+      spunPointsToday = spin?.points_awarded ?? null;
+    } catch {
+      spunToday = false;
+    }
+  }
   return (
     <Container>
       <div className="space-y-5">
@@ -113,6 +146,37 @@ export default async function Home() {
             <p className="text-[color:var(--muted)]">50 free coins are available via the link in the Favorited bio.</p>
           </div>
         </Card>
+
+        {canEarn ? (
+          <Card title="Daily Activities">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">🎡 Daily Spin</div>
+                  <div className="mt-1 text-xs text-[color:var(--muted)]">
+                    One spin per day. Earn 1–5 points.
+                  </div>
+                  {spunPointsToday !== null ? (
+                    <div className="mt-1 text-xs text-[color:var(--muted)]">
+                      Today: +{spunPointsToday}
+                    </div>
+                  ) : null}
+                </div>
+                <HubSpinButton disabled={!canEarn} spunToday={spunToday} />
+              </div>
+              <div className="border-t border-[color:var(--border)]" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">✅ Daily Check-in</div>
+                  <div className="mt-1 text-xs text-[color:var(--muted)]">
+                    +1 point per day
+                  </div>
+                </div>
+                <HubCheckInButton disabled={!canEarn} checkedToday={checkedToday} />
+              </div>
+            </div>
+          </Card>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3">
           {!member ? (
