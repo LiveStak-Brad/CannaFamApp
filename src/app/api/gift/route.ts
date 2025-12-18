@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdminOrNull } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { env } from "@/lib/env";
@@ -48,8 +49,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create gift record
-    const { data: giftRow, error: giftErr } = await sb
+    // Create gift record using admin client to bypass RLS
+    const admin = supabaseAdminOrNull();
+    const dbClient = admin || sb;
+    
+    const { data: giftRow, error: giftErr } = await dbClient
       .from("cfm_post_gifts")
       .insert({
         post_id: postId,
