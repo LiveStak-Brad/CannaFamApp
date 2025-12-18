@@ -1,6 +1,5 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
-import { PointsExplainerButton } from "@/components/ui/points-explainer";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -85,9 +84,6 @@ export default async function AwardsPage() {
           <p className="text-sm text-[color:var(--muted)]">
             Weekly winners and shoutouts.
           </p>
-          <div className="pt-2">
-            <PointsExplainerButton />
-          </div>
         </div>
 
         <Card title="Weekly Awards">
