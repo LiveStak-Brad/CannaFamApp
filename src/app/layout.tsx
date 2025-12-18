@@ -36,6 +36,8 @@ export default async function RootLayout({
 }>) {
   let navState: NavSessionState = "guest";
   let anonymousGiftTotalCents = 0;
+  let isLive = false;
+  let hostUserId: string | null = null;
 
   const user = await getAuthedUserOrNull();
   try {
@@ -45,6 +47,18 @@ export default async function RootLayout({
   } catch {
     anonymousGiftTotalCents = 0;
   }
+
+  try {
+    const sb = await supabaseServer();
+    const { data } = await sb.rpc("cfm_get_live_state");
+    isLive = !!(data as any)?.is_live;
+    hostUserId = (data as any)?.host_user_id ?? null;
+  } catch {
+    isLive = false;
+    hostUserId = null;
+  }
+
+  const isHost = !!user && !!hostUserId && user.id === hostUserId;
   if (user) {
     const sb = await supabaseServer();
     const { data: adminRow } = await sb
@@ -78,7 +92,7 @@ export default async function RootLayout({
         <TopNav right={<TopNavAuth />} />
         <LiveIndicator />
         {children}
-        <BottomNav state={navState} anonymousGiftTotalCents={anonymousGiftTotalCents} />
+        <BottomNav state={navState} anonymousGiftTotalCents={anonymousGiftTotalCents} isLive={isLive} isHost={isHost} />
       </body>
     </html>
   );

@@ -22,9 +22,13 @@ const NAV_ITEMS: NavItem[] = [
 export function BottomNav({
   state,
   anonymousGiftTotalCents,
+  isLive = false,
+  isHost = false,
 }: {
   state: NavSessionState;
   anonymousGiftTotalCents?: number;
+  isLive?: boolean;
+  isHost?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -33,7 +37,40 @@ export function BottomNav({
       <div className="mx-auto w-full max-w-xl px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="flex items-stretch justify-around gap-1">
           {NAV_ITEMS.map((item) => {
+            const isLiveItem = item.href === "/live";
             const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            
+            // Special handling for Live button
+            if (isLiveItem) {
+              const liveHref = isHost ? "/live-host" : "/live";
+              const liveLabel = isHost ? (isLive ? "Streaming" : "Go Live") : (isLive ? "Live" : "Live Soon");
+              const disabled = !isHost && !isLive;
+              
+              const cls =
+                "flex flex-col items-center justify-center rounded-xl px-2 py-1.5 text-center transition min-w-[56px]" +
+                (active
+                  ? " bg-[color:var(--accent)] text-white"
+                  : disabled
+                    ? " text-[color:var(--muted)] cursor-not-allowed opacity-50"
+                    : " text-[color:var(--foreground)] hover:text-[color:var(--accent)] hover:bg-[color:var(--border)]");
+
+              if (disabled) {
+                return (
+                  <span key={item.href} className={cls}>
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-[10px] font-semibold">{liveLabel}</span>
+                  </span>
+                );
+              }
+
+              return (
+                <Link key={item.href} href={liveHref} className={cls}>
+                  <span className="text-lg">{isLive ? "🔴" : item.icon}</span>
+                  <span className="text-[10px] font-semibold">{liveLabel}</span>
+                </Link>
+              );
+            }
+
             const cls =
               "flex flex-col items-center justify-center rounded-xl px-2 py-1.5 text-center transition min-w-[56px]" +
               (active
