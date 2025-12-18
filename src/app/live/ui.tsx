@@ -643,6 +643,46 @@ export function LiveClient({
     };
   }, [hardLeaveRtcSession, isHostMode, nextPath, router, sb, chatLiveId]);
 
+  // Fallback: poll live state to ensure viewers disconnect even if realtime is blocked by RLS
+  useEffect(() => {
+    if (isHostMode) return;
+
+    const liveId = String(chatLiveId ?? "").trim();
+    if (!liveId) return;
+
+    if (streamEnded) return;
+    if (!live.is_live) return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const { data } = await sb.rpc("cfm_get_live_state");
+        if (cancelled) return;
+        const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+        const nextLive = !!row?.is_live;
+
+        if (!nextLive) {
+          setStreamEnded(true);
+          setLive((prev) => ({ ...(prev as any), ...(row as any) }));
+          await hardLeaveRtcSession("stream_end_poll");
+          try {
+            router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/");
+            router.refresh();
+          } catch {}
+        }
+      } catch {
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [chatLiveId, hardLeaveRtcSession, isHostMode, live.is_live, nextPath, router, sb, streamEnded]);
+
   // Database-backed viewer tracking
   useEffect(() => {
     const liveId = String(chatLiveId ?? "").trim();
