@@ -66,7 +66,7 @@ export function BottomNav({
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--border)] bg-[color:var(--card)] backdrop-blur">
-      <div className="mx-auto w-full max-w-xl px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+      <div className="mx-auto w-full max-w-xl px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="flex items-stretch gap-1 overflow-x-auto overscroll-x-contain touch-pan-x snap-x snap-mandatory [-webkit-overflow-scrolling:touch]">
           {items.map((item) => {
             const active = pathname === item.href;
