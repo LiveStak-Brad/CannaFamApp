@@ -395,6 +395,19 @@ create table if not exists public.cfm_live_mutes (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.cfm_live_kicks (
+  id uuid primary key default gen_random_uuid(),
+  live_id uuid not null references public.cfm_live_state(id) on delete cascade,
+  kicked_user_id uuid not null,
+  kicked_by uuid,
+  reason text,
+  created_at timestamptz not null default now(),
+  unique (live_id, kicked_user_id)
+);
+
+create index if not exists cfm_live_kicks_live_user_idx
+  on public.cfm_live_kicks (live_id, kicked_user_id);
+
 create index if not exists cfm_live_mutes_user_until_idx
   on public.cfm_live_mutes (muted_user_id, until desc);
 
@@ -534,6 +547,8 @@ begin
   -- Clear chat history when stream ends (for fresh chat each live)
   if not next_is_live then
     delete from public.cfm_live_chat where live_id = ls.id;
+    delete from public.cfm_live_viewers where live_id = ls.id;
+    delete from public.cfm_live_kicks where live_id = ls.id;
   end if;
 
   return query
@@ -828,6 +843,7 @@ alter table public.cfm_live_state enable row level security;
 alter table public.cfm_live_chat enable row level security;
 alter table public.cfm_live_mods enable row level security;
 alter table public.cfm_live_mutes enable row level security;
+alter table public.cfm_live_kicks enable row level security;
 
 -- cfm_applications
 create policy "applications_insert_anyone"
@@ -1269,6 +1285,37 @@ for delete
 to authenticated
 using (public.cfm_is_admin() or public.cfm_is_mod());
 
+create policy "live_kicks_select_self_mod_or_admin"
+on public.cfm_live_kicks
+for select
+to authenticated
+using (
+  public.cfm_is_admin()
+  or public.cfm_is_mod()
+  or exists (select 1 from public.cfm_live_state ls where ls.id = live_id and ls.host_user_id = auth.uid())
+  or kicked_user_id = auth.uid()
+);
+
+create policy "live_kicks_insert_host_mod_or_admin"
+on public.cfm_live_kicks
+for insert
+to authenticated
+with check (
+  public.cfm_is_admin()
+  or public.cfm_is_mod()
+  or exists (select 1 from public.cfm_live_state ls where ls.id = live_id and ls.host_user_id = auth.uid())
+);
+
+create policy "live_kicks_delete_host_mod_or_admin"
+on public.cfm_live_kicks
+for delete
+to authenticated
+using (
+  public.cfm_is_admin()
+  or public.cfm_is_mod()
+  or exists (select 1 from public.cfm_live_state ls where ls.id = live_id and ls.host_user_id = auth.uid())
+);
+
 create policy "live_chat_select_anyone"
 on public.cfm_live_chat
 for select
@@ -1577,6 +1624,7 @@ declare
   v_user_id uuid := auth.uid();
   v_display_name text;
   v_live_exists boolean;
+  v_live_is_live boolean;
   v_is_new_join boolean := false;
 begin
   if v_user_id is null then
@@ -1587,6 +1635,20 @@ begin
   select exists(select 1 from public.cfm_live_state where id = p_live_id) into v_live_exists;
   if not v_live_exists then
     return json_build_object('error', 'Live session not found');
+  end if;
+
+  select is_live from public.cfm_live_state where id = p_live_id into v_live_is_live;
+  if not coalesce(v_live_is_live, false) then
+    return json_build_object('error', 'Live is not active');
+  end if;
+
+  if exists (
+    select 1
+    from public.cfm_live_kicks k
+    where k.live_id = p_live_id
+      and k.kicked_user_id = v_user_id
+  ) then
+    return json_build_object('error', 'You were removed by the host');
   end if;
 
   -- Get display name from cfm_public_member_ids (favorited_username)
@@ -1688,9 +1750,30 @@ set search_path = public
 as $$
 declare
   v_user_id uuid := auth.uid();
+  v_live_is_live boolean;
 begin
   if v_user_id is null then
     return json_build_object('error', 'Not authenticated');
+  end if;
+
+  if exists (
+    select 1
+    from public.cfm_live_kicks k
+    where k.live_id = p_live_id
+      and k.kicked_user_id = v_user_id
+  ) then
+    update public.cfm_live_viewers
+    set left_at = now()
+    where live_id = p_live_id and user_id = v_user_id;
+    return json_build_object('error', 'You were removed by the host');
+  end if;
+
+  select is_live from public.cfm_live_state where id = p_live_id into v_live_is_live;
+  if not coalesce(v_live_is_live, false) then
+    update public.cfm_live_viewers
+    set left_at = now()
+    where live_id = p_live_id and user_id = v_user_id;
+    return json_build_object('error', 'Live is not active');
   end if;
 
   update public.cfm_live_viewers
@@ -1702,6 +1785,49 @@ end;
 $$;
 
 grant execute on function public.cfm_viewer_heartbeat(uuid) to authenticated;
+
+create or replace function public.cfm_kick_live_viewer(
+  p_live_id uuid,
+  p_user_id uuid,
+  p_reason text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_host uuid;
+begin
+  if v_actor is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  select host_user_id into v_host from public.cfm_live_state where id = p_live_id;
+
+  if not (public.cfm_is_admin() or public.cfm_is_mod() or v_host = v_actor) then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  insert into public.cfm_live_kicks (live_id, kicked_user_id, kicked_by, reason)
+  values (p_live_id, p_user_id, v_actor, p_reason)
+  on conflict (live_id, kicked_user_id)
+  do update set
+    kicked_by = excluded.kicked_by,
+    reason = excluded.reason,
+    created_at = now();
+
+  update public.cfm_live_viewers
+  set left_at = now()
+  where live_id = p_live_id and user_id = p_user_id;
+
+  return json_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.cfm_kick_live_viewer(uuid, uuid, text) to authenticated;
 
 -- Add to realtime publication
 do $$
@@ -1715,6 +1841,25 @@ begin
         and tablename = 'cfm_live_viewers'
     ) then
       alter publication supabase_realtime add table public.cfm_live_viewers;
+    end if;
+  exception
+    when undefined_table then null;
+    when undefined_object then null;
+  end;
+end
+$$;
+
+do $$
+begin
+  begin
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'cfm_live_kicks'
+    ) then
+      alter publication supabase_realtime add table public.cfm_live_kicks;
     end if;
   exception
     when undefined_table then null;

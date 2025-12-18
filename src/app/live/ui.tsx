@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,68 @@ export function LiveClient({
   const [viewerListOpen, setViewerListOpen] = useState(false);
   const [lastRtcEvent, setLastRtcEvent] = useState<string | null>(null);
 
+  const [idlePaused, setIdlePaused] = useState(false);
+  const [idleEpoch, setIdleEpoch] = useState(0);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityAtRef = useRef<number>(Date.now());
+
+  function resumeWatching() {
+    if (isHostMode) return;
+    lastActivityAtRef.current = Date.now();
+    setIdlePaused(false);
+    setIdleEpoch((n) => n + 1);
+  }
+
+  useEffect(() => {
+    if (isHostMode) return;
+
+    const onActivity = () => {
+      lastActivityAtRef.current = Date.now();
+    };
+
+    const events: Array<keyof WindowEventMap> = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+    ];
+
+    for (const ev of events) {
+      window.addEventListener(ev, onActivity, { passive: true } as any);
+    }
+
+    const checkIdle = () => {
+      if (idlePaused) return;
+      if (!live.is_live) return;
+      const last = lastActivityAtRef.current || Date.now();
+      if (Date.now() - last >= 5 * 60 * 1000) {
+        console.log("[LiveClient] Viewer idle timeout - disconnecting Agora to stop billing");
+        try {
+          if (agoraCleanupRef.current) {
+            agoraCleanupRef.current();
+            agoraCleanupRef.current = null;
+          }
+        } catch {
+        }
+        setAgoraReady(false);
+        setHasRemoteVideo(false);
+        setRemoteUid(null);
+        setIdlePaused(true);
+      }
+    };
+
+    idleTimerRef.current = setInterval(checkIdle, 5000);
+
+    return () => {
+      for (const ev of events) {
+        window.removeEventListener(ev, onActivity as any);
+      }
+      if (idleTimerRef.current) clearInterval(idleTimerRef.current);
+      idleTimerRef.current = null;
+    };
+  }, [idlePaused, isHostMode, live.is_live]);
+
   // Gift flash animation state
   const [giftFlash, setGiftFlash] = useState<{ message: string; key: number } | null>(null);
   const giftFlashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -190,8 +252,10 @@ export function LiveClient({
   const lastLocalEmoteAtRef = useRef<number>(0);
 
   const isLoggedIn = !!myUserId;
+  const [kicked, setKicked] = useState(false);
+  const [kickReason, setKickReason] = useState<string | null>(null);
 
-  async function loadTopGifters() {
+  const loadTopGifters = useCallback(async () => {
     try {
       const [r1, r2, r3] = await Promise.all([
         sb.rpc("cfm_top_gifters", { period: "today" }),
@@ -207,7 +271,7 @@ export function LiveClient({
     } catch (e) {
       console.error("[loadTopGifters] error:", e);
     }
-  }
+  }, [sb]);
 
   const medal = (r: number) => {
     if (r === 1) return { label: "🥇", cls: "border-yellow-400/40 bg-yellow-400/15" };
@@ -294,6 +358,94 @@ export function LiveClient({
     const fallback = String((initialLive as any)?.id ?? "").trim();
     return fallback;
   }, [initialLive, live]);
+
+  const kickViewer = useCallback(
+    async (viewerUserId: string) => {
+      const lid = String(chatLiveId ?? "").trim();
+      const uid = String(viewerUserId ?? "").trim();
+      if (!lid || !uid) return;
+      if (uid === myUserId) return;
+      try {
+        await sb.rpc("cfm_kick_live_viewer", {
+          p_live_id: lid,
+          p_user_id: uid,
+          p_reason: null,
+        });
+        toast("Viewer removed", "success");
+      } catch {
+        toast("Kick failed", "error");
+      }
+    },
+    [chatLiveId, myUserId, sb],
+  );
+
+  useEffect(() => {
+    if (isHostMode) return;
+    if (!isLoggedIn || !myUserId) {
+      setKicked(false);
+      setKickReason(null);
+      return;
+    }
+
+    const liveId = String(chatLiveId ?? "").trim();
+    if (!liveId) return;
+
+    let cancelled = false;
+
+    const disconnect = () => {
+      try {
+        if (agoraCleanupRef.current) {
+          agoraCleanupRef.current();
+          agoraCleanupRef.current = null;
+        }
+      } catch {
+      }
+      setAgoraReady(false);
+      setHasRemoteVideo(false);
+      setRemoteUid(null);
+    };
+
+    (async () => {
+      try {
+        const { data } = await sb
+          .from("cfm_live_kicks")
+          .select("id,reason")
+          .eq("live_id", liveId)
+          .eq("kicked_user_id", myUserId)
+          .maybeSingle();
+        if (cancelled) return;
+        if (data?.id) {
+          setKicked(true);
+          setKickReason(String((data as any)?.reason ?? "").trim() || null);
+          disconnect();
+        }
+      } catch {
+      }
+    })();
+
+    const ch = sb
+      .channel(`live-kicks-${liveId}-${myUserId}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "INSERT", schema: "public", table: "cfm_live_kicks", filter: `live_id=eq.${liveId}` },
+        (payload: any) => {
+          const row = (payload as any)?.new ?? null;
+          const kickedUserId = String(row?.kicked_user_id ?? "").trim();
+          if (kickedUserId && kickedUserId === myUserId) {
+            setKicked(true);
+            setKickReason(String(row?.reason ?? "").trim() || null);
+            disconnect();
+            toast("Removed by host", "error");
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      sb.removeChannel(ch);
+    };
+  }, [chatLiveId, isHostMode, isLoggedIn, myUserId, sb]);
 
   // Auto-start live when host opens /hostlive
   useEffect(() => {
@@ -414,7 +566,7 @@ export function LiveClient({
     return () => {
       mounted = false;
     };
-  }, [sb, chatLiveId]);
+  }, [loadTopGifters, sb, chatLiveId]);
 
   // Subscribe to live state changes to auto-disconnect when stream ends
   useEffect(() => {
@@ -453,6 +605,10 @@ export function LiveClient({
   useEffect(() => {
     const liveId = String(chatLiveId ?? "").trim();
     if (!liveId) return;
+    if (!live.is_live) return;
+    if (idlePaused) return;
+    if (!isLoggedIn && !isHostMode) return;
+    if (!isHostMode && kicked) return;
 
     // Load viewers (works for all users)
     const loadViewers = async () => {
@@ -497,10 +653,7 @@ export function LiveClient({
         loadViewers();
       }, 30000);
     } else {
-      // Still refresh viewer list periodically for non-logged-in users
-      viewerHeartbeatRef.current = setInterval(() => {
-        loadViewers();
-      }, 15000);
+      // Logged-out viewers cannot watch; don't poll viewer list.
     }
 
     // Subscribe to realtime changes on cfm_live_viewers
@@ -529,7 +682,7 @@ export function LiveClient({
       clearTimeout(quickPoll2);
       sb.removeChannel(viewerChannel);
     };
-  }, [sb, chatLiveId, myUserId]);
+  }, [idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, sb, chatLiveId, myUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -573,7 +726,7 @@ export function LiveClient({
       loadTopGifters();
     }, 30000);
     return () => clearInterval(t);
-  }, [sb]);
+  }, [loadTopGifters]);
 
   useEffect(() => {
     try {
@@ -648,6 +801,7 @@ export function LiveClient({
   useEffect(() => {
     let cleanup: null | (() => void) = null;
     let cancelled = false;
+    let tokenRefresh: NodeJS.Timeout | null = null;
 
     (async () => {
       if (!videoRef.current) return;
@@ -658,11 +812,29 @@ export function LiveClient({
         return;
       }
 
+      if (!isHostMode && !isLoggedIn) {
+        console.log("[LiveClient] Login required - skipping Agora connection");
+        return;
+      }
+
+      if (!isHostMode && kicked) {
+        console.log("[LiveClient] Viewer kicked - skipping Agora connection");
+        return;
+      }
+
+      if (!isHostMode && idlePaused) {
+        console.log("[LiveClient] Viewer paused - skipping Agora connection");
+        return;
+      }
+
       try {
         const res = await fetch("/api/agora/token", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ role: isHostMode ? "host" : "viewer", client: "web" }),
+          body: JSON.stringify({
+            role: isHostMode ? "host" : "viewer",
+            client: "web",
+          }),
         });
 
         if (!res.ok) {
@@ -777,6 +949,7 @@ export function LiveClient({
           cleanup = () => {
             try {
               setBroadcasting(false);
+              if (tokenRefresh) clearInterval(tokenRefresh);
               client.removeAllListeners();
               try {
                 client.unpublish([mic, cam].filter(Boolean));
@@ -808,8 +981,33 @@ export function LiveClient({
           } catch {
           }
 
+          tokenRefresh = setInterval(async () => {
+            try {
+              if (cancelled) return;
+              if (!live.is_live) return;
+              if (idlePaused) return;
+              if (!isLoggedIn) return;
+
+              const rr = await fetch("/api/agora/token", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  role: "viewer",
+                  client: "web",
+                }),
+              });
+              if (!rr.ok) return;
+              const j = (await rr.json().catch(() => null)) as any;
+              const nextToken = String(j?.token ?? "");
+              if (!nextToken) return;
+              await client.renewToken(nextToken);
+            } catch {
+            }
+          }, 4 * 60 * 1000);
+
           cleanup = () => {
             try {
+              if (tokenRefresh) clearInterval(tokenRefresh);
               client.removeAllListeners();
               client.leave();
             } catch {
@@ -845,7 +1043,7 @@ export function LiveClient({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (cleanup) cleanup();
     };
-  }, [isHostMode, live.is_live]);
+  }, [idleEpoch, idlePaused, isHostMode, live.is_live, myUserId]);
 
   const title = "CannaStreams";
 
@@ -949,6 +1147,45 @@ export function LiveClient({
         <div className="mx-auto w-full max-w-[420px]">
           <div className="relative aspect-[9/16] w-full overflow-hidden rounded-3xl border border-white/10 bg-black">
             <div ref={videoRef} className="absolute inset-0" />
+
+            {!isHostMode && !isLoggedIn ? (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6">
+                <div className="w-full max-w-[320px] rounded-2xl border border-white/10 bg-black/60 p-5 text-center backdrop-blur">
+                  <div className="text-base font-semibold text-white">Log in to watch</div>
+                  <div className="mt-2 text-sm text-white/70">Viewing requires an account to prevent watch-time abuse.</div>
+                  <Button type="button" className="mt-4 w-full" onClick={() => router.push("/login")}
+                  >
+                    Go to login
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {!isHostMode && isLoggedIn && kicked ? (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6">
+                <div className="w-full max-w-[320px] rounded-2xl border border-white/10 bg-black/60 p-5 text-center backdrop-blur">
+                  <div className="text-base font-semibold text-white">Removed by host</div>
+                  <div className="mt-2 text-sm text-white/70">
+                    {kickReason ? kickReason : "You were removed from this live."}
+                  </div>
+                  <Button type="button" className="mt-4 w-full" onClick={() => router.push(nextPath)}>
+                    Go back
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {idlePaused && !isHostMode ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-6">
+                <div className="w-full max-w-[320px] rounded-2xl border border-white/10 bg-black/60 p-5 text-center backdrop-blur">
+                  <div className="text-base font-semibold text-white">Paused to save watch time</div>
+                  <div className="mt-2 text-sm text-white/70">No activity detected for 5 minutes.</div>
+                  <Button type="button" className="mt-4 w-full" onClick={resumeWatching}>
+                    Tap to continue watching
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
               {fallingEmotes.map((e) => (
@@ -1259,18 +1496,18 @@ export function LiveClient({
         {topModalOpen ? (
           <div className="fixed inset-0 z-[60] bg-[#0b0b0c]">
             <div className="mx-auto flex h-full w-full max-w-xl flex-col">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
-                <div className="text-lg font-bold text-white">💰 Top Gifters</div>
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-sm font-semibold text-white">Top Gifters</div>
                 <button
                   type="button"
-                  className="rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-bold text-white/80 hover:bg-white/10"
                   onClick={() => setTopModalOpen(false)}
                 >
                   Close
                 </button>
               </div>
 
-              <div className="flex gap-2 px-4 pt-4">
+              <div className="flex gap-2">
                 <button
                   type="button"
                   className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
@@ -1383,10 +1620,21 @@ export function LiveClient({
                             {v.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="text-sm text-white">{v.name}</div>
-                          {v.isOnline ? (
-                            <span className="ml-auto text-xs text-green-400">● Online</span>
+                          {isHost && myUserId && v.id !== myUserId ? (
+                            <button
+                              type="button"
+                              className="ml-auto rounded-full bg-[#d11f2a] px-3 py-1 text-xs font-bold text-white"
+                              onClick={() => kickViewer(v.id)}
+                            >
+                              Kick
+                            </button>
                           ) : (
-                            <span className="ml-auto text-xs text-white/40">Offline</span>
+                            <span className="ml-auto" />
+                          )}
+                          {v.isOnline ? (
+                            <span className="text-xs text-green-400">● Online</span>
+                          ) : (
+                            <span className="text-xs text-white/40">Offline</span>
                           )}
                         </div>
                       ))}

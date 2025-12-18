@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
@@ -29,12 +30,15 @@ export async function POST(request: NextRequest) {
     const appId = mustEnv("AGORA_APP_ID");
     const certificate = mustEnv("AGORA_APP_CERTIFICATE");
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
     const authHeader = String(request.headers.get("authorization") ?? "").trim();
     const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
 
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+      supabaseUrl,
+      supabaseAnonKey,
       {
         cookies: {
           getAll() {
@@ -55,11 +59,23 @@ export async function POST(request: NextRequest) {
 
     const channel = "cannafam-live";
     const now = Math.floor(Date.now() / 1000);
-    const expire = now + 60 * 60;
+    const expire =
+      requestedRole === "host"
+        ? now + 60 * 60
+        : body.client === "web"
+          ? now + 5 * 60
+          : now + 60 * 60;
 
     const hostUserId = String(process.env.CFM_LIVE_HOST_USER_ID ?? "").trim();
 
     const isHost = !!user && requestedRole === "host" && hostUserId && user.id === hostUserId;
+
+    if (requestedRole === "viewer" && !user) {
+      return NextResponse.json(
+        { error: "Login required to watch" },
+        { status: 401 },
+      );
+    }
 
     if (requestedRole === "host" && !isHost) {
       return NextResponse.json(
@@ -89,12 +105,38 @@ export async function POST(request: NextRequest) {
           { status: 403 },
         );
       }
+
+      const liveId = String(live?.id ?? "").trim();
+      if (liveId && user?.id) {
+        const client = bearer
+          ? createClient(supabaseUrl, supabaseAnonKey, {
+              auth: { persistSession: false },
+              global: { headers: { Authorization: `Bearer ${bearer}` } },
+            })
+          : supabase;
+
+        const { data: kick } = await client
+          .from("cfm_live_kicks")
+          .select("id")
+          .eq("live_id", liveId)
+          .eq("kicked_user_id", user.id)
+          .maybeSingle();
+
+        if (kick?.id) {
+          return NextResponse.json(
+            { error: "Removed by host" },
+            { status: 403 },
+          );
+        }
+      }
     }
 
     const { RtcTokenBuilder, RtcRole } = require("agora-access-token") as any;
     const role = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
 
-    const uid = isHost ? uidFromUuid(String(user?.id ?? "")) : Math.floor(Math.random() * 2000000000) + 1;
+    const uid = isHost
+      ? uidFromUuid(String(user?.id ?? ""))
+      : uidFromUuid(String(user?.id ?? ""));
     const token = RtcTokenBuilder.buildTokenWithUid(appId, certificate, channel, uid, role, expire);
 
     return NextResponse.json({
