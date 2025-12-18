@@ -15,8 +15,9 @@ export async function TopNavAuth() {
   let hostUserId: string | null = null;
   try {
     const { data } = await sb.rpc("cfm_get_live_state");
-    isLive = !!(data as any)?.is_live;
-    hostUserId = (data as any)?.host_user_id ?? null;
+    const row = Array.isArray(data) ? (data[0] as any) : (data as any);
+    isLive = !!row?.is_live;
+    hostUserId = row?.host_user_id ?? null;
   } catch {
     isLive = false;
     hostUserId = null;
