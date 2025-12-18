@@ -115,6 +115,9 @@ export async function TopNavAuth() {
             <Link href="/community-guidelines" className={mobileMenuItemClass}>
               Community Guidelines
             </Link>
+            <Link href="/support" className={mobileMenuItemClass}>
+              Support
+            </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/account" className={mobileMenuItemClass}>
               ⚙️ Account Settings
@@ -197,6 +200,9 @@ export async function TopNavAuth() {
             </Link>
             <Link href="/community-guidelines" className={mobileMenuItemClass}>
               Community Guidelines
+            </Link>
+            <Link href="/support" className={mobileMenuItemClass}>
+              Support
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/account" className={mobileMenuItemClass}>

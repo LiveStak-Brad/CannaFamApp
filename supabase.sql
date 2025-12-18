@@ -2372,3 +2372,130 @@ end;
 $$;
 
 grant execute on function public.cfm_disable_my_account() to authenticated;
+
+create table if not exists public.cfm_push_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  token text not null,
+  platform text not null,
+  enabled boolean not null default true,
+  updated_at timestamptz not null default now(),
+  unique (token),
+  constraint cfm_push_tokens_platform_check check (platform in ('ios','android','web'))
+);
+
+create index if not exists cfm_push_tokens_user_id_idx
+  on public.cfm_push_tokens (user_id);
+
+alter table public.cfm_push_tokens enable row level security;
+
+drop policy if exists "push_tokens_select_own" on public.cfm_push_tokens;
+drop policy if exists "push_tokens_insert_own" on public.cfm_push_tokens;
+drop policy if exists "push_tokens_update_own" on public.cfm_push_tokens;
+drop policy if exists "push_tokens_delete_own" on public.cfm_push_tokens;
+
+create policy "push_tokens_select_own"
+on public.cfm_push_tokens
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "push_tokens_insert_own"
+on public.cfm_push_tokens
+for insert
+to authenticated
+with check (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "push_tokens_update_own"
+on public.cfm_push_tokens
+for update
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid())
+with check (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "push_tokens_delete_own"
+on public.cfm_push_tokens
+for delete
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create or replace function public.cfm_register_push_token(
+  token text,
+  platform text
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_token text := btrim(coalesce(token, ''));
+  v_platform text := lower(btrim(coalesce(platform, '')));
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  if v_token = '' then
+    return json_build_object('error', 'Missing token');
+  end if;
+
+  if v_platform not in ('ios', 'android', 'web') then
+    return json_build_object('error', 'Invalid platform');
+  end if;
+
+  insert into public.cfm_push_tokens (user_id, token, platform, enabled, updated_at)
+  values (v_user_id, v_token, v_platform, true, now())
+  on conflict (token)
+  do update set
+    user_id = excluded.user_id,
+    platform = excluded.platform,
+    enabled = true,
+    updated_at = now();
+
+  return json_build_object('success', true);
+exception
+  when others then
+    return json_build_object('error', 'Failed to register push token');
+end;
+$$;
+
+grant execute on function public.cfm_register_push_token(text, text) to authenticated;
+
+create or replace function public.cfm_disable_push_token(
+  token text
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_token text := btrim(coalesce(token, ''));
+begin
+  if v_user_id is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  if v_token = '' then
+    return json_build_object('error', 'Missing token');
+  end if;
+
+  update public.cfm_push_tokens
+  set enabled = false,
+      updated_at = now()
+  where token = v_token
+    and (public.cfm_is_admin() or user_id = v_user_id);
+
+  return json_build_object('success', true);
+exception
+  when others then
+    return json_build_object('error', 'Failed to disable push token');
+end;
+$$;
+
+grant execute on function public.cfm_disable_push_token(text) to authenticated;

@@ -9,6 +9,7 @@ import { todayISODate } from "@/lib/utils";
 import { HomeLinkVisits } from "./ui";
 import { SiteGiftButton } from "@/app/feed/ui";
 import { HubCheckInButton, HubSpinButton } from "@/app/hub/ui";
+import { SupportChecklist } from "@/app/support/ui";
 
 export const runtime = "nodejs";
 
@@ -102,6 +103,21 @@ export default async function Home() {
       spunPointsToday = spin?.points_awarded ?? null;
     } catch {
       spunToday = false;
+    }
+  }
+
+  let shareCountToday = 0;
+  if (canEarn) {
+    const today = todayISODate();
+    try {
+      const { count } = await sb
+        .from("cfm_shares")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user!.id)
+        .eq("share_date", today);
+      shareCountToday = count ?? 0;
+    } catch {
+      shareCountToday = 0;
     }
   }
   return (
@@ -220,6 +236,19 @@ export default async function Home() {
             />
           </div>
         </Card>
+
+        <div id="share-live">
+          <Card title="Share Live">
+          <div className="space-y-3">
+            {!canEarn ? (
+              <div className="text-sm text-[color:var(--muted)]">
+                Log in and create your profile to earn points for sharing.
+              </div>
+            ) : null}
+            <SupportChecklist initialTodayCount={shareCountToday} dailyCap={5} canEarn={canEarn} />
+          </div>
+          </Card>
+        </div>
 
         <div className="text-xs text-[color:var(--muted)]">
           <Link href="/signup" className="underline underline-offset-4">

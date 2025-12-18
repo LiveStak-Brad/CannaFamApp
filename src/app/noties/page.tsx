@@ -226,8 +226,8 @@ export default async function NotiesPage() {
       label: "🔗 Live link shares",
       current: checklist.shares_capped,
       max: 5,
-      href: "/support",
-      hint: "Log shares from Support (points cap at 5/day).",
+      href: "/#share-live",
+      hint: "Log shares from Home (points cap at 5/day).",
       showMax: true as const,
     },
     {

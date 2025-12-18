@@ -16,7 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/feed", label: "Feed", icon: "🔥" },
   { href: "/live", label: "Live", icon: "▶️" },
   { href: "/awards", label: "Awards", icon: "🎖️" },
-  { href: "/support", label: "Support", icon: "🔗" },
+  { href: "/members", label: "Members", icon: "👥" },
 ];
 
 export function BottomNav({

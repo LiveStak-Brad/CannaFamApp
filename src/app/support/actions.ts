@@ -65,7 +65,7 @@ export async function logLiveShare(platform: string) {
   }
 
   const newCount = Math.min(DAILY_CAP, used + (insertedNew ? 1 : 0));
-  revalidatePath("/support");
+  revalidatePath("/");
   revalidatePath("/hub");
 
   return {
@@ -142,7 +142,7 @@ export async function logLinkVisit(linkType: string) {
     throw new Error(insertErr.message);
   }
 
-  revalidatePath("/support");
+  revalidatePath("/");
   revalidatePath("/noties");
   revalidatePath("/leaderboard");
 

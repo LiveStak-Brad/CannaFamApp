@@ -226,8 +226,8 @@ export default async function HubPage() {
         </Card>
 
         <div className="grid grid-cols-1 gap-3">
-          <Button as="link" href="/support" variant="secondary">
-            Support
+          <Button as="link" href="/#share-live" variant="secondary">
+            Share Live
           </Button>
           <Button as="link" href="/feed" variant="secondary">
             Highlight feed
