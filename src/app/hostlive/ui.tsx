@@ -30,13 +30,13 @@ type TopGifterRow = {
   profile_id: string; 
   display_name: string; 
   avatar_url: string | null; 
-  total_amount: number; 
+  total_amount: number | null; 
   rank: number;
 };
 
 type ViewerRow = {
   user_id: string;
-  username: string | null;
+  display_name: string | null;
   is_online: boolean;
   joined_at: string;
 };
@@ -58,9 +58,12 @@ export function HostLiveClient({
   const [viewerCount, setViewerCount] = useState(0);
   const [totalViews, setTotalViews] = useState(0);
 
-  // Top gifters state
+  // Top gifters state (Today, Weekly, All-Time like web view)
   const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
-  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [topWeekly, setTopWeekly] = useState<TopGifterRow[]>([]);
+  const [topAllTime, setTopAllTime] = useState<TopGifterRow[]>([]);
+  const [topModalOpen, setTopModalOpen] = useState(false);
+  const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
 
   // Viewers state
   const [viewers, setViewers] = useState<ViewerRow[]>([]);
@@ -77,11 +80,17 @@ export function HostLiveClient({
 
   const liveId = live?.id ?? "";
 
-  // Load top gifters
+  // Load top gifters (Today, Weekly, All-Time)
   const loadTopGifters = useCallback(async () => {
     try {
-      const { data } = await sb.rpc("cfm_top_gifters_today");
-      if (data) setTopToday(data as TopGifterRow[]);
+      const [r1, r2, r3] = await Promise.all([
+        sb.rpc("cfm_top_gifters_today"),
+        sb.rpc("cfm_top_gifters_weekly"),
+        sb.rpc("cfm_top_gifters_all_time"),
+      ]);
+      setTopToday(((r1.data ?? []) as any[]) as TopGifterRow[]);
+      setTopWeekly(((r2.data ?? []) as any[]) as TopGifterRow[]);
+      setTopAllTime(((r3.data ?? []) as any[]) as TopGifterRow[]);
     } catch {}
   }, [sb]);
 
@@ -91,7 +100,7 @@ export function HostLiveClient({
     try {
       const { data } = await sb
         .from("cfm_live_viewers")
-        .select("user_id,username,is_online,joined_at")
+        .select("user_id,display_name,is_online,joined_at")
         .eq("live_id", liveId);
       if (data) {
         setViewers(data as ViewerRow[]);
@@ -321,37 +330,49 @@ export function HostLiveClient({
           </div>
         </div>
 
-        {/* Top 3 Gifters - positioned on right side below close button */}
-        {topToday.length > 0 ? (
-          <div className="absolute right-3 top-16 z-20 flex flex-col gap-1">
-            {topToday.slice(0, 3).map((g) => {
-              const rank = Number(g.rank ?? 0);
-              const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
-              const bgColor = rank === 1 ? "rgba(234,179,8,0.25)" : rank === 2 ? "rgba(156,163,175,0.25)" : "rgba(249,115,22,0.25)";
-              const borderColor = rank === 1 ? "rgba(234,179,8,0.5)" : rank === 2 ? "rgba(156,163,175,0.5)" : "rgba(249,115,22,0.5)";
-              return (
-                <div
-                  key={`${g.profile_id}-${rank}`}
-                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] text-white"
-                  style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
-                >
-                  <span>{medalEmoji}</span>
-                  {g.avatar_url ? (
-                    <img src={g.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
-                  ) : (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[9px] font-bold">
-                      {g.display_name?.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="flex flex-col">
-                    <span className="font-semibold truncate max-w-[60px]">{g.display_name}</span>
-                    <span className="text-[9px] text-white/70">${g.total_amount.toFixed(2)}</span>
+        {/* Top 3 Gifters - positioned on right side below close button (like mobile) */}
+        <div className="absolute right-3 top-16 z-20 flex flex-col gap-1.5">
+          {topToday.slice(0, 3).map((g) => {
+            const rank = Number(g.rank ?? 0);
+            const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+            const bgColor = rank === 1 ? "rgba(234,179,8,0.35)" : rank === 2 ? "rgba(156,163,175,0.35)" : "rgba(249,115,22,0.35)";
+            const borderColor = rank === 1 ? "rgba(234,179,8,0.6)" : rank === 2 ? "rgba(156,163,175,0.6)" : "rgba(249,115,22,0.6)";
+            const amount = Number(g.total_amount ?? 0);
+            return (
+              <div
+                key={`${g.profile_id}-${rank}`}
+                className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 backdrop-blur-sm"
+                style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
+              >
+                <span className="text-sm">{medalEmoji}</span>
+                {g.avatar_url ? (
+                  <img src={g.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover object-top" />
+                ) : (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold text-white">
+                    {g.display_name?.charAt(0).toUpperCase()}
                   </div>
+                )}
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-semibold text-white truncate max-w-[70px]">{g.display_name}</span>
+                  <span className="text-[10px] font-bold text-green-400">${amount.toFixed(2)}</span>
                 </div>
-              );
-            })}
-          </div>
-        ) : null}
+              </div>
+            );
+          })}
+
+          {/* Trophy button to open leaderboard */}
+          <button
+            type="button"
+            onClick={() => {
+              setTopTab("today");
+              setTopModalOpen(true);
+            }}
+            className="flex h-10 w-10 items-center justify-center self-end rounded-full border border-yellow-500/40 bg-yellow-500/20 text-lg backdrop-blur-sm hover:bg-yellow-500/30"
+            title="Top Gifters"
+          >
+            🏆
+          </button>
+        </div>
 
         {/* Status messages */}
         {!agoraReady && !error ? (
@@ -372,136 +393,214 @@ export function HostLiveClient({
           </div>
         ) : null}
 
-        {/* Chat Display (read-only) - overlaying bottom of video */}
-        <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col">
-          {/* Chat messages */}
-          <div className="max-h-40 overflow-y-auto bg-gradient-to-t from-black/80 to-transparent p-3">
-            {chatRows.slice(-20).map((row) => {
+        {/* Chat Display (read-only) - overlaying bottom of video like mobile */}
+        <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col p-3">
+          {/* Chat messages - same styling as mobile/web view */}
+          <div className="max-h-48 overflow-y-auto space-y-1.5">
+            {chatRows.slice(-30).map((row) => {
               const kind = row.type;
-              const isGift = kind === "tip" || (kind === "system" && (row.metadata as any)?.event === "gift");
-              const isJoin = kind === "system" && (row.metadata as any)?.event === "join";
+              const msg = String(row.message ?? "");
+              const meta = row.metadata as any;
+              const senderId = String(row.sender_user_id ?? "").trim();
+              const senderName = String(nameByUserId[senderId] ?? "Member");
+              const isGift = kind === "tip" || (kind === "system" && meta?.event === "gift");
+              const isJoin = kind === "system" && meta?.event === "join";
               
+              // Green for joins (like mobile)
               if (isJoin) {
                 return (
-                  <div key={row.id} className="mb-1 text-xs text-green-400/70">
-                    {row.message}
-                  </div>
-                );
-              }
-              if (isGift) {
-                return (
-                  <div key={row.id} className="mb-1 text-sm font-semibold text-yellow-400">
-                    🎁 {row.message}
+                  <div key={row.id} className="text-[15px] text-green-400 font-semibold">
+                    {msg}
                   </div>
                 );
               }
               
+              // Red for gifts (like mobile)
+              if (isGift) {
+                return (
+                  <div key={row.id} className="text-[15px] text-red-400 font-semibold">
+                    {msg}
+                  </div>
+                );
+              }
+              
+              // Regular chat
               return (
-                <div key={row.id} className="mb-1 text-sm">
-                  <span className="font-semibold text-purple-400">
-                    {nameByUserId[row.sender_user_id ?? ""] || "Member"}:
-                  </span>{" "}
-                  <span className="text-white/90">{row.message}</span>
+                <div key={row.id} className="text-[15px] font-medium text-white">
+                  <span className="text-white/70 font-semibold">{senderName}:</span>{" "}
+                  {msg}
                 </div>
               );
             })}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Controls - Flip Camera, Filters, Trophy */}
-          <div className="bg-black/60 p-2">
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => toast("Flip camera not available on web", "info")}
-                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl hover:bg-white/20"
-                title="Flip Camera"
-              >
-                🔄
-              </button>
-              <button
-                onClick={() => toast("Filters not available on web", "info")}
-                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl hover:bg-white/20"
-                title="Filters"
-              >
-                🪄
-              </button>
-              <button
-                onClick={() => setLeaderboardOpen(true)}
-                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl hover:bg-white/20"
-                title="Leaderboard"
-              >
-                🏆
-              </button>
-            </div>
+          {/* Controls - Flip Camera & Filters (greyed out) */}
+          <div className="mt-3 flex justify-center gap-4">
+            <button
+              type="button"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xl opacity-50 cursor-not-allowed"
+              title="Available on mobile"
+              disabled
+            >
+              🔄
+            </button>
+            <button
+              type="button"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xl opacity-50 cursor-not-allowed"
+              title="Available on mobile"
+              disabled
+            >
+              🪄
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Viewer List Modal */}
+      {/* Viewer List Modal - same as web view screen */}
       {viewerListOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setViewerListOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Viewers</h3>
-              <button onClick={() => setViewerListOpen(false)} className="text-2xl text-white/60 hover:text-white">×</button>
+        <div className="fixed inset-0 z-[60] bg-[#0b0b0c]">
+          <div className="mx-auto flex h-full w-full max-w-xl flex-col">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+              <div className="text-lg font-semibold text-white">👥 Viewers</div>
+              <button
+                type="button"
+                className="rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+                onClick={() => setViewerListOpen(false)}
+              >
+                Close
+              </button>
             </div>
-            <div className="mb-4 flex gap-4">
-              <div className="flex-1 rounded-xl bg-white/10 p-3 text-center">
-                <div className="text-2xl font-bold text-white">{viewerCount}</div>
-                <div className="text-xs text-white/60">👁️ Watching Now</div>
-              </div>
-              <div className="flex-1 rounded-xl bg-white/10 p-3 text-center">
-                <div className="text-2xl font-bold text-white">{totalViews}</div>
-                <div className="text-xs text-white/60">👥 Total Joined</div>
-              </div>
-            </div>
-            <div className="max-h-60 overflow-y-auto">
-              {viewers.map((v) => (
-                <div key={v.user_id} className="flex items-center gap-2 border-b border-white/10 py-2">
-                  <div className={`h-2 w-2 rounded-full ${v.is_online ? "bg-green-500" : "bg-gray-500"}`} />
-                  <span className="text-sm text-white">{v.username || "Member"}</span>
+
+            <div className="flex-1 overflow-auto p-4">
+              <div className="mb-4 flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="flex-1 text-center">
+                  <div className="text-2xl font-bold text-white">{viewerCount}</div>
+                  <div className="text-xs text-white/60">👁️ Watching Now</div>
                 </div>
-              ))}
-              {viewers.length === 0 ? (
-                <div className="text-center text-sm text-white/50">No viewers yet</div>
-              ) : null}
+                <div className="flex-1 text-center">
+                  <div className="text-2xl font-bold text-white">{totalViews}</div>
+                  <div className="text-xs text-white/60">👥 Total Since Start</div>
+                </div>
+              </div>
+
+              {viewers.length > 0 ? (
+                <div className="mt-4">
+                  <div className="text-sm font-semibold text-white mb-2">Viewers</div>
+                  <div className="space-y-2 max-h-[300px] overflow-auto">
+                    {viewers.map((v) => (
+                      <div key={v.user_id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white">
+                          {(v.display_name || "M").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="text-sm text-white">{v.display_name || "Member"}</div>
+                        {v.is_online ? (
+                          <span className="ml-auto text-xs text-green-400">● Online</span>
+                        ) : (
+                          <span className="ml-auto text-xs text-white/40">Offline</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-white/50 text-center">
+                  No viewers yet
+                </div>
+              )}
             </div>
           </div>
         </div>
       ) : null}
 
-      {/* Leaderboard Modal */}
-      {leaderboardOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setLeaderboardOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-[#1a1a1a] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">🏆 Top Gifters Today</h3>
-              <button onClick={() => setLeaderboardOpen(false)} className="text-2xl text-white/60 hover:text-white">×</button>
+      {/* Leaderboard Modal - same as web view screen with Today/Weekly/All-Time tabs */}
+      {topModalOpen ? (
+        <div className="fixed inset-0 z-[60] bg-[#0b0b0c]">
+          <div className="mx-auto flex h-full w-full max-w-xl flex-col">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+              <div className="text-lg font-bold text-white">💰 Top Gifters</div>
+              <button
+                type="button"
+                className="rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white hover:bg-white/20"
+                onClick={() => setTopModalOpen(false)}
+              >
+                Close
+              </button>
             </div>
-            <div className="max-h-80 overflow-y-auto">
-              {topToday.map((g) => {
-                const rank = Number(g.rank ?? 0);
-                const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`;
-                return (
-                  <div key={g.profile_id} className="flex items-center gap-3 border-b border-white/10 py-3">
-                    <span className="w-8 text-center text-lg">{medalEmoji}</span>
-                    {g.avatar_url ? (
-                      <img src={g.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-sm font-bold text-white">
-                        {g.display_name?.charAt(0).toUpperCase()}
+
+            <div className="flex gap-2 px-4 pt-4">
+              <button
+                type="button"
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                  topTab === "today" ? "border-red-500 bg-red-600 text-white" : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                }`}
+                onClick={() => setTopTab("today")}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                  topTab === "weekly" ? "border-red-500 bg-red-600 text-white" : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                }`}
+                onClick={() => setTopTab("weekly")}
+              >
+                Weekly
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                  topTab === "all_time" ? "border-red-500 bg-red-600 text-white" : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                }`}
+                onClick={() => setTopTab("all_time")}
+              >
+                All-Time
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto px-4 py-4">
+              <div className="space-y-2">
+                {(topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime).map((g) => {
+                  const r = Number(g.rank ?? 0);
+                  const name = String(g.display_name ?? "Member");
+                  const amount = Number(g.total_amount ?? 0);
+                  const medalEmoji = r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : null;
+                  const bgClass = r === 1 ? "bg-yellow-500/20 border-yellow-500/40" : r === 2 ? "bg-gray-400/20 border-gray-400/40" : r === 3 ? "bg-orange-500/20 border-orange-500/40" : "bg-white/5 border-white/10";
+                  return (
+                    <div
+                      key={`${String(g.profile_id)}-${r}`}
+                      className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition hover:bg-white/10 ${bgClass}`}
+                    >
+                      <div className="w-10 shrink-0 text-center">
+                        {medalEmoji ? (
+                          <span className="text-2xl">{medalEmoji}</span>
+                        ) : (
+                          <span className="text-sm font-bold text-white/60">#{r}</span>
+                        )}
                       </div>
-                    )}
-                    <div className="flex-1">
-                      <div className="font-semibold text-white">{g.display_name}</div>
-                      <div className="text-sm text-green-400">${g.total_amount.toFixed(2)}</div>
+                      {g.avatar_url ? (
+                        <img src={g.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover object-top" />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-sm font-semibold text-white">
+                          {name.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-bold text-white">{name}</div>
+                        <div className="text-lg font-bold text-green-400">${amount.toFixed(2)}</div>
+                      </div>
                     </div>
+                  );
+                })}
+
+                {(topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime).length === 0 ? (
+                  <div className="py-8 text-center">
+                    <div className="text-4xl mb-2">💸</div>
+                    <div className="text-sm text-white/50">No gifts yet for this period.</div>
+                    <div className="text-xs text-white/30 mt-1">Be the first to gift!</div>
                   </div>
-                );
-              })}
-              {topToday.length === 0 ? (
-                <div className="text-center text-sm text-white/50">No gifters yet today</div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
