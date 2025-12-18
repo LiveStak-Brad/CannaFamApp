@@ -56,7 +56,7 @@ export function LoginForm() {
                   : "Signed in.",
             });
             if (mode === "password") {
-              router.push("/hub");
+              router.push("/");
               router.refresh();
             }
           } else {

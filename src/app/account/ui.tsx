@@ -50,7 +50,7 @@ export function AccountPasswordForm() {
           }
 
           formEl.reset();
-          router.push("/hub");
+          router.push("/");
           router.refresh();
         });
       }}

@@ -35,21 +35,21 @@ export async function getMyAdminRole(): Promise<AdminRole | null> {
 export async function requireOwner() {
   const user = await requireUser();
   const role = await getMyAdminRole();
-  if (role !== "owner") redirect("/hub");
+  if (role !== "owner") redirect("/");
   return user;
 }
 
 export async function requireAdmin() {
   const user = await requireUser();
   const role = await getMyAdminRole();
-  if (role !== "owner" && role !== "admin") redirect("/hub");
+  if (role !== "owner" && role !== "admin") redirect("/");
   return user;
 }
 
 export async function requireMod() {
   const user = await requireUser();
   const role = await getMyAdminRole();
-  if (role !== "owner" && role !== "admin" && role !== "moderator") redirect("/hub");
+  if (role !== "owner" && role !== "admin" && role !== "moderator") redirect("/");
   return user;
 }
 

@@ -895,7 +895,7 @@ export function LiveClient({
         toast("Could not exit live.", "error");
         return;
       }
-      router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/hub");
+      router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/");
       router.refresh();
     } catch {
       toast("Could not exit live.", "error");

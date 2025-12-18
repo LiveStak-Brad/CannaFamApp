@@ -7,7 +7,7 @@ import { assertPublicEnv, env } from "@/lib/env";
 function safeNextPath(next: string | null) {
   const n = String(next ?? "").trim();
   if (n.startsWith("/")) return n;
-  return "/hub";
+  return "/";
 }
 
 export async function GET(request: NextRequest) {

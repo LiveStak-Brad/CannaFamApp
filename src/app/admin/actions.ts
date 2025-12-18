@@ -91,7 +91,7 @@ export async function sendMemberInvite(memberId: string) {
     }
 
     const redirectTo = new URL("/auth/callback", baseUrl);
-    redirectTo.searchParams.set("next", "/hub");
+    redirectTo.searchParams.set("next", "/");
 
     const { error: inviteErr } = await sb.auth.admin.inviteUserByEmail(email, {
       redirectTo: redirectTo.toString(),
