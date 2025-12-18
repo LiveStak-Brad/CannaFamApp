@@ -9,20 +9,7 @@ import { DropdownMenu } from "@/components/shell/dropdown-menu";
 
 export async function TopNavAuth() {
   const user = await getAuthedUserOrNull();
-
   const sb = await supabaseServer();
-  let isLive = false;
-  let hostUserId: string | null = null;
-  try {
-    const { data } = await sb.rpc("cfm_get_live_state");
-    const row = Array.isArray(data) ? (data[0] as any) : (data as any);
-    isLive = !!row?.is_live;
-    hostUserId = row?.host_user_id ?? null;
-  } catch {
-    isLive = false;
-    hostUserId = null;
-  }
-  const isHost = !!user && !!hostUserId && user.id === hostUserId;
 
   const navBtnClass = "px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm";
   const mobileMenuBtnClass =
@@ -30,20 +17,9 @@ export async function TopNavAuth() {
   const mobileMenuItemClass =
     "block w-full rounded-lg px-3 py-2 text-sm font-semibold text-[color:var(--foreground)] hover:bg-[color:var(--border)]";
 
-  const liveBtnClass =
-    "rounded-full bg-gradient-to-r from-[color:var(--gradient-start)] to-[color:var(--gradient-end)] px-3 py-1.5 text-xs font-semibold text-white shadow-none hover:opacity-90 border border-[color:var(--accent)]/40";
-
-  const liveSoonBtnClass =
-    "rounded-full bg-[color:var(--card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--muted)] border border-[color:var(--border)]";
-
   if (!user) {
     return (
       <div className="flex items-center gap-2">
-        {isLive ? (
-          <Button as="link" href="/live" className={liveBtnClass}>
-            LIVE
-          </Button>
-        ) : null}
         <Button as="link" href="/login" variant="secondary" className={navBtnClass}>
           Login
         </Button>
@@ -84,23 +60,6 @@ export async function TopNavAuth() {
   return (
     <>
       <div className="hidden max-w-full flex-wrap items-center justify-end gap-1 sm:flex sm:gap-2">
-        {isHost ? (
-          isLive ? (
-            <Button as="link" href="/live-host" className={liveBtnClass}>
-              STREAMING
-            </Button>
-          ) : (
-            <Button as="link" href="/live-host" className={liveSoonBtnClass}>
-              GO LIVE
-            </Button>
-          )
-        ) : isLive ? (
-          <Button as="link" href="/live" className={liveBtnClass}>
-            LIVE
-          </Button>
-        ) : (
-          <span className={liveSoonBtnClass}>Live Soon!</span>
-        )}
         {isAdmin ? (
           <Button
             as="link"
@@ -171,23 +130,6 @@ export async function TopNavAuth() {
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
-        {isHost ? (
-          isLive ? (
-            <Button as="link" href="/live-host" className={liveBtnClass}>
-              STREAMING
-            </Button>
-          ) : (
-            <Button as="link" href="/live-host" className={liveSoonBtnClass}>
-              GO LIVE
-            </Button>
-          )
-        ) : isLive ? (
-          <Button as="link" href="/live" className={liveBtnClass}>
-            LIVE
-          </Button>
-        ) : (
-          <span className={liveSoonBtnClass}>Live Soon!</span>
-        )}
         <Button as="link" href="/leaderboard" variant="secondary" className={navBtnClass}>
           🏆
         </Button>

@@ -56,22 +56,25 @@ export function LiveClient({
   initialLive,
   myUserId,
   nextPath,
+  forceHostMode,
 }: {
   initialLive: LiveState;
   myUserId: string | null;
   nextPath: string;
+  forceHostMode?: boolean;
 }) {
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
 
   const isHostMode = useMemo(() => {
+    if (forceHostMode) return true;
     if (typeof window === "undefined") return false;
     try {
       return new URLSearchParams(window.location.search).get("host") === "1";
     } catch {
       return false;
     }
-  }, []);
+  }, [forceHostMode]);
 
   const [live, setLive] = useState<LiveState>(initialLive);
   const [rows, setRows] = useState<LiveChatRow[]>([]);
@@ -291,6 +294,39 @@ export function LiveClient({
     const fallback = String((initialLive as any)?.id ?? "").trim();
     return fallback;
   }, [initialLive, live]);
+
+  // Auto-start live when host opens /hostlive
+  useEffect(() => {
+    if (!isHostMode) return;
+    if (live.is_live) return; // Already live
+    
+    // Auto-start the live stream
+    (async () => {
+      try {
+        const { data, error } = await sb.rpc("cfm_set_live", {
+          next_is_live: true,
+          next_title: live.title || "CannaFam Live",
+        } as any);
+        if (!error && data) {
+          setLive((prev) => ({ ...(prev as any), ...(data as any) }));
+        }
+      } catch {
+        // Fallback
+        try {
+          const now = new Date().toISOString();
+          await sb.from("cfm_live_state").update({
+            is_live: true,
+            started_at: live.started_at ?? now,
+            ended_at: null,
+            updated_at: now,
+          }).eq("id", live.id);
+          const { data: fresh } = await sb.rpc("cfm_get_live_state");
+          const row = Array.isArray(fresh) ? (fresh[0] as any) : (fresh as any);
+          if (row) setLive(row);
+        } catch {}
+      }
+    })();
+  }, [isHostMode]);
 
   useEffect(() => {
     let mounted = true;
@@ -993,18 +1029,12 @@ export function LiveClient({
 
             <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">LIVE</span>
+                {live.is_live ? (
+                  <span className="rounded-full bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">LIVE</span>
+                ) : (
+                  <span className="rounded-full bg-gray-600 px-2 py-1 text-[11px] font-semibold text-white">OFFLINE</span>
+                )}
                 <div className="text-sm font-semibold text-white">{title}</div>
-                {isHost ? (
-                  <button
-                    type="button"
-                    disabled={hostPending}
-                    onClick={() => setLiveState(!live.is_live)}
-                    className="ml-2 rounded-full border border-white/15 bg-black/35 px-3 py-1 text-[11px] font-semibold text-white"
-                  >
-                    {live.is_live ? "End Live" : "Go Live"}
-                  </button>
-                ) : null}
               </div>
 
               <div className="flex flex-col items-end gap-2">
