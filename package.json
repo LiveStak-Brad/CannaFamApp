@@ -10,7 +10,6 @@
     "verify:supabase": "node ./scripts/verify-supabase.mjs"
   },
   "dependencies": {
-    "@cannafam/shared": "file:../packages/shared",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.56.0",
     "agora-access-token": "^2.0.4",

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import { getGifterLevel } from "@cannafam/shared";
+import { getGifterLevel } from "@/lib/gifterLevel";
 
 export type GifterRingAvatarProps = {
   size?: number;

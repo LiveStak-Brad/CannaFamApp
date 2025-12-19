@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
-import { GIFTER_TIERS, getGifterLevel } from "@cannafam/shared";
+import { GIFTER_TIERS, getGifterLevel } from "@/lib/gifterLevel";
 
 export const runtime = "nodejs";
 
