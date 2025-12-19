@@ -6,6 +6,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { HubCheckInButton, HubSpinButton } from "./ui";
 
 export const runtime = "nodejs";
@@ -14,6 +15,7 @@ type MemberProfile = {
   id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio: string | null;
   public_link: string | null;
   instagram_link: string | null;
@@ -35,7 +37,7 @@ export default async function HubPage() {
 
   let { data: memberRaw } = await sb
     .from("cfm_members")
-    .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+    .select("id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -53,7 +55,7 @@ export default async function HubPage() {
       if (!insertErr) {
         const refetch = await sb
           .from("cfm_members")
-          .select("id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+          .select("id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
           .eq("user_id", user.id)
           .maybeSingle();
         member = (refetch.data as unknown as MemberProfile | null) ?? null;
@@ -120,20 +122,19 @@ export default async function HubPage() {
         {approved ? (
           <Card title="Profile">
             <div className="space-y-3">
-              {member?.photo_url ? (
+              {member?.favorited_username ? (
                 <div className="flex items-center gap-3">
-                  <img
-                    src={member.photo_url}
-                    alt={member.favorited_username ?? "Member"}
-                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover object-top"
-                    referrerPolicy="no-referrer"
+                  <GifterRingAvatar
+                    size={48}
+                    imageUrl={member.photo_url}
+                    name={member.favorited_username ?? "Member"}
+                    totalUsd={
+                      typeof member.lifetime_gifted_total_usd === "number" ? member.lifetime_gifted_total_usd : null
+                    }
+                    showDiamondShimmer
                   />
-                  <div className="text-sm font-semibold">
-                    {member.favorited_username ?? "Member"}
-                  </div>
+                  <div className="text-sm font-semibold">{member.favorited_username ?? "Member"}</div>
                 </div>
-              ) : member?.favorited_username ? (
-                <div className="text-sm font-semibold">{member.favorited_username}</div>
               ) : null}
 
               <div className="flex flex-wrap gap-2">

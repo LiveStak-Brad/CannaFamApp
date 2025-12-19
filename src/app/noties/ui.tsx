@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { markAllNotiesRead, markNotieRead } from "./actions";
 
 export type NotieRow = {
@@ -22,6 +23,7 @@ export type ActorProfile = {
   user_id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
 };
 
 function labelFor(n: NotieRow) {
@@ -177,16 +179,15 @@ export function NotiesClient({
                 <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      {actor?.photo_url ? (
-                        <img
-                          src={actor.photo_url}
-                          alt={actor.favorited_username}
-                          className="h-9 w-9 rounded-full border border-[color:var(--border)] object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                      )}
+                      <GifterRingAvatar
+                        size={36}
+                        imageUrl={actor?.photo_url ?? null}
+                        name={actor?.favorited_username ?? "Member"}
+                        totalUsd={
+                          typeof actor?.lifetime_gifted_total_usd === "number" ? actor.lifetime_gifted_total_usd : null
+                        }
+                        showDiamondShimmer
+                      />
                       <div className="min-w-0">
                         <div className="text-sm font-semibold truncate">
                           {actor?.favorited_username ? `${actor.favorited_username}: ` : ""}

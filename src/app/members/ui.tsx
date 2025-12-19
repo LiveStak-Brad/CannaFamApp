@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import {
   MiniProfileModal,
@@ -9,7 +8,7 @@ import {
   type MiniProfilePointsRow,
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
-import { FollowInline } from "@/components/ui/follow-inline";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 type PublicMember = {
   user_id: string;
@@ -21,6 +20,7 @@ type PublicMember = {
   x_link?: string | null;
   tiktok_link?: string | null;
   youtube_link?: string | null;
+  lifetime_gifted_total_usd?: number | null;
 };
 
 type AwardRow = {
@@ -68,6 +68,8 @@ export function MembersClient({
         user_id: selected.user_id,
         favorited_username: selected.favorited_username,
         photo_url: selected.photo_url,
+        lifetime_gifted_total_usd:
+          typeof selected.lifetime_gifted_total_usd === "number" ? selected.lifetime_gifted_total_usd : null,
         bio: selected.bio,
         public_link: selected.public_link ?? null,
         instagram_link: selected.instagram_link ?? null,
@@ -89,25 +91,18 @@ export function MembersClient({
               onClick={() => setSelectedId(m.user_id)}
             >
               <Card>
-                <div className="flex items-start gap-4">
-                  {m.photo_url ? (
-                    <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-[color:var(--border)]">
-                      <Image
-                        src={m.photo_url}
-                        alt={m.favorited_username}
-                        fill
-                        sizes="48px"
-                        className="object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="h-12 w-12 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                  )}
+                <div className="flex items-start gap-3">
+                  <GifterRingAvatar
+                    size={48}
+                    imageUrl={m.photo_url}
+                    name={m.favorited_username}
+                    totalUsd={
+                      typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null
+                    }
+                    showDiamondShimmer
+                  />
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-semibold">{m.favorited_username}</div>
-                      <FollowInline targetUserId={m.user_id} myUserId={myUserId} />
-                    </div>
+                    <div className="text-sm font-semibold">{m.favorited_username}</div>
                     {m.bio ? (
                       <div className="mt-1 text-sm text-[color:var(--muted)]">{m.bio}</div>
                     ) : null}

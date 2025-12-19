@@ -7,7 +7,6 @@ import {
   type MiniProfilePointsRow,
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
-import { FollowInline } from "@/components/ui/follow-inline";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type PublicProfile = {
@@ -283,7 +282,6 @@ export function LeaderboardClient({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{m.favorited_username}</span>
-                      <FollowInline targetUserId={m.user_id} myUserId={myUserId} />
                     </div>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
                       <span>🔥 {m.streak_points ?? 0}</span>

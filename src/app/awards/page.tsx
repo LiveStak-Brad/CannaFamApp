@@ -1,5 +1,6 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -20,6 +21,7 @@ type PublicMemberIdRow = {
   favorited_username: string;
   photo_url: string | null;
   bio: string | null;
+  lifetime_gifted_total_usd?: number | null;
 };
 
 const CATEGORIES = [
@@ -46,7 +48,7 @@ export default async function AwardsPage() {
     const { data: publicMembers } = await sb
       // This view does not exist yet in some DBs; it is intended for Phase 7 SQL.
       .from("cfm_public_member_ids")
-      .select("user_id,favorited_username,photo_url,bio")
+      .select("user_id,favorited_username,photo_url,bio,lifetime_gifted_total_usd")
       .limit(2000);
 
     for (const m of (publicMembers ?? []) as any[]) {
@@ -56,6 +58,8 @@ export default async function AwardsPage() {
         favorited_username: String(m.favorited_username ?? ""),
         photo_url: (m.photo_url ?? null) as string | null,
         bio: (m.bio ?? null) as string | null,
+        lifetime_gifted_total_usd:
+          typeof m.lifetime_gifted_total_usd === "number" ? (m.lifetime_gifted_total_usd as number) : null,
       });
     }
   } catch {
@@ -101,14 +105,15 @@ export default async function AwardsPage() {
                     <div className="text-sm font-semibold">{cat}</div>
                     {profile ? (
                       <div className="mt-1 flex items-center gap-2 text-sm">
-                        {profile.photo_url ? (
-                          <img
-                            src={profile.photo_url}
-                            alt={profile.favorited_username}
-                            className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : null}
+                        <GifterRingAvatar
+                          size={24}
+                          imageUrl={profile.photo_url}
+                          name={profile.favorited_username}
+                          totalUsd={
+                            typeof profile.lifetime_gifted_total_usd === "number" ? profile.lifetime_gifted_total_usd : null
+                          }
+                          showDiamondShimmer
+                        />
                         <div className="truncate text-[color:var(--muted)]">
                           {profile.favorited_username}
                         </div>

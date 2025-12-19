@@ -315,7 +315,7 @@ export default async function UserProfilePage({
   if (isOwnProfile) {
     const { data: mentionCandidatesRaw } = await sb
       .from("cfm_public_member_ids")
-      .select("user_id,favorited_username,photo_url")
+      .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
       .limit(2000);
     mentionCandidates = (mentionCandidatesRaw ?? []) as MentionCandidate[];
   }

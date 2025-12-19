@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FollowInline } from "@/components/ui/follow-inline";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type MiniProfileSubject = {
@@ -151,9 +150,6 @@ export function MiniProfileModal({
                     </Link>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
                       <span>Mini profile</span>
-                      {subject.user_id ? (
-                        <FollowInline targetUserId={String(subject.user_id)} myUserId={myUserId} />
-                      ) : null}
                     </div>
                   </div>
                   {socials.length ? (

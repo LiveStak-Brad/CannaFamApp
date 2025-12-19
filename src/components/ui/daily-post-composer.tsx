@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { deleteMyDailyPost, upsertMyDailyPost } from "@/app/feed/actions";
 
 export type DailyPostDraft = {
@@ -20,6 +21,7 @@ export type MentionCandidate = {
   user_id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
 };
 
 function MediaPreview({ mediaUrl, mediaType }: { mediaUrl: string; mediaType: string }) {
@@ -190,16 +192,15 @@ export function DailyPostComposer({
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
                       onClick={() => insertMention(m.favorited_username)}
                     >
-                      {m.photo_url ? (
-                        <img
-                          src={m.photo_url}
-                          alt={m.favorited_username}
-                          className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="h-6 w-6 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                      )}
+                      <GifterRingAvatar
+                        size={24}
+                        imageUrl={m.photo_url}
+                        name={m.favorited_username}
+                        totalUsd={
+                          typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null
+                        }
+                        showDiamondShimmer
+                      />
                       <div className="font-semibold">@{m.favorited_username}</div>
                     </button>
                   ))}

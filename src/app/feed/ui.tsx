@@ -29,7 +29,6 @@ import {
   type MiniProfilePointsRow,
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
-import { FollowInline } from "@/components/ui/follow-inline";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type FeedPost = {
@@ -594,7 +593,6 @@ function WhoLikedModal({
   awards,
   leaderboard,
   myUserId,
-  followedUserIds,
   onClose,
 }: {
   open: boolean;
@@ -603,7 +601,6 @@ function WhoLikedModal({
   awards: MiniProfileAwardRow[];
   leaderboard: MiniProfilePointsRow[];
   myUserId?: string | null;
-  followedUserIds?: string[];
   onClose: () => void;
 }) {
   if (!open) return null;
@@ -727,7 +724,6 @@ function CommentsModal({
   mentionCandidates,
   comments,
   commenterProfiles,
-  followedUserIds,
   upvoteCountByComment,
   upvotedByMe,
   awards,
@@ -755,7 +751,6 @@ function CommentsModal({
       youtube_link?: string | null;
     }
   >;
-  followedUserIds?: string[];
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;
   awards: MiniProfileAwardRow[];
@@ -802,11 +797,9 @@ function CommentsModal({
     return subj;
   }, [commenterProfiles, selectedUserId]);
 
-  const followedSet = useMemo(() => new Set(followedUserIds ?? []), [followedUserIds]);
-
   const visible = useMemo(
     () => localComments.filter((c) => !c.is_hidden || isAdmin),
-    [localComments, isAdmin],
+    [isAdmin, localComments],
   );
 
   const replyToComment = useMemo(() => {
@@ -1131,11 +1124,6 @@ function CommentsModal({
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <div className="text-sm font-semibold truncate">{name}</div>
-                                    <FollowInline
-                                      targetUserId={c.user_id}
-                                      myUserId={myUserId}
-                                      initialFollowing={followedSet.has(c.user_id)}
-                                    />
                                   </div>
                                   {bio ? (
                                     <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
@@ -1346,7 +1334,6 @@ export function CommentsButton({
   mentionCandidates,
   comments,
   commenterProfiles,
-  followedUserIds,
   upvoteCountByComment,
   upvotedByMe,
   awards,
@@ -1362,7 +1349,6 @@ export function CommentsButton({
     string,
     { favorited_username: string; photo_url: string | null; lifetime_gifted_total_usd?: number | null; bio?: string | null }
   >;
-  followedUserIds?: string[];
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;
   awards: MiniProfileAwardRow[];
@@ -1389,7 +1375,6 @@ export function CommentsButton({
         mentionCandidates={mentionCandidates}
         comments={comments}
         commenterProfiles={commenterProfiles}
-        followedUserIds={followedUserIds}
         upvoteCountByComment={upvoteCountByComment}
         upvotedByMe={upvotedByMe}
         awards={awards}
@@ -1698,7 +1683,6 @@ export function LikeButton({
   leaderboard,
   canEarn = true,
   myUserId,
-  followedUserIds,
 }: {
   postId: string;
   liked: boolean;
@@ -1708,7 +1692,6 @@ export function LikeButton({
   leaderboard: MiniProfilePointsRow[];
   canEarn?: boolean;
   myUserId?: string | null;
-  followedUserIds?: string[];
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -1772,7 +1755,6 @@ export function LikeButton({
         awards={awards}
         leaderboard={leaderboard}
         myUserId={myUserId}
-        followedUserIds={followedUserIds}
         onClose={() => setOpenWhoLiked(false)}
       />
     </div>

@@ -68,7 +68,7 @@ export default async function NotiesPage() {
     try {
       const { data: rows } = await sb
         .from("cfm_public_member_ids")
-        .select("user_id,favorited_username,photo_url")
+        .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
         .in("user_id", actorIds)
         .limit(500);
       actorProfiles = Object.fromEntries(
@@ -80,6 +80,8 @@ export default async function NotiesPage() {
               user_id: uid,
               favorited_username: String(r.favorited_username ?? "").trim(),
               photo_url: r.photo_url ?? null,
+              lifetime_gifted_total_usd:
+                typeof r.lifetime_gifted_total_usd === "number" ? (r.lifetime_gifted_total_usd as number) : null,
             } satisfies ActorProfile,
           ];
         }),
