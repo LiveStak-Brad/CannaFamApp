@@ -116,7 +116,6 @@ export function LiveClient({
   const rtcClientRef = useRef<any>(null);
   const rtcLocalTracksRef = useRef<{ mic?: any; cam?: any } | null>(null);
   const rtcTokenRefreshRef = useRef<NodeJS.Timeout | null>(null);
-  const rtcHiddenLeaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const rtcAwaySinceRef = useRef<number | null>(null);
   const rtcAbortJoinRef = useRef(0);
   const rtcJoinInFlightRef = useRef(false);
@@ -174,46 +173,17 @@ export function LiveClient({
     }
   }, [rtcLog]);
 
-  const clearHiddenLeaveTimer = useCallback(() => {
-    if (rtcHiddenLeaveTimerRef.current) {
-      clearTimeout(rtcHiddenLeaveTimerRef.current);
-      rtcHiddenLeaveTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleHiddenLeave = useCallback(
-    (reason: string) => {
+  const forceExitViewer = useCallback(
+    async (reason: string) => {
       if (isHostMode) return;
-      if (!rtcClientRef.current && !rtcJoinInFlightRef.current) return;
-      if (rtcHiddenLeaveTimerRef.current) return;
-      rtcHiddenLeaveTimerRef.current = setTimeout(() => {
-        rtcHiddenLeaveTimerRef.current = null;
-        void hardLeaveRtcSession(reason);
-      }, 5000);
+      setStreamEnded(true);
+      await hardLeaveRtcSession(reason);
+      try {
+        router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/");
+        router.refresh();
+      } catch {}
     },
-    [hardLeaveRtcSession, isHostMode],
-  );
-
-  const markAway = useCallback(
-    (reason: string) => {
-      if (isHostMode) return;
-      if (rtcAwaySinceRef.current == null) rtcAwaySinceRef.current = Date.now();
-      scheduleHiddenLeave(reason);
-    },
-    [isHostMode, scheduleHiddenLeave],
-  );
-
-  const markBack = useCallback(
-    (reason: string) => {
-      if (isHostMode) return;
-      const since = rtcAwaySinceRef.current;
-      rtcAwaySinceRef.current = null;
-      clearHiddenLeaveTimer();
-      if (since != null && Date.now() - since >= 5000) {
-        void hardLeaveRtcSession(reason);
-      }
-    },
-    [clearHiddenLeaveTimer, hardLeaveRtcSession, isHostMode],
+    [hardLeaveRtcSession, isHostMode, nextPath, router],
   );
 
   const [idlePaused, setIdlePaused] = useState(false);
@@ -670,14 +640,7 @@ export function LiveClient({
           if (row) {
             setLive((prev) => ({ ...prev, ...row }));
             if (row.is_live === false) {
-              setStreamEnded(true);
-              hardLeaveRtcSession("stream_end");
-              if (!isHostMode) {
-                try {
-                  router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/");
-                  router.refresh();
-                } catch {}
-              }
+              void forceExitViewer("stream_end");
             }
           }
         }
@@ -687,7 +650,7 @@ export function LiveClient({
     return () => {
       sb.removeChannel(liveStateChannel);
     };
-  }, [hardLeaveRtcSession, isHostMode, nextPath, router, sb, chatLiveId]);
+  }, [chatLiveId, forceExitViewer, sb]);
 
   // Fallback: poll live state to ensure viewers disconnect even if realtime is blocked by RLS
   useEffect(() => {
@@ -709,13 +672,8 @@ export function LiveClient({
         const nextLive = !!row?.is_live;
 
         if (!nextLive) {
-          setStreamEnded(true);
           setLive((prev) => ({ ...(prev as any), ...(row as any) }));
-          await hardLeaveRtcSession("stream_end_poll");
-          try {
-            router.push(nextPath && nextPath.startsWith("/") ? nextPath : "/");
-            router.refresh();
-          } catch {}
+          await forceExitViewer("stream_end_poll");
         }
       } catch {
       }
@@ -727,7 +685,65 @@ export function LiveClient({
       cancelled = true;
       clearInterval(t);
     };
-  }, [chatLiveId, hardLeaveRtcSession, isHostMode, live.is_live, nextPath, router, sb, streamEnded]);
+  }, [chatLiveId, forceExitViewer, isHostMode, live.is_live, sb, streamEnded]);
+
+  // Page lifecycle safety: force exit immediately on background/pagehide/freeze
+  useEffect(() => {
+    if (isHostMode) return;
+
+    const onAway = (reason: string) => {
+      if (rtcAwaySinceRef.current == null) rtcAwaySinceRef.current = Date.now();
+      void forceExitViewer(reason);
+    };
+
+    const onResume = (reason: string) => {
+      const since = rtcAwaySinceRef.current;
+      rtcAwaySinceRef.current = null;
+      if (since != null && Date.now() - since >= 5000) {
+        void forceExitViewer(reason);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        onAway("background_visibility_hidden");
+        return;
+      }
+      if (document.visibilityState === "visible") {
+        onResume("away_5s_resume_visibility");
+      }
+    };
+
+    const handlePageHide = () => {
+      onAway("background_pagehide");
+    };
+
+    const handleFreeze = () => {
+      onAway("background_freeze");
+    };
+
+    const handleFocus = () => {
+      onResume("away_5s_resume_focus");
+    };
+
+    const handlePageShow = () => {
+      onResume("away_5s_resume_pageshow");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    (document as any).addEventListener?.("freeze", handleFreeze);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      (document as any).removeEventListener?.("freeze", handleFreeze);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [forceExitViewer, isHostMode]);
 
   // Database-backed viewer tracking
   useEffect(() => {
@@ -1115,37 +1131,13 @@ export function LiveClient({
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        markBack("resume_after_hidden_5s");
-        return;
-      }
-      markAway("visibility_hidden_5s");
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    const handleBlur = () => {
-      markAway("window_blur_5s");
-    };
-
-    const handleFocus = () => {
-      markBack("resume_after_blur_5s");
-    };
-
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-
     return () => {
       cancelled = true;
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      clearHiddenLeaveTimer();
       rtcAwaySinceRef.current = null;
       void hardLeaveRtcSession("effect_cleanup");
     };
-  }, [clearHiddenLeaveTimer, hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, markAway, markBack, rtcLog, streamEnded]);
+  }, [hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, rtcLog, streamEnded]);
 
   const title = "CannaStreams";
 
