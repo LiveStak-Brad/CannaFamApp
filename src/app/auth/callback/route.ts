@@ -88,5 +88,34 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // If the user signed up with a favorited_username in auth metadata, auto-create their member row.
+  // This prevents a post-verify "go create your profile" loop.
+  try {
+    const { data } = await supabase.auth.getUser();
+    const user = data.user ?? null;
+    const suggested = String((user as any)?.user_metadata?.favorited_username ?? "")
+      .trim()
+      .replace(/^@/, "");
+
+    if (user?.id && suggested) {
+      const { data: existing, error: existingErr } = await (supabase as any)
+        .from("cfm_members")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!existingErr && !existing?.id) {
+        await (supabase as any)
+          .from("cfm_members")
+          .upsert(
+            { user_id: user.id, favorited_username: suggested, points: 0 },
+            { onConflict: "user_id" },
+          );
+      }
+    }
+  } catch (e) {
+    console.warn("/auth/callback: failed to auto-create member row", e);
+  }
+
   return response;
 }
