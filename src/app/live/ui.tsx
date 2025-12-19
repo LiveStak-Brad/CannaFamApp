@@ -116,6 +116,7 @@ export function LiveClient({
   const rtcClientRef = useRef<any>(null);
   const rtcLocalTracksRef = useRef<{ mic?: any; cam?: any } | null>(null);
   const rtcTokenRefreshRef = useRef<NodeJS.Timeout | null>(null);
+  const rtcHiddenLeaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const rtcJoinInFlightRef = useRef(false);
   const rtcLeftRef = useRef(false);
   const rtcSessionKeyRef = useRef<string>("");
@@ -169,6 +170,26 @@ export function LiveClient({
       setLastRtcEvent(`left:${reason}`);
     }
   }, [rtcLog]);
+
+  const clearHiddenLeaveTimer = useCallback(() => {
+    if (rtcHiddenLeaveTimerRef.current) {
+      clearTimeout(rtcHiddenLeaveTimerRef.current);
+      rtcHiddenLeaveTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleHiddenLeave = useCallback(
+    (reason: string) => {
+      if (isHostMode) return;
+      if (!rtcClientRef.current) return;
+      if (rtcHiddenLeaveTimerRef.current) return;
+      rtcHiddenLeaveTimerRef.current = setTimeout(() => {
+        rtcHiddenLeaveTimerRef.current = null;
+        void hardLeaveRtcSession(reason);
+      }, 5000);
+    },
+    [hardLeaveRtcSession, isHostMode],
+  );
 
   const [idlePaused, setIdlePaused] = useState(false);
   const [idleEpoch, setIdleEpoch] = useState(0);
@@ -1015,10 +1036,7 @@ export function LiveClient({
           rtcTokenRefreshRef.current = setInterval(async () => {
             try {
               if (cancelled) return;
-              if (document.visibilityState !== "visible") {
-                hardLeaveRtcSession("tab_hidden");
-                return;
-              }
+              if (document.visibilityState !== "visible") return;
               if (!live.is_live) {
                 hardLeaveRtcSession("stream_end");
                 return;
@@ -1067,19 +1085,39 @@ export function LiveClient({
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        void hardLeaveRtcSession("visibility_hidden");
+      if (document.visibilityState === "visible") {
+        clearHiddenLeaveTimer();
+        return;
       }
+      scheduleHiddenLeave("visibility_hidden_5s");
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const handleBlur = () => {
+      if (document.visibilityState === "visible") {
+        scheduleHiddenLeave("window_blur_5s");
+      } else {
+        scheduleHiddenLeave("visibility_hidden_5s");
+      }
+    };
+
+    const handleFocus = () => {
+      clearHiddenLeaveTimer();
+    };
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       cancelled = true;
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      clearHiddenLeaveTimer();
       void hardLeaveRtcSession("effect_cleanup");
     };
-  }, [hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, rtcLog, streamEnded]);
+  }, [clearHiddenLeaveTimer, hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, rtcLog, scheduleHiddenLeave, streamEnded]);
 
   const title = "CannaStreams";
 
