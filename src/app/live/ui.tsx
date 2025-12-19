@@ -117,6 +117,8 @@ export function LiveClient({
   const rtcLocalTracksRef = useRef<{ mic?: any; cam?: any } | null>(null);
   const rtcTokenRefreshRef = useRef<NodeJS.Timeout | null>(null);
   const rtcHiddenLeaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const rtcAwaySinceRef = useRef<number | null>(null);
+  const rtcAbortJoinRef = useRef(0);
   const rtcJoinInFlightRef = useRef(false);
   const rtcLeftRef = useRef(false);
   const rtcSessionKeyRef = useRef<string>("");
@@ -129,6 +131,7 @@ export function LiveClient({
 
   const hardLeaveRtcSession = useCallback(async (reason: string) => {
     if (rtcLeftRef.current) return;
+    rtcAbortJoinRef.current += 1;
     rtcLeftRef.current = true;
     rtcJoinInFlightRef.current = false;
     rtcLog("leave", { reason, at: new Date().toISOString(), sessionKey: rtcSessionKeyRef.current });
@@ -181,7 +184,7 @@ export function LiveClient({
   const scheduleHiddenLeave = useCallback(
     (reason: string) => {
       if (isHostMode) return;
-      if (!rtcClientRef.current) return;
+      if (!rtcClientRef.current && !rtcJoinInFlightRef.current) return;
       if (rtcHiddenLeaveTimerRef.current) return;
       rtcHiddenLeaveTimerRef.current = setTimeout(() => {
         rtcHiddenLeaveTimerRef.current = null;
@@ -189,6 +192,28 @@ export function LiveClient({
       }, 5000);
     },
     [hardLeaveRtcSession, isHostMode],
+  );
+
+  const markAway = useCallback(
+    (reason: string) => {
+      if (isHostMode) return;
+      if (rtcAwaySinceRef.current == null) rtcAwaySinceRef.current = Date.now();
+      scheduleHiddenLeave(reason);
+    },
+    [isHostMode, scheduleHiddenLeave],
+  );
+
+  const markBack = useCallback(
+    (reason: string) => {
+      if (isHostMode) return;
+      const since = rtcAwaySinceRef.current;
+      rtcAwaySinceRef.current = null;
+      clearHiddenLeaveTimer();
+      if (since != null && Date.now() - since >= 5000) {
+        void hardLeaveRtcSession(reason);
+      }
+    },
+    [clearHiddenLeaveTimer, hardLeaveRtcSession, isHostMode],
   );
 
   const [idlePaused, setIdlePaused] = useState(false);
@@ -924,6 +949,7 @@ export function LiveClient({
     rtcLog("join_start", { isHostMode, isLoggedIn, at: new Date().toISOString() });
 
     (async () => {
+      const abortKey = rtcAbortJoinRef.current;
       try {
         const res = await fetch("/api/agora/token", {
           method: "POST",
@@ -950,6 +976,7 @@ export function LiveClient({
 
         if (!token || !appId || !channel) return;
         if (cancelled) return;
+        if (rtcAbortJoinRef.current !== abortKey) return;
 
         rtcSessionKeyRef.current = sessionKeyStr;
         setLocalRtc({ appId, channel, uid: uidNum ? String(uidNum) : "", role });
@@ -957,6 +984,7 @@ export function LiveClient({
         const rtcMod: any = await import("agora-rtc-sdk-ng");
         const AgoraRTC = (rtcMod?.default ?? rtcMod) as any;
         if (cancelled) return;
+        if (rtcAbortJoinRef.current !== abortKey) return;
 
         const client = AgoraRTC.createClient({ mode: "live", codec: "h264" });
         rtcClientRef.current = client;
@@ -1013,6 +1041,9 @@ export function LiveClient({
         });
 
         await client.join(appId, channel, token, uidNum || null);
+
+        if (cancelled) return;
+        if (rtcAbortJoinRef.current !== abortKey) return;
 
         rtcLog("join_ok", { channel, uid: uidNum, role });
         setRemoteCount(Number((client.remoteUsers ?? []).length));
@@ -1086,23 +1117,19 @@ export function LiveClient({
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        clearHiddenLeaveTimer();
+        markBack("resume_after_hidden_5s");
         return;
       }
-      scheduleHiddenLeave("visibility_hidden_5s");
+      markAway("visibility_hidden_5s");
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const handleBlur = () => {
-      if (document.visibilityState === "visible") {
-        scheduleHiddenLeave("window_blur_5s");
-      } else {
-        scheduleHiddenLeave("visibility_hidden_5s");
-      }
+      markAway("window_blur_5s");
     };
 
     const handleFocus = () => {
-      clearHiddenLeaveTimer();
+      markBack("resume_after_blur_5s");
     };
 
     window.addEventListener("blur", handleBlur);
@@ -1115,9 +1142,10 @@ export function LiveClient({
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
       clearHiddenLeaveTimer();
+      rtcAwaySinceRef.current = null;
       void hardLeaveRtcSession("effect_cleanup");
     };
-  }, [clearHiddenLeaveTimer, hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, rtcLog, scheduleHiddenLeave, streamEnded]);
+  }, [clearHiddenLeaveTimer, hardLeaveRtcSession, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, markAway, markBack, rtcLog, streamEnded]);
 
   const title = "CannaStreams";
 
