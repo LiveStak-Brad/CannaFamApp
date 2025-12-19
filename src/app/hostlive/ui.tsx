@@ -65,6 +65,15 @@ export function HostLiveClient({
   const [topModalOpen, setTopModalOpen] = useState(false);
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
 
+  const allTimeRankByUserId = useMemo(() => {
+    const map: Record<string, number> = {};
+    topAllTime.slice(0, 3).forEach((g, i) => {
+      const uid = String(g.profile_id ?? "").trim();
+      if (uid) map[uid] = i + 1;
+    });
+    return map;
+  }, [topAllTime]);
+
   // Viewers state
   const [viewers, setViewers] = useState<ViewerRow[]>([]);
   const [viewerListOpen, setViewerListOpen] = useState(false);
@@ -457,7 +466,8 @@ export function HostLiveClient({
         <div className="absolute right-3 top-16 z-20 flex flex-col gap-1.5">
           {topToday.slice(0, 3).map((g) => {
             const rank = Number(g.rank ?? 0);
-            const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+            const allTimeRank = allTimeRankByUserId[String(g.profile_id ?? "").trim()] ?? 0;
+            const medalEmoji = allTimeRank === 1 ? "🥇" : allTimeRank === 2 ? "🥈" : allTimeRank === 3 ? "🥉" : (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "");
             const bgColor = rank === 1 ? "rgba(234,179,8,0.35)" : rank === 2 ? "rgba(156,163,175,0.35)" : "rgba(249,115,22,0.35)";
             const borderColor = rank === 1 ? "rgba(234,179,8,0.6)" : rank === 2 ? "rgba(156,163,175,0.6)" : "rgba(249,115,22,0.6)";
             const amount = Number(g.total_amount ?? 0);
