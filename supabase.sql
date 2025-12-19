@@ -83,6 +83,7 @@ create table if not exists public.cfm_members (
   tiktok_link text,
   youtube_link text,
   points int default 0,
+  lifetime_gifted_total_usd numeric not null default 0,
   created_at timestamp default now()
 );
 
@@ -121,6 +122,7 @@ alter table public.cfm_members add column if not exists instagram_link text;
 alter table public.cfm_members add column if not exists x_link text;
 alter table public.cfm_members add column if not exists tiktok_link text;
 alter table public.cfm_members add column if not exists youtube_link text;
+alter table public.cfm_members add column if not exists lifetime_gifted_total_usd numeric not null default 0;
 
 -- Public roster view (prevents exposing user_id/points via anon)
 create or replace view public.cfm_public_members as
@@ -134,6 +136,7 @@ create or replace view public.cfm_public_members as
     x_link,
     tiktok_link,
     youtube_link,
+    lifetime_gifted_total_usd,
     created_at
   from public.cfm_members;
 
@@ -147,7 +150,8 @@ create or replace view public.cfm_public_member_ids as
     instagram_link,
     x_link,
     tiktok_link,
-    youtube_link
+    youtube_link,
+    lifetime_gifted_total_usd
   from public.cfm_members
   where user_id is not null;
 
@@ -165,6 +169,7 @@ returns table (
   x_link text,
   tiktok_link text,
   youtube_link text,
+  lifetime_gifted_total_usd numeric,
   created_at timestamp
 )
 language plpgsql
@@ -196,6 +201,7 @@ begin
     m.x_link,
     m.tiktok_link,
     m.youtube_link,
+    m.lifetime_gifted_total_usd,
     m.created_at
   from public.cfm_members m
   where btrim(m.favorited_username) = uname
@@ -218,6 +224,7 @@ begin
     m.x_link,
     m.tiktok_link,
     m.youtube_link,
+    m.lifetime_gifted_total_usd,
     m.created_at
   from public.cfm_members m
   where btrim(m.favorited_username) ilike uname
@@ -820,6 +827,41 @@ as $$
   where g.status = 'paid'
     and g.gifter_user_id is null;
 $$;
+
+create or replace function public.cfm_apply_paid_gift_to_lifetime()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (tg_op = 'INSERT' and new.status = 'paid') or (tg_op = 'UPDATE' and old.status is distinct from 'paid' and new.status = 'paid') then
+    if new.gifter_user_id is not null then
+      update public.cfm_members m
+      set lifetime_gifted_total_usd = coalesce(m.lifetime_gifted_total_usd, 0) + (new.amount_cents::numeric / 100)
+      where m.user_id = new.gifter_user_id;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists cfm_post_gifts_apply_paid_to_lifetime on public.cfm_post_gifts;
+create trigger cfm_post_gifts_apply_paid_to_lifetime
+after insert or update of status on public.cfm_post_gifts
+for each row
+execute function public.cfm_apply_paid_gift_to_lifetime();
+
+update public.cfm_members m
+set lifetime_gifted_total_usd = coalesce(t.total_usd, 0)
+from (
+  select g.gifter_user_id, (sum(g.amount_cents)::numeric / 100) as total_usd
+  from public.cfm_post_gifts g
+  where g.status = 'paid'
+    and g.gifter_user_id is not null
+  group by g.gifter_user_id
+) t
+where m.user_id = t.gifter_user_id;
 
 grant execute on function public.cfm_anonymous_gift_total_cents() to anon, authenticated;
 

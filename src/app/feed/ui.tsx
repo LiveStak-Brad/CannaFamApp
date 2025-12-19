@@ -30,6 +30,7 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { FollowInline } from "@/components/ui/follow-inline";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type FeedPost = {
   id: string;
@@ -198,16 +199,18 @@ export function MyDailyPostComposer({
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
                       onClick={() => insertMention(m.favorited_username)}
                     >
-                      {m.photo_url ? (
-                        <img
-                          src={m.photo_url}
-                          alt={m.favorited_username}
-                          className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="h-6 w-6 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                      )}
+                      <GifterRingAvatar
+                        size={24}
+                        imageUrl={m.photo_url}
+                        name={m.favorited_username}
+                        totalUsd={
+                          typeof (m as any)?.lifetime_gifted_total_usd === "number"
+                            ? Number((m as any).lifetime_gifted_total_usd)
+                            : null
+                        }
+                        showLevelBadge={false}
+                        showDiamondShimmer
+                      />
                       <div className="font-semibold">@{m.favorited_username}</div>
                     </button>
                   ))}
@@ -273,6 +276,7 @@ export type LikerProfile = {
   user_id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -295,6 +299,7 @@ export type MentionCandidate = {
   user_id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -306,6 +311,7 @@ export type MentionCandidate = {
 export type GiftTopGifter = {
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   total_cents: number;
 };
 
@@ -569,18 +575,19 @@ export function GiftSummary({
       {top.length ? (
         <div className="flex items-center gap-1">
           {top.map((g) => (
-            <div key={g.favorited_username} className="h-6 w-6 overflow-hidden rounded-full border border-[color:var(--border)]">
-              {g.photo_url ? (
-                <img
-                  src={g.photo_url}
-                  alt={g.favorited_username}
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="h-full w-full bg-[rgba(255,255,255,0.06)]" />
-              )}
-            </div>
+            <GifterRingAvatar
+              key={g.favorited_username}
+              size={24}
+              imageUrl={g.photo_url}
+              name={g.favorited_username}
+              totalUsd={
+                typeof (g as any)?.lifetime_gifted_total_usd === "number"
+                  ? Number((g as any).lifetime_gifted_total_usd)
+                  : null
+              }
+              showLevelBadge={false}
+              showDiamondShimmer
+            />
           ))}
         </div>
       ) : null}
@@ -650,16 +657,18 @@ function WhoLikedModal({
                     className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
                     onClick={() => setSelectedUserId(p.user_id)}
                   >
-                    {p.photo_url ? (
-                      <img
-                        src={p.photo_url}
-                        alt={p.favorited_username}
-                        className="h-8 w-8 rounded-full border border-[color:var(--border)] object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                    )}
+                    <GifterRingAvatar
+                      size={32}
+                      imageUrl={p.photo_url}
+                      name={p.favorited_username}
+                      totalUsd={
+                        typeof (p as any)?.lifetime_gifted_total_usd === "number"
+                          ? Number((p as any).lifetime_gifted_total_usd)
+                          : null
+                      }
+                      showLevelBadge={false}
+                      showDiamondShimmer
+                    />
                     <div className="text-sm font-semibold">{p.favorited_username}</div>
                   </button>
                 ))}
@@ -746,6 +755,7 @@ function CommentsModal({
     {
       favorited_username: string;
       photo_url: string | null;
+      lifetime_gifted_total_usd?: number | null;
       bio?: string | null;
       public_link?: string | null;
       instagram_link?: string | null;
@@ -1020,16 +1030,18 @@ function CommentsModal({
                           className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
                           onClick={() => insertMention(m.favorited_username)}
                         >
-                          {m.photo_url ? (
-                            <img
-                              src={m.photo_url}
-                              alt={m.favorited_username}
-                              className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="h-6 w-6 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                          )}
+                          <GifterRingAvatar
+                            size={24}
+                            imageUrl={m.photo_url}
+                            name={m.favorited_username}
+                            totalUsd={
+                              typeof (m as any)?.lifetime_gifted_total_usd === "number"
+                                ? Number((m as any).lifetime_gifted_total_usd)
+                                : null
+                            }
+                            showLevelBadge={false}
+                            showDiamondShimmer
+                          />
                           <div className="font-semibold">@{m.favorited_username}</div>
                         </button>
                       ))}
@@ -1096,6 +1108,10 @@ function CommentsModal({
                         const p = commenterProfiles.get(c.user_id) ?? null;
                         const name = p?.favorited_username || "Member";
                         const photo = p?.photo_url ?? null;
+                        const totalUsd =
+                          typeof (p as any)?.lifetime_gifted_total_usd === "number"
+                            ? Number((p as any).lifetime_gifted_total_usd)
+                            : null;
                         const bio = p?.bio ?? null;
 
                         const upCount = upvoteCountByComment.get(c.id) ?? 0;
@@ -1117,16 +1133,14 @@ function CommentsModal({
                           className="flex min-w-0 items-start gap-3 text-left"
                           onClick={() => setSelectedUserId(c.user_id)}
                         >
-                          {photo ? (
-                            <img
-                              src={photo}
-                              alt={name}
-                              className="h-8 w-8 rounded-full border border-[color:var(--border)] object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                          )}
+                          <GifterRingAvatar
+                            size={32}
+                            imageUrl={photo}
+                            name={name}
+                            totalUsd={totalUsd}
+                            showLevelBadge={false}
+                            showDiamondShimmer
+                          />
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <div className="text-sm font-semibold truncate">{name}</div>
@@ -1357,7 +1371,15 @@ export function CommentsButton({
   myUserId: string | null;
   mentionCandidates: MentionCandidate[];
   comments: FeedComment[];
-  commenterProfiles: Map<string, { favorited_username: string; photo_url: string | null; bio?: string | null }>;
+  commenterProfiles: Map<
+    string,
+    {
+      favorited_username: string;
+      photo_url: string | null;
+      lifetime_gifted_total_usd?: number | null;
+      bio?: string | null;
+    }
+  >;
   followedUserIds?: string[];
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;

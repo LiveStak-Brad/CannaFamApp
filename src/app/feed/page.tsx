@@ -21,6 +21,7 @@ import {
 } from "./ui";
 import Link from "next/link";
 import { AdminPostComposer } from "@/components/ui/admin-post-composer";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export const runtime = "nodejs";
 
@@ -116,11 +117,18 @@ export default async function FeedPage({
     ),
   );
 
-  const authorById = new Map<string, { favorited_username: string; photo_url: string | null }>();
+  const authorById = new Map<
+    string,
+    {
+      favorited_username: string;
+      photo_url: string | null;
+      lifetime_gifted_total_usd?: number | null;
+    }
+  >();
   if (authorIds.length) {
     const { data: authors } = await sb
       .from("cfm_public_member_ids")
-      .select("user_id,favorited_username,photo_url")
+      .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
       .in("user_id", authorIds)
       .limit(2000);
 
@@ -129,6 +137,10 @@ export default async function FeedPage({
       authorById.set(String(a.user_id), {
         favorited_username: String(a.favorited_username ?? "Member"),
         photo_url: (a.photo_url ?? null) as string | null,
+        lifetime_gifted_total_usd:
+          typeof (a as any).lifetime_gifted_total_usd === "number"
+            ? (a as any).lifetime_gifted_total_usd
+            : null,
       });
     }
   }
@@ -182,12 +194,19 @@ export default async function FeedPage({
       const gifterIds = Array.from(
         new Set(rows.map((r) => (r.gifter_user_id ? String(r.gifter_user_id) : "")).filter(Boolean)),
       );
-      const gifterProfiles = new Map<string, { favorited_username: string; photo_url: string | null }>();
+      const gifterProfiles = new Map<
+        string,
+        {
+          favorited_username: string;
+          photo_url: string | null;
+          lifetime_gifted_total_usd?: number | null;
+        }
+      >();
 
       if (gifterIds.length) {
         const { data: gifters } = await sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
           .in("user_id", gifterIds)
           .limit(2000);
 
@@ -196,6 +215,10 @@ export default async function FeedPage({
           gifterProfiles.set(String(g.user_id), {
             favorited_username: String(g.favorited_username ?? ""),
             photo_url: (g.photo_url ?? null) as string | null,
+            lifetime_gifted_total_usd:
+              typeof (g as any).lifetime_gifted_total_usd === "number"
+                ? (g as any).lifetime_gifted_total_usd
+                : null,
           });
         }
       }
@@ -228,6 +251,10 @@ export default async function FeedPage({
             return {
               favorited_username: prof?.favorited_username ?? "Member",
               photo_url: prof?.photo_url ?? null,
+              lifetime_gifted_total_usd:
+                typeof (prof as any)?.lifetime_gifted_total_usd === "number"
+                  ? Number((prof as any).lifetime_gifted_total_usd)
+                  : null,
               total_cents: total,
             };
           });
@@ -241,7 +268,9 @@ export default async function FeedPage({
   // Public-safe member list for @mention autocomplete
   const { data: mentionCandidatesRaw } = await sb
     .from("cfm_public_member_ids")
-    .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+    .select(
+      "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+    )
     .limit(2000);
   const mentionCandidates = (mentionCandidatesRaw ?? []) as any[];
 
@@ -268,6 +297,7 @@ export default async function FeedPage({
     {
       favorited_username: string;
       photo_url: string | null;
+      lifetime_gifted_total_usd?: number | null;
       bio?: string | null;
       public_link?: string | null;
       instagram_link?: string | null;
@@ -318,7 +348,9 @@ export default async function FeedPage({
     const { data: publicMembers } = commenterIds.length
       ? await sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+          .select(
+            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+          )
           .in("user_id", commenterIds)
       : { data: [] };
 
@@ -327,6 +359,10 @@ export default async function FeedPage({
       commenterProfiles.set(String(m.user_id), {
         favorited_username: String(m.favorited_username ?? ""),
         photo_url: (m.photo_url ?? null) as string | null,
+        lifetime_gifted_total_usd:
+          typeof (m as any).lifetime_gifted_total_usd === "number"
+            ? (m as any).lifetime_gifted_total_usd
+            : null,
         bio: (m.bio ?? null) as string | null,
         public_link: (m.public_link ?? null) as string | null,
         instagram_link: (m.instagram_link ?? null) as string | null,
@@ -377,6 +413,7 @@ export default async function FeedPage({
       {
         favorited_username: string;
         photo_url: string | null;
+        lifetime_gifted_total_usd?: number | null;
         bio?: string | null;
         public_link?: string | null;
         instagram_link?: string | null;
@@ -389,7 +426,9 @@ export default async function FeedPage({
     try {
       const { data: publicMembers, error: publicErr } = await sb
         .from("cfm_public_member_ids")
-        .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+        .select(
+          "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+        )
         .in("user_id", userIds);
 
       if (publicErr) throw new Error(publicErr.message);
@@ -399,6 +438,10 @@ export default async function FeedPage({
         byUser.set(String(m.user_id), {
           favorited_username: String(m.favorited_username ?? ""),
           photo_url: (m.photo_url ?? null) as string | null,
+          lifetime_gifted_total_usd:
+            typeof (m as any).lifetime_gifted_total_usd === "number"
+              ? (m as any).lifetime_gifted_total_usd
+              : null,
           bio: (m.bio ?? null) as string | null,
           public_link: (m.public_link ?? null) as string | null,
           instagram_link: (m.instagram_link ?? null) as string | null,
@@ -411,7 +454,9 @@ export default async function FeedPage({
       if (isAdmin) {
         const { data: likerMembers } = await sb
           .from("cfm_members")
-          .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+          .select(
+            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+          )
           .in("user_id", userIds);
 
         for (const m of likerMembers ?? []) {
@@ -419,6 +464,10 @@ export default async function FeedPage({
           byUser.set(m.user_id, {
             favorited_username: m.favorited_username,
             photo_url: m.photo_url,
+            lifetime_gifted_total_usd:
+              typeof (m as any).lifetime_gifted_total_usd === "number"
+                ? (m as any).lifetime_gifted_total_usd
+                : null,
             bio: (m as any).bio ?? null,
             public_link: (m as any).public_link ?? null,
             instagram_link: (m as any).instagram_link ?? null,
@@ -439,6 +488,10 @@ export default async function FeedPage({
           user_id: l.user_id,
           favorited_username: info.favorited_username,
           photo_url: info.photo_url,
+          lifetime_gifted_total_usd:
+            typeof (info as any)?.lifetime_gifted_total_usd === "number"
+              ? Number((info as any).lifetime_gifted_total_usd)
+              : null,
           bio: (info as any).bio ?? null,
           public_link: (info as any).public_link ?? null,
           instagram_link: (info as any).instagram_link ?? null,
@@ -469,9 +522,11 @@ export default async function FeedPage({
           </Card>
         ) : null}
 
-        {canEditPosts ? <AdminPostComposer title="Post to the feed (admin)" /> : null}
-
-        <MyDailyPostComposer canPost={canEarn} existing={myDailyPost} mentionCandidates={mentionCandidates} />
+        {canEditPosts ? (
+          <AdminPostComposer title="Post to the feed (admin)" />
+        ) : (
+          <MyDailyPostComposer canPost={canEarn} existing={myDailyPost} mentionCandidates={mentionCandidates} />
+        )}
 
         <div className="space-y-3">
           {filteredPosts?.length ? (
@@ -484,21 +539,21 @@ export default async function FeedPage({
                       const info = uid ? authorById.get(uid) ?? null : null;
                       const uname = String(info?.favorited_username ?? "").trim();
                       const photo = info?.photo_url ?? null;
+                      const totalUsd =
+                        typeof (info as any)?.lifetime_gifted_total_usd === "number"
+                          ? Number((info as any).lifetime_gifted_total_usd)
+                          : null;
                       if (!uname) return null;
                       return (
                         <Link href={`/u/${encodeURIComponent(uname)}`} className="flex items-center gap-2 hover:opacity-80">
-                          {photo ? (
-                            <img
-                              src={photo}
-                              alt={uname}
-                              className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover object-top"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--border)] text-[10px] font-semibold">
-                              {uname[0]?.toUpperCase() ?? "?"}
-                            </div>
-                          )}
+                          <GifterRingAvatar
+                            size={24}
+                            imageUrl={photo}
+                            name={uname}
+                            totalUsd={totalUsd}
+                            showLevelBadge={false}
+                            showDiamondShimmer
+                          />
                           <span className="font-semibold text-[color:var(--foreground)]">@{uname}</span>
                         </Link>
                       );

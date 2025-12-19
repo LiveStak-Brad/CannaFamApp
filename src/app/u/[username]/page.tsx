@@ -3,6 +3,7 @@ import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { AdminPostComposer } from "@/components/ui/admin-post-composer";
 import { DailyPostComposer, type DailyPostDraft, type MentionCandidate } from "@/components/ui/daily-post-composer";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
@@ -15,6 +16,7 @@ type PublicProfile = {
   user_id: string | null;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio: string | null;
   public_link: string | null;
   instagram_link: string | null;
@@ -108,7 +110,7 @@ export default async function UserProfilePage({
   }
 
   const profileFields =
-    "user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link";
+    "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link";
 
   let profile: PublicProfile | null = null;
   let lookupErrMsg = "";
@@ -329,24 +331,24 @@ export default async function UserProfilePage({
         <Card title="Profile">
           <div className="space-y-4">
             <div className="flex items-start gap-4">
-              {profile?.photo_url ? (
-                <img
-                  src={profile.photo_url}
-                  alt={profile.favorited_username}
-                  className="h-20 w-20 rounded-full border border-[color:var(--border)] object-cover object-top"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.05)] text-2xl font-semibold">
-                  {(profile?.favorited_username ?? "?").trim().slice(0, 1).toUpperCase()}
-                </div>
-              )}
+              <GifterRingAvatar
+                size={80}
+                imageUrl={profile?.photo_url ?? null}
+                name={profile?.favorited_username ?? "Member"}
+                totalUsd={
+                  typeof profile?.lifetime_gifted_total_usd === "number" ? profile.lifetime_gifted_total_usd : null
+                }
+                showDiamondShimmer
+              />
 
               <div className="min-w-0 flex-1 space-y-2">
                 {linkedUserId ? (
                   <div className="flex flex-wrap items-center gap-3 text-xs text-[color:var(--muted)]">
                     <span>Followers: {followerCount}</span>
                     <span>Following: {followingCount}</span>
+                    <Link href="/gifter-levels" className="font-semibold underline underline-offset-4">
+                      Gifter Levels
+                    </Link>
                   </div>
                 ) : null}
 
@@ -422,6 +424,14 @@ export default async function UserProfilePage({
           </div>
         </Card>
 
+        {isOwnProfile ? (
+          canAdminPost ? (
+            <AdminPostComposer title="Post to the feed (admin)" />
+          ) : (
+            <DailyPostComposer title="Post to your profile" existing={myDailyPostToday} mentionCandidates={mentionCandidates} />
+          )
+        ) : null}
+
         <Card title="Daily post">
           {!linkedUserId ? (
             <div className="text-sm text-[color:var(--muted)]">
@@ -461,14 +471,6 @@ export default async function UserProfilePage({
             <div className="text-sm text-[color:var(--muted)]">No daily post yet.</div>
           )}
         </Card>
-
-        {isOwnProfile ? (
-          <DailyPostComposer title="Post to your profile" existing={myDailyPostToday} mentionCandidates={mentionCandidates} />
-        ) : null}
-
-        {isOwnProfile && canAdminPost ? (
-          <AdminPostComposer title="Post to the feed (admin)" />
-        ) : null}
 
         <Card title="Recent comments">
           {!linkedUserId ? (
