@@ -66,8 +66,8 @@ export function HostLiveClient({
   const [topModalOpen, setTopModalOpen] = useState(false);
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
 
-  const top3 = (topLive.length ? topLive : topToday).slice(0, 3);
-  const modalRows = topTab === "today" ? (topLive.length ? topLive : topToday) : topTab === "weekly" ? topWeekly : topAllTime;
+  const top3 = topLive.slice(0, 3);
+  const modalRows = topTab === "today" ? topLive : topTab === "weekly" ? topWeekly : topAllTime;
 
   const allTimeRankByUserId = useMemo(() => {
     const map: Record<string, number> = {};

@@ -416,8 +416,8 @@ export function LiveClient({
     );
   };
 
-  const top3 = (topLive.length ? topLive : topToday).slice(0, 3);
-  const modalRows = topTab === "today" ? (topLive.length ? topLive : topToday) : topTab === "weekly" ? topWeekly : topAllTime;
+  const top3 = topLive.slice(0, 3);
+  const modalRows = topTab === "today" ? topLive : topTab === "weekly" ? topWeekly : topAllTime;
 
   // Map user IDs to their all-time rank (1, 2, or 3) for badge display
   const allTimeRankByUserId = useMemo(() => {
