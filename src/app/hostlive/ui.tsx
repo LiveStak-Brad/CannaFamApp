@@ -62,8 +62,12 @@ export function HostLiveClient({
   const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
   const [topWeekly, setTopWeekly] = useState<TopGifterRow[]>([]);
   const [topAllTime, setTopAllTime] = useState<TopGifterRow[]>([]);
+  const [topLive, setTopLive] = useState<TopGifterRow[]>([]);
   const [topModalOpen, setTopModalOpen] = useState(false);
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
+
+  const top3 = (topLive.length ? topLive : topToday).slice(0, 3);
+  const modalRows = topTab === "today" ? (topLive.length ? topLive : topToday) : topTab === "weekly" ? topWeekly : topAllTime;
 
   const allTimeRankByUserId = useMemo(() => {
     const map: Record<string, number> = {};
@@ -124,6 +128,16 @@ export function HostLiveClient({
     }
   }, [sb]);
 
+  const loadTopLiveGifters = useCallback(async () => {
+    if (!liveId) return;
+    try {
+      const r1 = await sb.rpc("cfm_live_top_gifters", { p_live_id: liveId });
+      setTopLive(((r1.data ?? []) as any[]) as TopGifterRow[]);
+    } catch {
+      setTopLive([]);
+    }
+  }, [liveId, sb]);
+
   // Load viewers using RPC function
   const loadViewers = useCallback(async () => {
     if (!liveId) return;
@@ -149,14 +163,17 @@ export function HostLiveClient({
   // Load data on mount and periodically
   useEffect(() => {
     loadTopGifters();
+    loadTopLiveGifters();
     loadViewers();
     const t1 = setInterval(loadTopGifters, 30000);
+    const t1b = setInterval(loadTopLiveGifters, 15000);
     const t2 = setInterval(loadViewers, 10000);
     return () => {
       clearInterval(t1);
+      clearInterval(t1b);
       clearInterval(t2);
     };
-  }, [loadTopGifters, loadViewers]);
+  }, [loadTopGifters, loadTopLiveGifters, loadViewers]);
 
   // Auto-start live on mount
   useEffect(() => {
@@ -464,7 +481,7 @@ export function HostLiveClient({
 
         {/* Top 3 Gifters - positioned on right side below close button (like mobile) */}
         <div className="absolute right-3 top-16 z-20 flex flex-col gap-1.5">
-          {topToday.slice(0, 3).map((g) => {
+          {top3.map((g) => {
             const rank = Number(g.rank ?? 0);
             const allTimeRank = allTimeRankByUserId[String(g.profile_id ?? "").trim()] ?? 0;
             const medalEmoji = allTimeRank === 1 ? "🥇" : allTimeRank === 2 ? "🥈" : allTimeRank === 3 ? "🥉" : (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "");
@@ -675,7 +692,7 @@ export function HostLiveClient({
         </div>
       ) : null}
 
-      {/* Leaderboard Modal - same as web view screen with Today/Weekly/All-Time tabs */}
+      {/* Leaderboard Modal - same as web view screen with Daily/Weekly/All-Time tabs */}
       {topModalOpen ? (
         <div className="fixed inset-0 z-[60] bg-[#0b0b0c]">
           <div className="mx-auto flex h-full w-full max-w-xl flex-col">
@@ -698,7 +715,7 @@ export function HostLiveClient({
                 }`}
                 onClick={() => setTopTab("today")}
               >
-                Today
+                Daily
               </button>
               <button
                 type="button"
@@ -722,7 +739,7 @@ export function HostLiveClient({
 
             <div className="flex-1 overflow-auto px-4 py-4">
               <div className="space-y-2">
-                {(topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime).map((g) => {
+                {modalRows.map((g) => {
                   const r = Number(g.rank ?? 0);
                   const name = String(g.display_name ?? "Member");
                   const amount = Number(g.total_amount ?? 0);
@@ -755,7 +772,7 @@ export function HostLiveClient({
                   );
                 })}
 
-                {(topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime).length === 0 ? (
+                {modalRows.length === 0 ? (
                   <div className="py-8 text-center">
                     <div className="text-4xl mb-2">💸</div>
                     <div className="text-sm text-white/50">No gifts yet for this period.</div>

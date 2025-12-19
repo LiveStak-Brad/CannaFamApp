@@ -1625,6 +1625,7 @@ declare
   v_display_name text;
   v_live_exists boolean;
   v_live_is_live boolean;
+  v_started_at timestamptz;
   v_is_new_join boolean := false;
 begin
   if v_user_id is null then
@@ -1641,6 +1642,8 @@ begin
   if not coalesce(v_live_is_live, false) then
     return json_build_object('error', 'Live is not active');
   end if;
+
+  select started_at from public.cfm_live_state where id = p_live_id into v_started_at;
 
   if exists (
     select 1
@@ -1659,7 +1662,10 @@ begin
   -- Check if this is a new join (not already in viewers or left_at is set)
   select not exists(
     select 1 from public.cfm_live_viewers 
-    where live_id = p_live_id and user_id = v_user_id and left_at is null
+    where live_id = p_live_id
+      and user_id = v_user_id
+      and left_at is null
+      and (v_started_at is null or joined_at >= v_started_at)
   ) into v_is_new_join;
 
   -- Upsert viewer record
@@ -1669,6 +1675,12 @@ begin
   do update set
     last_seen_at = now(),
     left_at = null,
+    joined_at = case
+      when excluded.joined_at is null then cfm_live_viewers.joined_at
+      when v_started_at is not null and cfm_live_viewers.joined_at < v_started_at then excluded.joined_at
+      when cfm_live_viewers.left_at is not null then excluded.joined_at
+      else cfm_live_viewers.joined_at
+    end,
     display_name = coalesce(excluded.display_name, cfm_live_viewers.display_name);
 
   -- Insert join message to chat if this is a new join
@@ -1727,6 +1739,11 @@ security definer
 stable
 set search_path = public
 as $$
+  with ls as (
+    select started_at
+    from public.cfm_live_state
+    where id = p_live_id
+  )
   select
     v.user_id,
     v.display_name,
@@ -1734,11 +1751,90 @@ as $$
     v.last_seen_at,
     (v.left_at is null and v.last_seen_at > now() - interval '2 minutes') as is_online
   from public.cfm_live_viewers v
+  cross join ls
   where v.live_id = p_live_id
+    and (ls.started_at is null or v.joined_at >= ls.started_at)
   order by v.joined_at asc;
 $$;
 
 grant execute on function public.cfm_get_live_viewers(uuid) to anon, authenticated;
+
+create or replace function public.cfm_live_top_gifters(p_live_id uuid)
+returns table (
+  profile_id uuid,
+  display_name text,
+  avatar_url text,
+  total_amount numeric,
+  rank int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with ls as (
+    select id, started_at
+    from public.cfm_live_state
+    where id = p_live_id
+  ),
+  events as (
+    select
+      g.gifter_user_id as user_id,
+      g.amount_cents::bigint as amount_cents,
+      coalesce(g.paid_at, g.created_at) as ts
+    from public.cfm_post_gifts g
+    cross join ls
+    where g.status = 'paid'
+      and g.gifter_user_id is not null
+      and (g.post_id is null or g.post_id::text = 'Live')
+
+    union all
+
+    select
+      lc.sender_user_id as user_id,
+      case
+        when (lc.metadata->>'amount_cents') ~ '^[0-9]+$'
+          then (lc.metadata->>'amount_cents')::bigint
+        else null
+      end as amount_cents,
+      lc.created_at as ts
+    from public.cfm_live_chat lc
+    cross join ls
+    where lc.live_id = p_live_id
+      and lc.type = 'tip'
+      and lc.is_deleted = false
+      and lc.sender_user_id is not null
+      and lc.metadata ? 'amount_cents'
+  ),
+  filtered as (
+    select e.user_id, e.amount_cents
+    from events e
+    cross join ls
+    where e.user_id is not null
+      and e.amount_cents is not null
+      and e.amount_cents > 0
+      and (ls.started_at is null or (e.ts at time zone 'America/Chicago') >= (ls.started_at at time zone 'America/Chicago'))
+  ),
+  totals as (
+    select
+      f.user_id,
+      sum(f.amount_cents)::bigint as total_cents
+    from filtered f
+    group by f.user_id
+  )
+  select
+    t.user_id as profile_id,
+    coalesce(pm.favorited_username, 'Member') as display_name,
+    pm.photo_url as avatar_url,
+    (t.total_cents / 100.0)::numeric as total_amount,
+    rank() over (order by t.total_cents desc, coalesce(pm.favorited_username, 'Member') asc)::int as rank
+  from totals t
+  left join public.cfm_public_member_ids pm
+    on pm.user_id = t.user_id
+  order by rank asc;
+$$;
+
+grant execute on function public.cfm_live_top_gifters(uuid) to anon, authenticated;
 
 -- Function to heartbeat (update last_seen_at)
 create or replace function public.cfm_viewer_heartbeat(p_live_id uuid)

@@ -90,6 +90,7 @@ export function LiveClient({
   const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
   const [topWeekly, setTopWeekly] = useState<TopGifterRow[]>([]);
   const [topAllTime, setTopAllTime] = useState<TopGifterRow[]>([]);
+  const [topLive, setTopLive] = useState<TopGifterRow[]>([]);
   const [topModalOpen, setTopModalOpen] = useState(false);
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
 
@@ -321,6 +322,13 @@ export function LiveClient({
   const [kicked, setKicked] = useState(false);
   const [kickReason, setKickReason] = useState<string | null>(null);
 
+  const chatLiveId = useMemo(() => {
+    const v = String((live as any)?.id ?? "").trim();
+    if (v) return v;
+    const fallback = String((initialLive as any)?.id ?? "").trim();
+    return fallback;
+  }, [initialLive, live]);
+
   const loadTopGifters = useCallback(async () => {
     try {
       const [r1, r2, r3] = await Promise.all([
@@ -338,6 +346,17 @@ export function LiveClient({
       console.error("[loadTopGifters] error:", e);
     }
   }, [sb]);
+
+  const loadTopLiveGifters = useCallback(async () => {
+    const liveId = String(chatLiveId ?? "").trim();
+    if (!liveId) return;
+    try {
+      const r1 = await sb.rpc("cfm_live_top_gifters", { p_live_id: liveId });
+      setTopLive(((r1.data ?? []) as any[]) as TopGifterRow[]);
+    } catch {
+      setTopLive([]);
+    }
+  }, [chatLiveId, sb]);
 
   const medal = (r: number) => {
     if (r === 1) return { label: "🥇", cls: "border-yellow-400/40 bg-yellow-400/15" };
@@ -397,8 +416,8 @@ export function LiveClient({
     );
   };
 
-  const top3 = topToday.slice(0, 3);
-  const modalRows = topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime;
+  const top3 = (topLive.length ? topLive : topToday).slice(0, 3);
+  const modalRows = topTab === "today" ? (topLive.length ? topLive : topToday) : topTab === "weekly" ? topWeekly : topAllTime;
 
   // Map user IDs to their all-time rank (1, 2, or 3) for badge display
   const allTimeRankByUserId = useMemo(() => {
@@ -418,12 +437,13 @@ export function LiveClient({
     return "";
   };
 
-  const chatLiveId = useMemo(() => {
-    const v = String((live as any)?.id ?? "").trim();
-    if (v) return v;
-    const fallback = String((initialLive as any)?.id ?? "").trim();
-    return fallback;
-  }, [initialLive, live]);
+  useEffect(() => {
+    void loadTopLiveGifters();
+    const t = setInterval(() => {
+      void loadTopLiveGifters();
+    }, 15000);
+    return () => clearInterval(t);
+  }, [loadTopLiveGifters]);
 
   const kickViewer = useCallback(
     async (viewerUserId: string) => {
@@ -1412,7 +1432,10 @@ export function LiveClient({
 
                 <div className="flex flex-col gap-2">
                   {top3.map((g) => {
-                    const m = medal(Number(g.rank ?? 0));
+                    const streamRank = Number(g.rank ?? 0);
+                    const allTimeRank = allTimeRankByUserId[String(g.profile_id ?? "").trim()] ?? 0;
+                    const m = medal(streamRank);
+                    const label = allTimeRank === 1 ? "🥇" : allTimeRank === 2 ? "🥈" : allTimeRank === 3 ? "🥉" : m.label;
                     const name = String(g.display_name ?? "Member");
                     return (
                       <button
@@ -1421,7 +1444,7 @@ export function LiveClient({
                         onClick={() => openProfile(String(g.profile_id))}
                         className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-left ${m.cls}`}
                       >
-                        <span className="text-sm">{m.label}</span>
+                        <span className="text-sm">{label}</span>
                         {renderAvatar(name, g.avatar_url, 24)}
                         <div className="min-w-0">
                           <div className="max-w-[100px] truncate text-[11px] font-semibold text-white">{name}</div>
@@ -1609,7 +1632,7 @@ export function LiveClient({
                   }`}
                   onClick={() => setTopTab("today")}
                 >
-                  Today
+                  Daily
                 </button>
                 <button
                   type="button"
@@ -1714,7 +1737,7 @@ export function LiveClient({
                             {v.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="text-sm text-white">{v.name}</div>
-                          {isHost && myUserId && v.id !== myUserId ? (
+                          {isHost && myUserId && v.isOnline && v.id !== myUserId ? (
                             <button
                               type="button"
                               className="ml-auto rounded-full bg-[#d11f2a] px-3 py-1 text-xs font-bold text-white"
