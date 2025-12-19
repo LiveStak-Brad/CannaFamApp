@@ -2516,8 +2516,8 @@ to authenticated
 using (public.cfm_is_admin() or user_id = auth.uid());
 
 create or replace function public.cfm_register_push_token(
-  token text,
-  platform text
+  p_token text,
+  p_platform text
 )
 returns json
 language plpgsql
@@ -2527,8 +2527,8 @@ set search_path = public
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_token text := btrim(coalesce(token, ''));
-  v_platform text := lower(btrim(coalesce(platform, '')));
+  v_token text := btrim(coalesce(p_token, ''));
+  v_platform text := lower(btrim(coalesce(p_platform, '')));
 begin
   if v_user_id is null then
     return json_build_object('error', 'Not authenticated');
@@ -2554,14 +2554,14 @@ begin
   return json_build_object('success', true);
 exception
   when others then
-    return json_build_object('error', 'Failed to register push token');
+    return json_build_object('error', sqlerrm);
 end;
 $$;
 
 grant execute on function public.cfm_register_push_token(text, text) to authenticated;
 
 create or replace function public.cfm_disable_push_token(
-  token text
+  p_token text
 )
 returns json
 language plpgsql
@@ -2571,7 +2571,7 @@ set search_path = public
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_token text := btrim(coalesce(token, ''));
+  v_token text := btrim(coalesce(p_token, ''));
 begin
   if v_user_id is null then
     return json_build_object('error', 'Not authenticated');
@@ -2590,7 +2590,7 @@ begin
   return json_build_object('success', true);
 exception
   when others then
-    return json_build_object('error', 'Failed to disable push token');
+    return json_build_object('error', sqlerrm);
 end;
 $$;
 
