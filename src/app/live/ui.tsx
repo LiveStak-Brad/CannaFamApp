@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/toast";
 import { GiftModal } from "@/app/feed/ui";
 import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 const DEFAULT_EMOTES = ["🔥", "😂", "❤️", "👀", "😭"];
 
@@ -82,6 +83,9 @@ export function LiveClient({
   const [pending, startTransition] = useTransition();
 
   const [nameByUserId, setNameByUserId] = useState<Record<string, string>>({});
+  const [memberByUserId, setMemberByUserId] = useState<
+    Record<string, { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }>
+  >({});
 
   const [hostPending, startHostTransition] = useTransition();
   const [isHost, setIsHost] = useState(false);
@@ -258,7 +262,9 @@ export function LiveClient({
       const [profileRes, lbRes, awardsRes] = await Promise.all([
         sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+          .select(
+            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+          )
           .eq("user_id", uid)
           .maybeSingle(),
         sb.rpc("cfm_leaderboard", { limit_n: 500 }),
@@ -270,31 +276,33 @@ export function LiveClient({
           .limit(50),
       ]);
 
-      const profile = (profileRes.data as any) ?? null;
-      const lbRows = ((lbRes.data ?? []) as MiniProfilePointsRow[]);
-      const awards = ((awardsRes.data ?? []) as MiniProfileAwardRow[]);
+      const profileRow = (profileRes as any)?.data ?? null;
+      const subj: MiniProfileSubject | null = profileRow
+        ? {
+            user_id: profileRow.user_id ?? uid,
+            favorited_username: String(profileRow.favorited_username ?? nameByUserId[uid] ?? "Member"),
+            photo_url: profileRow.photo_url ?? null,
+            lifetime_gifted_total_usd:
+              typeof profileRow.lifetime_gifted_total_usd === "number" ? profileRow.lifetime_gifted_total_usd : null,
+            bio: profileRow.bio ?? null,
+            public_link: profileRow.public_link ?? null,
+            instagram_link: profileRow.instagram_link ?? null,
+            x_link: profileRow.x_link ?? null,
+            tiktok_link: profileRow.tiktok_link ?? null,
+            youtube_link: profileRow.youtube_link ?? null,
+          }
+        : {
+            user_id: uid,
+            favorited_username: nameByUserId[uid] || "Member",
+          };
 
-      if (profile) {
-        setMiniProfileSubject({
-          user_id: profile.user_id,
-          favorited_username: profile.favorited_username ?? "Member",
-          photo_url: profile.photo_url,
-          bio: profile.bio,
-          public_link: profile.public_link,
-          instagram_link: profile.instagram_link,
-          x_link: profile.x_link,
-          tiktok_link: profile.tiktok_link,
-          youtube_link: profile.youtube_link,
-        });
-      } else {
-        setMiniProfileSubject({
-          user_id: uid,
-          favorited_username: nameByUserId[uid] || "Member",
-        });
-      }
+      const lbRows = (((lbRes as any)?.data ?? []) as any[]) as MiniProfilePointsRow[];
+      const awards = (((awardsRes as any)?.data ?? []) as any[]) as MiniProfileAwardRow[];
 
+      setMiniProfileSubject(subj);
       setMiniProfileLeaderboard(lbRows);
       setMiniProfileAwards(awards);
+
       setMiniProfileOpen(true);
     } catch {
       setMiniProfileSubject({
@@ -393,26 +401,18 @@ export function LiveClient({
     router.push("/members");
   }
 
-  const renderAvatar = (name: string, url: string | null, size = 28) => {
-    const initial = String(name ?? "?").trim().slice(0, 1).toUpperCase();
-    if (url) {
-      return (
-        <img
-          src={url}
-          alt={name}
-          className="rounded-full object-cover object-top"
-          style={{ width: size, height: size }}
-          referrerPolicy="no-referrer"
-        />
-      );
-    }
+  const renderAvatar = (userId: string, name: string, url: string | null, size = 28) => {
+    const uid = String(userId ?? "").trim();
+    const cached = uid ? memberByUserId[uid] ?? null : null;
+    const totalUsd = typeof cached?.lifetime_gifted_total_usd === "number" ? cached.lifetime_gifted_total_usd : null;
     return (
-      <div
-        className="flex items-center justify-center rounded-full border border-white/15 bg-white/10 text-xs font-semibold text-white"
-        style={{ width: size, height: size }}
-      >
-        {initial}
-      </div>
+      <GifterRingAvatar
+        size={size}
+        imageUrl={url ?? cached?.photo_url ?? null}
+        name={name}
+        totalUsd={totalUsd}
+        showDiamondShimmer
+      />
     );
   };
 
@@ -863,18 +863,36 @@ export function LiveClient({
         );
         if (!ids.length) return;
 
-        const { data } = await sb.from("cfm_public_member_ids").select("user_id,favorited_username").in("user_id", ids);
+        const { data } = await sb
+          .from("cfm_public_member_ids")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+          .in("user_id", ids);
         if (cancelled) return;
 
         const patch: Record<string, string> = {};
+        const memberPatch: Record<string, { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }> = {};
         for (const row of (data ?? []) as any[]) {
           const uid = String(row?.user_id ?? "").trim();
           const uname = String(row?.favorited_username ?? "").trim();
+          const photoUrl = (row?.photo_url ?? null) as string | null;
+          const lifetimeUsd = typeof row?.lifetime_gifted_total_usd === "number" ? (row.lifetime_gifted_total_usd as number) : null;
+
           if (uid && uname) patch[uid] = uname;
+          if (uid) {
+            memberPatch[uid] = {
+              photo_url: photoUrl,
+              lifetime_gifted_total_usd: lifetimeUsd,
+              favorited_username: uname || null,
+            };
+          }
         }
 
         if (Object.keys(patch).length) {
           setNameByUserId((prev) => ({ ...prev, ...patch }));
+        }
+
+        if (Object.keys(memberPatch).length) {
+          setMemberByUserId((prev) => ({ ...prev, ...memberPatch }));
         }
       } catch {
       }
@@ -884,6 +902,54 @@ export function LiveClient({
       cancelled = true;
     };
   }, [nameByUserId, rows, sb]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = Array.from(
+          new Set(
+            [...topLive, ...topToday, ...topWeekly, ...topAllTime]
+              .map((g) => String((g as any)?.profile_id ?? "").trim())
+              .filter(Boolean)
+              .concat(viewers.map((v) => String((v as any)?.id ?? "").trim()).filter(Boolean))
+              .filter((id) => !memberByUserId[id]),
+          ),
+        );
+        if (!ids.length) return;
+
+        const { data } = await sb
+          .from("cfm_public_member_ids")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+          .in("user_id", ids)
+          .limit(2000);
+        if (cancelled) return;
+
+        const memberPatch: Record<
+          string,
+          { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }
+        > = {};
+        for (const row of (data ?? []) as any[]) {
+          const uid = String(row?.user_id ?? "").trim();
+          if (!uid) continue;
+          memberPatch[uid] = {
+            photo_url: (row?.photo_url ?? null) as string | null,
+            lifetime_gifted_total_usd:
+              typeof row?.lifetime_gifted_total_usd === "number" ? (row.lifetime_gifted_total_usd as number) : null,
+            favorited_username: String(row?.favorited_username ?? "").trim() || null,
+          };
+        }
+
+        if (Object.keys(memberPatch).length) {
+          setMemberByUserId((prev) => ({ ...prev, ...memberPatch }));
+        }
+      } catch {
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberByUserId, sb, topAllTime, topLive, topToday, topWeekly]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -1445,7 +1511,7 @@ export function LiveClient({
                         className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-left ${m.cls}`}
                       >
                         <span className="text-sm">{label}</span>
-                        {renderAvatar(name, g.avatar_url, 24)}
+                        {renderAvatar(String(g.profile_id ?? ""), name, g.avatar_url, 24)}
                         <div className="min-w-0">
                           <div className="max-w-[100px] truncate text-[11px] font-semibold text-white">{name}</div>
                           <div className="text-[11px] font-bold text-green-400">{fmtAmount(g.total_amount ?? 0)}</div>
@@ -1657,7 +1723,9 @@ export function LiveClient({
               <div className="flex-1 overflow-auto px-4 py-4">
                 <div className="space-y-2">
                   {modalRows.map((g) => {
-                    const r = Number(g.rank ?? 0);
+                    const uid = String(g.profile_id ?? "").trim();
+                    if (!uid) return null;
+                    const r = Number(g.rank ?? 0) || 0;
                     const name = String(g.display_name ?? "Member");
                     const amount = Number(g.total_amount ?? 0);
                     const medalEmoji = r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : null;
@@ -1679,7 +1747,7 @@ export function LiveClient({
                             <span className="text-sm font-bold text-white/60">#{r}</span>
                           )}
                         </div>
-                        {renderAvatar(name, g.avatar_url, 40)}
+                        {renderAvatar(uid, name, g.avatar_url, 40)}
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-bold text-white">{name}</div>
                           <div className="text-lg font-bold text-green-400">${amount.toFixed(2)}</div>
@@ -1733,8 +1801,18 @@ export function LiveClient({
                     <div className="space-y-2 max-h-[300px] overflow-auto">
                       {viewers.map((v) => (
                         <div key={v.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white">
-                            {v.name.charAt(0).toUpperCase()}
+                          <div className="shrink-0">
+                            <GifterRingAvatar
+                              size={32}
+                              imageUrl={memberByUserId[String(v.id)]?.photo_url ?? null}
+                              name={v.name}
+                              totalUsd={
+                                typeof memberByUserId[String(v.id)]?.lifetime_gifted_total_usd === "number"
+                                  ? memberByUserId[String(v.id)]?.lifetime_gifted_total_usd
+                                  : null
+                              }
+                              showDiamondShimmer
+                            />
                           </div>
                           <div className="text-sm text-white">{v.name}</div>
                           {isHost && myUserId && v.isOnline && v.id !== myUserId ? (

@@ -5,11 +5,13 @@ import { useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FollowInline } from "@/components/ui/follow-inline";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type MiniProfileSubject = {
   user_id?: string | null;
   favorited_username: string;
   photo_url?: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -98,6 +100,7 @@ export function MiniProfileModal({
   const initial = (subject.favorited_username || "?").trim().slice(0, 1).toUpperCase();
   const photoUrl = subject.photo_url ?? null;
   const bio = subject.bio ?? null;
+  const totalUsd = typeof subject.lifetime_gifted_total_usd === "number" ? subject.lifetime_gifted_total_usd : null;
 
   const socials = [
     { key: "public", label: "Link", href: subject.public_link ?? null },
@@ -128,18 +131,13 @@ export function MiniProfileModal({
                 onClick={() => onClose()}
                 className="shrink-0"
               >
-                {photoUrl ? (
-                  <img
-                    src={photoUrl}
-                    alt={subject.favorited_username}
-                    className="h-12 w-12 rounded-full border border-[color:var(--border)] object-cover object-top"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.05)] text-lg font-semibold">
-                    {initial}
-                  </div>
-                )}
+                <GifterRingAvatar
+                  size={48}
+                  imageUrl={photoUrl}
+                  name={subject.favorited_username}
+                  totalUsd={totalUsd}
+                  showDiamondShimmer
+                />
               </Link>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">

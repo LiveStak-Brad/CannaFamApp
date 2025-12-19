@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toast";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 type LiveState = {
   id: string;
@@ -107,7 +108,33 @@ export function HostLiveClient({
   const [nameByUserId, setNameByUserId] = useState<Record<string, string>>({});
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  const [memberByUserId, setMemberByUserId] = useState<
+    Record<
+      string,
+      {
+        photo_url: string | null;
+        lifetime_gifted_total_usd: number | null;
+        favorited_username: string | null;
+      }
+    >
+  >({});
+
   const liveId = live?.id ?? "";
+
+  const renderAvatar = (userId: string, name: string, url: string | null, size = 28) => {
+    const uid = String(userId ?? "").trim();
+    const cached = uid ? memberByUserId[uid] ?? null : null;
+    const totalUsd = typeof cached?.lifetime_gifted_total_usd === "number" ? cached.lifetime_gifted_total_usd : null;
+    return (
+      <GifterRingAvatar
+        size={size}
+        imageUrl={url ?? cached?.photo_url ?? null}
+        name={name}
+        totalUsd={totalUsd}
+        showDiamondShimmer
+      />
+    );
+  };
 
   // Load top gifters (Today, Weekly, All-Time)
   const loadTopGifters = useCallback(async () => {
@@ -407,15 +434,82 @@ export function HostLiveClient({
     (async () => {
       const { data } = await sb
         .from("cfm_public_member_ids")
-        .select("user_id,favorited_username")
+        .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
         .in("user_id", unknownIds);
       if (data) {
         const map: Record<string, string> = {};
-        data.forEach((r: any) => { map[r.user_id] = r.favorited_username; });
+        const memberPatch: Record<
+          string,
+          { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }
+        > = {};
+        data.forEach((r: any) => {
+          const uid = String(r?.user_id ?? "").trim();
+          const uname = String(r?.favorited_username ?? "").trim();
+          if (uid && uname) map[uid] = uname;
+          if (uid) {
+            memberPatch[uid] = {
+              photo_url: (r?.photo_url ?? null) as string | null,
+              lifetime_gifted_total_usd:
+                typeof r?.lifetime_gifted_total_usd === "number" ? (r.lifetime_gifted_total_usd as number) : null,
+              favorited_username: uname || null,
+            };
+          }
+        });
         setNameByUserId(prev => ({ ...prev, ...map }));
+        if (Object.keys(memberPatch).length) {
+          setMemberByUserId((prev) => ({ ...prev, ...memberPatch }));
+        }
       }
     })();
   }, [chatRows, sb]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = Array.from(
+          new Set(
+            [...topLive, ...topWeekly, ...topAllTime]
+              .map((g) => String((g as any)?.profile_id ?? "").trim())
+              .filter(Boolean)
+              .concat(viewers.map((v) => String((v as any)?.user_id ?? "").trim()).filter(Boolean))
+              .filter((id) => !memberByUserId[id]),
+          ),
+        );
+        if (!ids.length) return;
+
+        const { data } = await sb
+          .from("cfm_public_member_ids")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+          .in("user_id", ids)
+          .limit(2000);
+        if (cancelled) return;
+
+        const memberPatch: Record<
+          string,
+          { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }
+        > = {};
+        for (const row of (data ?? []) as any[]) {
+          const uid = String(row?.user_id ?? "").trim();
+          if (!uid) continue;
+          memberPatch[uid] = {
+            photo_url: (row?.photo_url ?? null) as string | null,
+            lifetime_gifted_total_usd:
+              typeof row?.lifetime_gifted_total_usd === "number" ? (row.lifetime_gifted_total_usd as number) : null,
+            favorited_username: String(row?.favorited_username ?? "").trim() || null,
+          };
+        }
+
+        if (Object.keys(memberPatch).length) {
+          setMemberByUserId((prev) => ({ ...prev, ...memberPatch }));
+        }
+      } catch {
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberByUserId, sb, topAllTime, topLive, topWeekly, viewers]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -488,6 +582,7 @@ export function HostLiveClient({
             const bgColor = rank === 1 ? "rgba(234,179,8,0.35)" : rank === 2 ? "rgba(156,163,175,0.35)" : "rgba(249,115,22,0.35)";
             const borderColor = rank === 1 ? "rgba(234,179,8,0.6)" : rank === 2 ? "rgba(156,163,175,0.6)" : "rgba(249,115,22,0.6)";
             const amount = Number(g.total_amount ?? 0);
+            const name = String(g.display_name ?? "Member");
             return (
               <div
                 key={`${g.profile_id}-${rank}`}
@@ -495,15 +590,9 @@ export function HostLiveClient({
                 style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
               >
                 <span className="text-sm">{medalEmoji}</span>
-                {g.avatar_url ? (
-                  <img src={g.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover object-top" />
-                ) : (
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold text-white">
-                    {g.display_name?.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                {renderAvatar(String(g.profile_id ?? ""), name, g.avatar_url, 24)}
                 <div className="flex flex-col">
-                  <span className="text-[11px] font-semibold text-white truncate max-w-[70px]">{g.display_name}</span>
+                  <span className="text-[11px] font-semibold text-white truncate max-w-[70px]">{name}</span>
                   <span className="text-[10px] font-bold text-green-400">${amount.toFixed(2)}</span>
                 </div>
               </div>
@@ -669,9 +758,7 @@ export function HostLiveClient({
                   <div className="space-y-2 max-h-[300px] overflow-auto">
                     {viewers.map((v) => (
                       <div key={v.user_id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white">
-                          {(v.display_name || "M").charAt(0).toUpperCase()}
-                        </div>
+                        {renderAvatar(String(v.user_id ?? ""), String(v.display_name ?? "Member"), null, 32)}
                         <div className="text-sm text-white">{v.display_name || "Member"}</div>
                         {v.is_online ? (
                           <span className="ml-auto text-xs text-green-400">● Online</span>
@@ -757,13 +844,7 @@ export function HostLiveClient({
                           <span className="text-sm font-bold text-white/60">#{r}</span>
                         )}
                       </div>
-                      {g.avatar_url ? (
-                        <img src={g.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover object-top" />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-sm font-semibold text-white">
-                          {name.slice(0, 1).toUpperCase()}
-                        </div>
-                      )}
+                      {renderAvatar(String(g.profile_id ?? ""), name, g.avatar_url, 40)}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-bold text-white">{name}</div>
                         <div className="text-lg font-bold text-green-400">${amount.toFixed(2)}</div>

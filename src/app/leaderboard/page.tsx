@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
+import Link from "next/link";
 import {
   LeaderboardClient,
   type AwardRow,
@@ -24,7 +25,9 @@ export default async function LeaderboardPage() {
   const { data: profiles } = usernames.length
     ? await sb
         .from("cfm_public_members")
-        .select("favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link")
+        .select(
+          "favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+        )
         .in("favorited_username", usernames)
     : { data: [] };
 
@@ -76,7 +79,15 @@ export default async function LeaderboardPage() {
             Top members by points.
           </p>
           <div className="pt-2">
-            <PointsExplainerButton />
+            <div className="flex flex-wrap items-center gap-2">
+              <PointsExplainerButton />
+              <Link
+                href="/gifter-levels"
+                className="text-xs font-semibold underline underline-offset-4 text-[color:var(--muted)]"
+              >
+                Gifter Levels
+              </Link>
+            </div>
           </div>
         </div>
 

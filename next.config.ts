@@ -3,6 +3,7 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  transpilePackages: ["@cannafam/shared"],
   reactCompiler: true,
   outputFileTracingRoot: path.join(__dirname),
   experimental: {

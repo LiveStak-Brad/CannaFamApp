@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Container } from "@/components/shell/container";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { requireApprovedMember } from "@/lib/auth";
@@ -14,6 +15,7 @@ type MemberProfile = {
   id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio: string | null;
   public_link: string | null;
   instagram_link: string | null;
@@ -29,7 +31,7 @@ export default async function MePage() {
   const { data: memberRaw } = await sb
     .from("cfm_members")
     .select(
-      "id,favorited_username,photo_url,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+      "id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -49,30 +51,33 @@ export default async function MePage() {
 
         <Card title="Edit profile">
           <div className="space-y-3">
-            {member?.photo_url ? (
+            {member?.favorited_username ? (
               <div className="flex items-center gap-3">
-                <img
-                  src={member.photo_url}
-                  alt={member.favorited_username ?? "Member"}
-                  className="h-14 w-14 rounded-full border border-[color:var(--border)] object-cover object-top"
-                  referrerPolicy="no-referrer"
+                <GifterRingAvatar
+                  size={56}
+                  imageUrl={member?.photo_url ?? null}
+                  name={member?.favorited_username ?? "Member"}
+                  totalUsd={
+                    typeof member?.lifetime_gifted_total_usd === "number" ? member.lifetime_gifted_total_usd : null
+                  }
+                  showDiamondShimmer
                 />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold truncate">
                     {member.favorited_username ?? "Member"}
                   </div>
-                  {myUsername ? (
-                    <Link
-                      href={`/u/${encodeURIComponent(myUsername)}`}
-                      className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-                    >
-                      View public profile
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[color:var(--muted)]">
+                    {myUsername ? (
+                      <Link href={`/u/${encodeURIComponent(myUsername)}`} className="underline underline-offset-4">
+                        View public profile
+                      </Link>
+                    ) : null}
+                    <Link href="/gifter-levels" className="underline underline-offset-4">
+                      Gifter Levels
                     </Link>
-                  ) : null}
+                  </div>
                 </div>
               </div>
-            ) : member?.favorited_username ? (
-              <div className="text-sm font-semibold">{member.favorited_username}</div>
             ) : (
               <div className="text-sm text-[color:var(--muted)]">
                 Profile not found.

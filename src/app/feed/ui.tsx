@@ -30,6 +30,7 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { FollowInline } from "@/components/ui/follow-inline";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type FeedPost = {
   id: string;
@@ -198,16 +199,15 @@ export function MyDailyPostComposer({
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
                       onClick={() => insertMention(m.favorited_username)}
                     >
-                      {m.photo_url ? (
-                        <img
-                          src={m.photo_url}
-                          alt={m.favorited_username}
-                          className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="h-6 w-6 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                      )}
+                      <GifterRingAvatar
+                        size={24}
+                        imageUrl={m.photo_url}
+                        name={m.favorited_username}
+                        totalUsd={
+                          typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null
+                        }
+                        showDiamondShimmer
+                      />
                       <div className="font-semibold">@{m.favorited_username}</div>
                     </button>
                   ))}
@@ -273,6 +273,7 @@ export type LikerProfile = {
   user_id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -295,6 +296,7 @@ export type MentionCandidate = {
   user_id: string;
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -306,6 +308,7 @@ export type MentionCandidate = {
 export type GiftTopGifter = {
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   total_cents: number;
 };
 
@@ -569,18 +572,14 @@ export function GiftSummary({
       {top.length ? (
         <div className="flex items-center gap-1">
           {top.map((g) => (
-            <div key={g.favorited_username} className="h-6 w-6 overflow-hidden rounded-full border border-[color:var(--border)]">
-              {g.photo_url ? (
-                <img
-                  src={g.photo_url}
-                  alt={g.favorited_username}
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="h-full w-full bg-[rgba(255,255,255,0.06)]" />
-              )}
-            </div>
+            <GifterRingAvatar
+              key={g.favorited_username}
+              size={24}
+              imageUrl={g.photo_url}
+              name={g.favorited_username}
+              totalUsd={typeof g.lifetime_gifted_total_usd === "number" ? g.lifetime_gifted_total_usd : null}
+              showDiamondShimmer
+            />
           ))}
         </div>
       ) : null}
@@ -620,6 +619,8 @@ function WhoLikedModal({
         user_id: selected.user_id,
         favorited_username: selected.favorited_username,
         photo_url: selected.photo_url,
+        lifetime_gifted_total_usd:
+          typeof selected.lifetime_gifted_total_usd === "number" ? selected.lifetime_gifted_total_usd : null,
         bio: selected.bio ?? null,
         public_link: selected.public_link ?? null,
         instagram_link: selected.instagram_link ?? null,
@@ -650,16 +651,15 @@ function WhoLikedModal({
                     className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
                     onClick={() => setSelectedUserId(p.user_id)}
                   >
-                    {p.photo_url ? (
-                      <img
-                        src={p.photo_url}
-                        alt={p.favorited_username}
-                        className="h-8 w-8 rounded-full border border-[color:var(--border)] object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                    )}
+                    <GifterRingAvatar
+                      size={32}
+                      imageUrl={p.photo_url}
+                      name={p.favorited_username}
+                      totalUsd={
+                        typeof p.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null
+                      }
+                      showDiamondShimmer
+                    />
                     <div className="text-sm font-semibold">{p.favorited_username}</div>
                   </button>
                 ))}
@@ -746,6 +746,7 @@ function CommentsModal({
     {
       favorited_username: string;
       photo_url: string | null;
+      lifetime_gifted_total_usd?: number | null;
       bio?: string | null;
       public_link?: string | null;
       instagram_link?: string | null;
@@ -789,6 +790,8 @@ function CommentsModal({
       user_id: selectedUserId,
       favorited_username: p.favorited_username,
       photo_url: p.photo_url,
+      lifetime_gifted_total_usd:
+        typeof p.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null,
       bio: p.bio ?? null,
       public_link: p.public_link ?? null,
       instagram_link: p.instagram_link ?? null,
@@ -1020,16 +1023,15 @@ function CommentsModal({
                           className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
                           onClick={() => insertMention(m.favorited_username)}
                         >
-                          {m.photo_url ? (
-                            <img
-                              src={m.photo_url}
-                              alt={m.favorited_username}
-                              className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="h-6 w-6 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                          )}
+                          <GifterRingAvatar
+                            size={24}
+                            imageUrl={m.photo_url}
+                            name={m.favorited_username}
+                            totalUsd={
+                              typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null
+                            }
+                            showDiamondShimmer
+                          />
                           <div className="font-semibold">@{m.favorited_username}</div>
                         </button>
                       ))}
@@ -1111,200 +1113,199 @@ function CommentsModal({
                               (isReply ? "ml-10" : "")
                             }
                           >
-                      <div className="flex items-start justify-between gap-3">
-                        <button
-                          type="button"
-                          className="flex min-w-0 items-start gap-3 text-left"
-                          onClick={() => setSelectedUserId(c.user_id)}
-                        >
-                          {photo ? (
-                            <img
-                              src={photo}
-                              alt={name}
-                              className="h-8 w-8 rounded-full border border-[color:var(--border)] object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="h-8 w-8 rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)]" />
-                          )}
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="text-sm font-semibold truncate">{name}</div>
-                              <FollowInline
-                                targetUserId={c.user_id}
-                                myUserId={myUserId}
-                                initialFollowing={followedSet.has(c.user_id)}
-                              />
-                            </div>
-                            {bio ? (
-                              <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
-                            ) : null}
-                            <div className="mt-1 text-xs text-[color:var(--muted)]">{fmtTime(c.created_at)}</div>
-                          </div>
-                        </button>
-
-                        <div className="shrink-0 text-right">
-                          <button
-                            type="button"
-                            className={
-                              "rounded-lg border border-[color:var(--border)] px-2 py-1 text-xs font-semibold " +
-                              (mine
-                                ? "bg-[rgba(209,31,42,0.25)] text-[color:var(--foreground)]"
-                                : "bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)]")
-                            }
-                            onClick={() => {
-                              if (!canComment) return;
-                              setMsg(null);
-                              startTransition(async () => {
-                                try {
-                                  const res = await toggleCommentUpvote(c.id, mine);
-                                  setMsg({ tone: "success", text: res.message });
-                                } catch (e) {
-                                  setMsg({
-                                    tone: "error",
-                                    text: e instanceof Error ? e.message : "Upvote failed",
-                                  });
-                                }
-                              });
-                            }}
-                          >
-                            ⬆ {upCount}
-                          </button>
-
-                          {!isReply ? (
-                            <div className="mt-2 flex justify-end">
+                            <div className="flex items-start justify-between gap-3">
                               <button
                                 type="button"
-                                className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-                                onClick={() => {
-                                  if (!canComment) return;
-                                  setReplyToId(c.id);
-                                  requestAnimationFrame(() => composerRef.current?.focus());
-                                }}
+                                className="flex min-w-0 items-start gap-3 text-left"
+                                onClick={() => setSelectedUserId(c.user_id)}
                               >
-                                Reply
+                                <GifterRingAvatar
+                                  size={32}
+                                  imageUrl={photo}
+                                  name={name}
+                                  totalUsd={
+                                    typeof p?.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null
+                                  }
+                                  showDiamondShimmer
+                                />
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-sm font-semibold truncate">{name}</div>
+                                    <FollowInline
+                                      targetUserId={c.user_id}
+                                      myUserId={myUserId}
+                                      initialFollowing={followedSet.has(c.user_id)}
+                                    />
+                                  </div>
+                                  {bio ? (
+                                    <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
+                                  ) : null}
+                                  <div className="mt-1 text-xs text-[color:var(--muted)]">{fmtTime(c.created_at)}</div>
+                                </div>
                               </button>
-                            </div>
-                          ) : null}
 
-                          {isOwner ? (
-                            <div className="mt-2 flex justify-end gap-2">
-                              {isEditing ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-                                    onClick={() => {
-                                      setEditingId(null);
-                                      setEditingText("");
-                                    }}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-                                    onClick={() => {
-                                      const next = editingText.trim();
-                                      if (!next) return;
-                                      setMsg(null);
-                                      startTransition(async () => {
-                                        try {
-                                          const res = await updateFeedComment(c.id, next);
-                                          setMsg({ tone: "success", text: res.message });
-                                          setEditingId(null);
-                                          setEditingText("");
-                                        } catch (e) {
-                                          setMsg({
-                                            tone: "error",
-                                            text: e instanceof Error ? e.message : "Update failed",
-                                          });
-                                        }
-                                      });
-                                    }}
-                                  >
-                                    Save
-                                  </button>
-                                </>
-                              ) : (
+                              <div className="shrink-0 text-right">
                                 <button
                                   type="button"
-                                  className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                  className={
+                                    "rounded-lg border border-[color:var(--border)] px-2 py-1 text-xs font-semibold " +
+                                    (mine
+                                      ? "bg-[rgba(209,31,42,0.25)] text-[color:var(--foreground)]"
+                                      : "bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)]")
+                                  }
                                   onClick={() => {
-                                    setEditingId(c.id);
-                                    setEditingText(c.content);
+                                    if (!canComment) return;
+                                    setMsg(null);
+                                    startTransition(async () => {
+                                      try {
+                                        const res = await toggleCommentUpvote(c.id, mine);
+                                        setMsg({ tone: "success", text: res.message });
+                                      } catch (e) {
+                                        setMsg({
+                                          tone: "error",
+                                          text: e instanceof Error ? e.message : "Upvote failed",
+                                        });
+                                      }
+                                    });
                                   }}
                                 >
-                                  Edit
+                                  ⬆ {upCount}
                                 </button>
-                              )}
-                            </div>
-                          ) : null}
 
-                          {isAdmin ? (
-                            <div className="mt-2 flex justify-end gap-2">
-                              <button
-                                type="button"
-                                className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-                                onClick={() => {
-                                  setMsg(null);
-                                  startTransition(async () => {
-                                    try {
-                                      const res = await hideFeedComment(c.id, !c.is_hidden);
-                                      setMsg({ tone: "success", text: res.message });
-                                    } catch (e) {
-                                      setMsg({
-                                        tone: "error",
-                                        text: e instanceof Error ? e.message : "Hide failed",
-                                      });
-                                    }
-                                  });
-                                }}
-                              >
-                                {c.is_hidden ? "Unhide" : "Hide"}
-                              </button>
-                              <button
-                                type="button"
-                                className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-                                onClick={() => {
-                                  const ok = window.confirm("Delete this comment?");
-                                  if (!ok) return;
-                                  setMsg(null);
-                                  startTransition(async () => {
-                                    try {
-                                      const res = await deleteFeedComment(c.id);
-                                      setMsg({ tone: "success", text: res.message });
-                                    } catch (e) {
-                                      setMsg({
-                                        tone: "error",
-                                        text: e instanceof Error ? e.message : "Delete failed",
-                                      });
-                                    }
-                                  });
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
+                                {!isReply ? (
+                                  <div className="mt-2 flex justify-end">
+                                    <button
+                                      type="button"
+                                      className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                      onClick={() => {
+                                        if (!canComment) return;
+                                        setReplyToId(c.id);
+                                        requestAnimationFrame(() => composerRef.current?.focus());
+                                      }}
+                                    >
+                                      Reply
+                                    </button>
+                                  </div>
+                                ) : null}
 
-                      {isEditing ? (
-                        <div className="mt-2">
-                          <Textarea
-                            label="Edit comment"
-                            value={editingText}
-                            onChange={(e) => setEditingText(e.target.value)}
-                            placeholder="Update your comment"
-                          />
-                        </div>
-                      ) : (
-                        <div className="mt-2 text-sm whitespace-pre-wrap">{renderWithMentions(c.content)}</div>
-                      )}
-                      {c.is_hidden && isAdmin ? (
-                        <div className="mt-2 text-xs text-[color:var(--muted)]">Hidden from public.</div>
-                      ) : null}
+                                {isOwner ? (
+                                  <div className="mt-2 flex justify-end gap-2">
+                                    {isEditing ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                          onClick={() => {
+                                            setEditingId(null);
+                                            setEditingText("");
+                                          }}
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                          onClick={() => {
+                                            const next = editingText.trim();
+                                            if (!next) return;
+                                            setMsg(null);
+                                            startTransition(async () => {
+                                              try {
+                                                const res = await updateFeedComment(c.id, next);
+                                                setMsg({ tone: "success", text: res.message });
+                                                setEditingId(null);
+                                                setEditingText("");
+                                              } catch (e) {
+                                                setMsg({
+                                                  tone: "error",
+                                                  text: e instanceof Error ? e.message : "Update failed",
+                                                });
+                                              }
+                                            });
+                                          }}
+                                        >
+                                          Save
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                        onClick={() => {
+                                          setEditingId(c.id);
+                                          setEditingText(c.content);
+                                        }}
+                                      >
+                                        Edit
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : null}
+
+                                {isAdmin ? (
+                                  <div className="mt-2 flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                      onClick={() => {
+                                        setMsg(null);
+                                        startTransition(async () => {
+                                          try {
+                                            const res = await hideFeedComment(c.id, !c.is_hidden);
+                                            setMsg({ tone: "success", text: res.message });
+                                          } catch (e) {
+                                            setMsg({
+                                              tone: "error",
+                                              text: e instanceof Error ? e.message : "Hide failed",
+                                            });
+                                          }
+                                        });
+                                      }}
+                                    >
+                                      {c.is_hidden ? "Unhide" : "Hide"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="text-xs text-[color:var(--muted)] underline underline-offset-4"
+                                      onClick={() => {
+                                        const ok = window.confirm("Delete this comment?");
+                                        if (!ok) return;
+                                        setMsg(null);
+                                        startTransition(async () => {
+                                          try {
+                                            const res = await deleteFeedComment(c.id);
+                                            setMsg({ tone: "success", text: res.message });
+                                          } catch (e) {
+                                            setMsg({
+                                              tone: "error",
+                                              text: e instanceof Error ? e.message : "Delete failed",
+                                            });
+                                          }
+                                        });
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {isEditing ? (
+                              <div className="mt-2">
+                                <Textarea
+                                  label="Edit comment"
+                                  value={editingText}
+                                  onChange={(e) => setEditingText(e.target.value)}
+                                  placeholder="Update your comment"
+                                />
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-sm whitespace-pre-wrap">{renderWithMentions(c.content)}</div>
+                            )}
+                            {c.is_hidden && isAdmin ? (
+                              <div className="mt-2 text-xs text-[color:var(--muted)]">Hidden from public.</div>
+                            ) : null}
                           </div>
                         );
                       })}
@@ -1357,7 +1358,10 @@ export function CommentsButton({
   myUserId: string | null;
   mentionCandidates: MentionCandidate[];
   comments: FeedComment[];
-  commenterProfiles: Map<string, { favorited_username: string; photo_url: string | null; bio?: string | null }>;
+  commenterProfiles: Map<
+    string,
+    { favorited_username: string; photo_url: string | null; lifetime_gifted_total_usd?: number | null; bio?: string | null }
+  >;
   followedUserIds?: string[];
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;

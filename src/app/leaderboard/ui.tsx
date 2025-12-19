@@ -8,10 +8,12 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { FollowInline } from "@/components/ui/follow-inline";
+import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
 export type PublicProfile = {
   favorited_username: string;
   photo_url: string | null;
+  lifetime_gifted_total_usd?: number | null;
   bio: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -84,6 +86,16 @@ export function LeaderboardClient({
   const [giftPeriod, setGiftPeriod] = useState<"today" | "weekly" | "all_time">("all_time");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const profileByUsername = useMemo(() => {
+    const m = new Map<string, PublicProfile>();
+    for (const p of profiles ?? []) {
+      const uname = String(p?.favorited_username ?? "").trim();
+      if (!uname) continue;
+      m.set(uname, p);
+    }
+    return m;
+  }, [profiles]);
+
   const giftRows = giftPeriod === "today" ? giftRowsToday : giftPeriod === "weekly" ? giftRowsWeekly : giftRowsAllTime;
   const selected = useMemo(() => {
     if (!selectedId) return null;
@@ -95,14 +107,15 @@ export function LeaderboardClient({
 
   const profile = useMemo(() => {
     if (!selected) return null;
-    return profiles.find((p) => p.favorited_username === selected.favorited_username) ?? null;
-  }, [profiles, selected]);
+    return profileByUsername.get(selected.favorited_username) ?? null;
+  }, [profileByUsername, selected]);
 
   const subject: MiniProfileSubject | null = selected
     ? {
         user_id: selected.user_id,
         favorited_username: selected.favorited_username,
         photo_url: profile?.photo_url ?? null,
+        lifetime_gifted_total_usd: profile?.lifetime_gifted_total_usd ?? null,
         bio: profile?.bio ?? null,
         public_link: profile?.public_link ?? null,
         instagram_link: profile?.instagram_link ?? null,
@@ -189,6 +202,7 @@ export function LeaderboardClient({
                 const rank = m.rank ?? idx + 1;
                 const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
                 const bgClass = rank === 1 ? "bg-yellow-500/10 border-yellow-500/30" : rank === 2 ? "bg-gray-400/10 border-gray-400/30" : rank === 3 ? "bg-orange-500/10 border-orange-500/30" : "border-[color:var(--border)]";
+                const rowProfile = profileByUsername.get(m.favorited_username) ?? null;
                 return (
                   <button
                     key={m.user_id}
@@ -203,6 +217,18 @@ export function LeaderboardClient({
                         ) : (
                           <span className="text-sm font-semibold text-[color:var(--muted)]">#{rank}</span>
                         )}
+                      </div>
+                      <div className="shrink-0">
+                        <GifterRingAvatar
+                          size={28}
+                          imageUrl={m.photo_url ?? rowProfile?.photo_url ?? null}
+                          name={m.favorited_username}
+                          totalUsd={
+                            typeof rowProfile?.lifetime_gifted_total_usd === "number"
+                              ? rowProfile.lifetime_gifted_total_usd
+                              : null
+                          }
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className="font-semibold">{m.favorited_username}</span>
@@ -226,6 +252,7 @@ export function LeaderboardClient({
             const rank = idx + 1;
             const medalEmoji = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
             const bgClass = rank === 1 ? "bg-yellow-500/10 border-yellow-500/30" : rank === 2 ? "bg-gray-400/10 border-gray-400/30" : rank === 3 ? "bg-orange-500/10 border-orange-500/30" : "border-[color:var(--border)]";
+            const rowProfile = profileByUsername.get(m.favorited_username) ?? null;
             return (
               <button
                 key={m.user_id}
@@ -240,6 +267,18 @@ export function LeaderboardClient({
                     ) : (
                       <span className="text-sm font-semibold text-[color:var(--muted)]">#{rank}</span>
                     )}
+                  </div>
+                  <div className="shrink-0">
+                    <GifterRingAvatar
+                      size={28}
+                      imageUrl={rowProfile?.photo_url ?? null}
+                      name={m.favorited_username}
+                      totalUsd={
+                        typeof rowProfile?.lifetime_gifted_total_usd === "number"
+                          ? rowProfile.lifetime_gifted_total_usd
+                          : null
+                      }
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -345,14 +384,14 @@ export function CurrentWinners({
               <div className="text-sm font-semibold">{cat}</div>
               {member ? (
                 <div className="mt-1 flex items-center gap-2 text-sm">
-                  {profile?.photo_url ? (
-                    <img
-                      src={profile.photo_url}
-                      alt={member.favorited_username}
-                      className="h-6 w-6 rounded-full border border-[color:var(--border)] object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : null}
+                  <GifterRingAvatar
+                    size={26}
+                    imageUrl={profile?.photo_url ?? null}
+                    name={member.favorited_username}
+                    totalUsd={
+                      typeof profile?.lifetime_gifted_total_usd === "number" ? profile.lifetime_gifted_total_usd : null
+                    }
+                  />
                   <div className="truncate text-[color:var(--muted)]">
                     {member.favorited_username}
                   </div>
