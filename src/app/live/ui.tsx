@@ -9,6 +9,7 @@ import { GiftModal } from "@/app/feed/ui";
 import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { parseLifetimeUsd } from "@/lib/utils";
 
 const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
 
@@ -294,8 +295,7 @@ export function LiveClient({
             user_id: profileRow.user_id ?? uid,
             favorited_username: String(profileRow.favorited_username ?? nameByUserId[uid] ?? "Member"),
             photo_url: profileRow.photo_url ?? null,
-            lifetime_gifted_total_usd:
-              typeof profileRow.lifetime_gifted_total_usd === "number" ? profileRow.lifetime_gifted_total_usd : null,
+            lifetime_gifted_total_usd: parseLifetimeUsd((profileRow as any)?.lifetime_gifted_total_usd),
             bio: profileRow.bio ?? null,
             public_link: profileRow.public_link ?? null,
             instagram_link: profileRow.instagram_link ?? null,
@@ -437,7 +437,7 @@ export function LiveClient({
   const renderAvatar = (userId: string, name: string, url: string | null, size = 28) => {
     const uid = String(userId ?? "").trim();
     const cached = uid ? memberByUserId[uid] ?? null : null;
-    const totalUsd = typeof cached?.lifetime_gifted_total_usd === "number" ? cached.lifetime_gifted_total_usd : null;
+    const totalUsd = parseLifetimeUsd((cached as any)?.lifetime_gifted_total_usd);
 
     const resolvedUrl = url ?? cached?.photo_url ?? (DEFAULT_PROFILE_PHOTO_URL ? DEFAULT_PROFILE_PHOTO_URL : null);
     return (
@@ -927,7 +927,7 @@ export function LiveClient({
           const uid = String(row?.user_id ?? "").trim();
           const uname = String(row?.favorited_username ?? "").trim();
           const photoUrl = (row?.photo_url ?? null) as string | null;
-          const lifetimeUsd = typeof row?.lifetime_gifted_total_usd === "number" ? (row.lifetime_gifted_total_usd as number) : null;
+          const lifetimeUsd = parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd);
 
           if (uid && uname) patch[uid] = uname;
           if (uid) {
@@ -986,8 +986,7 @@ export function LiveClient({
           if (!uid) continue;
           memberPatch[uid] = {
             photo_url: (row?.photo_url ?? null) as string | null,
-            lifetime_gifted_total_usd:
-              typeof row?.lifetime_gifted_total_usd === "number" ? (row.lifetime_gifted_total_usd as number) : null,
+            lifetime_gifted_total_usd: parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd),
             favorited_username: String(row?.favorited_username ?? "").trim() || null,
           };
         }
@@ -1865,11 +1864,7 @@ export function LiveClient({
                               size={32}
                               imageUrl={memberByUserId[String(v.id)]?.photo_url ?? null}
                               name={v.name}
-                              totalUsd={
-                                typeof memberByUserId[String(v.id)]?.lifetime_gifted_total_usd === "number"
-                                  ? memberByUserId[String(v.id)]?.lifetime_gifted_total_usd
-                                  : null
-                              }
+                              totalUsd={parseLifetimeUsd((memberByUserId[String(v.id)] as any)?.lifetime_gifted_total_usd)}
                               showDiamondShimmer
                             />
                           </div>

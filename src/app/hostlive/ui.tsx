@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toast";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { parseLifetimeUsd } from "@/lib/utils";
 
 const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
 
@@ -137,7 +138,7 @@ export function HostLiveClient({
   const renderAvatar = (userId: string, name: string, url: string | null, size = 28) => {
     const uid = String(userId ?? "").trim();
     const cached = uid ? memberByUserId[uid] ?? null : null;
-    const totalUsd = typeof cached?.lifetime_gifted_total_usd === "number" ? cached.lifetime_gifted_total_usd : null;
+    const totalUsd = parseLifetimeUsd((cached as any)?.lifetime_gifted_total_usd);
 
     const resolvedUrl =
       url ??
@@ -530,8 +531,7 @@ export function HostLiveClient({
           if (uid) {
             memberPatch[uid] = {
               photo_url: (r?.photo_url ?? null) as string | null,
-              lifetime_gifted_total_usd:
-                typeof r?.lifetime_gifted_total_usd === "number" ? (r.lifetime_gifted_total_usd as number) : null,
+              lifetime_gifted_total_usd: parseLifetimeUsd((r as any)?.lifetime_gifted_total_usd),
               favorited_username: uname || null,
             };
           }
@@ -575,8 +575,7 @@ export function HostLiveClient({
           if (!uid) continue;
           memberPatch[uid] = {
             photo_url: (row?.photo_url ?? null) as string | null,
-            lifetime_gifted_total_usd:
-              typeof row?.lifetime_gifted_total_usd === "number" ? (row.lifetime_gifted_total_usd as number) : null,
+            lifetime_gifted_total_usd: parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd),
             favorited_username: String(row?.favorited_username ?? "").trim() || null,
           };
         }
