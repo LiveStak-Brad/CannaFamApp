@@ -336,6 +336,7 @@ export function LiveClient({
   const [viewers, setViewers] = useState<ViewerInfo[]>([]);
   const viewerHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const viewerUserIdRef = useRef<string | null>(null);
+  const viewerJoinKeyRef = useRef<string>("");
   const agoraCleanupRef = useRef<(() => void) | null>(null);
   const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
@@ -849,46 +850,62 @@ export function LiveClient({
 
     viewerLog("[viewers] effect", { liveId, liveSessionKey, myUserId, isHostMode, kicked, idlePaused, isLive: live.is_live });
 
-    (async () => {
+    const attemptJoin = async (uidRaw: string | null | undefined) => {
+      const resolvedUserId = String(uidRaw ?? "").trim() || null;
+      const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !idlePaused;
+      viewerLog("[join] gate", { liveId, liveSessionKey, resolvedUserId, isHostMode, kicked, idlePaused, isLive: live.is_live, shouldTrackMe });
+      if (!shouldTrackMe) return;
+
+      const joinKey = `${liveSessionKey}:${liveId}:${resolvedUserId}`;
+      if (viewerJoinKeyRef.current === joinKey) return;
+      viewerJoinKeyRef.current = joinKey;
+      viewerUserIdRef.current = resolvedUserId;
+
       try {
-        let resolvedUserId = String(myUserId ?? "").trim() || null;
-        if (!resolvedUserId) {
-          try {
-            const { data } = await sb.auth.getUser();
-            resolvedUserId = String(data?.user?.id ?? "").trim() || null;
-          } catch {}
-        }
-
-        viewerUserIdRef.current = resolvedUserId;
-
-        const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !idlePaused;
-        viewerLog("[join] gate", { liveId, liveSessionKey, resolvedUserId, isHostMode, kicked, idlePaused, isLive: live.is_live, shouldTrackMe });
-
-        if (shouldTrackMe) {
-          viewerLog("[join] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
-          const { data, error } = await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId });
-          viewerLog("[join] result", { data, error });
-          const payload: any = data ?? null;
-          if (payload?.error) {
-            try { console.warn("[cfm_join_live_viewer]", payload.error); } catch {}
-          }
-          setTimeout(loadViewers, 500);
-
-          viewerHeartbeatRef.current = setInterval(async () => {
-            try {
-              viewerLog("[heartbeat] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
-              const { data, error } = await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId });
-              viewerLog("[heartbeat] result", { data, error });
-              const hbPayload: any = data ?? null;
-              if (hbPayload?.error) {
-                try { console.warn("[cfm_viewer_heartbeat]", hbPayload.error); } catch {}
-              }
-            } catch {}
-            loadViewers();
-          }, 30000);
+        viewerLog("[join] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
+        const { data, error } = await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId });
+        viewerLog("[join] result", { data, error });
+        const payload: any = data ?? null;
+        if (payload?.error) {
+          try { console.warn("[cfm_join_live_viewer]", payload.error); } catch {}
         }
       } catch {}
+
+      setTimeout(loadViewers, 500);
+
+      if (viewerHeartbeatRef.current) {
+        clearInterval(viewerHeartbeatRef.current);
+      }
+      viewerHeartbeatRef.current = setInterval(async () => {
+        try {
+          viewerLog("[heartbeat] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
+          const { data, error } = await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId });
+          viewerLog("[heartbeat] result", { data, error });
+          const hbPayload: any = data ?? null;
+          if (hbPayload?.error) {
+            try { console.warn("[cfm_viewer_heartbeat]", hbPayload.error); } catch {}
+          }
+        } catch {}
+        loadViewers();
+      }, 30000);
+    };
+
+    // Attempt join immediately using server-provided user id
+    void attemptJoin(myUserId);
+
+    // If server didn't provide, attempt join once session is loaded...
+    (async () => {
+      try {
+        const { data } = await sb.auth.getUser();
+        if (cancelled) return;
+        void attemptJoin(data?.user?.id ?? null);
+      } catch {}
     })();
+
+    // ...and retry when auth becomes available later (Vercel/server auth race)
+    const authSub = sb.auth.onAuthStateChange((_event: any, session: any) => {
+      void attemptJoin(session?.user?.id ?? null);
+    });
 
     loadViewers();
     const poll = setInterval(loadViewers, 10000);
@@ -908,6 +925,10 @@ export function LiveClient({
     return () => {
       cancelled = true;
       if (poll) clearInterval(poll);
+
+      try {
+        (authSub as any)?.data?.subscription?.unsubscribe?.();
+      } catch {}
 
       // Leave as viewer (only if logged in)
       const leaveUserId = String(viewerUserIdRef.current ?? myUserId ?? "").trim();
