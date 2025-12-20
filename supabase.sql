@@ -1372,6 +1372,11 @@ with check (
   public.cfm_is_admin()
   or public.cfm_is_mod()
   or (
+    sender_user_id = auth.uid()
+    and type = 'system'
+    and coalesce(metadata->>'event','') = 'join'
+  )
+  or (
     public.cfm_is_approved_member()
     and sender_user_id = auth.uid()
     and type in ('chat','emote')
@@ -1727,8 +1732,13 @@ begin
 
   -- Insert join message to chat if this is a new join
   if v_is_new_join then
-    insert into public.cfm_live_chat (live_id, sender_user_id, message, type, metadata)
-    values (p_live_id, v_user_id, coalesce(v_display_name, 'Viewer') || ' has joined', 'system', '{"event": "join"}'::jsonb);
+    begin
+      insert into public.cfm_live_chat (live_id, sender_user_id, message, type, metadata)
+      values (p_live_id, v_user_id, coalesce(v_display_name, 'Viewer') || ' has joined', 'system', '{"event": "join"}'::jsonb);
+    exception
+      when others then
+        null;
+    end;
   end if;
 
   return json_build_object('success', true);
@@ -1736,7 +1746,7 @@ exception
   when foreign_key_violation then
     return json_build_object('error', 'Live session not found');
   when others then
-    return json_build_object('error', 'Failed to join');
+    return json_build_object('error', 'Failed to join: ' || sqlerrm);
 end;
 $$;
 

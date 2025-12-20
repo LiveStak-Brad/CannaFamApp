@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as ReqBody;
     const requestedRole = body.role === "host" ? "host" : "viewer";
+    let viewerRegisterWarning: { supabaseError: string | null; payloadError: string | null } | null = null;
 
     const channel = "cannafam-live";
     const now = Math.floor(Date.now() / 1000);
@@ -128,23 +129,22 @@ export async function POST(request: NextRequest) {
         }
 
         // Ensure DB-backed viewer tracking stays accurate: joining/refreshing a viewer token
-        // must upsert the viewer row + insert the join system message when appropriate.
-        const { data: joinData, error: joinError } = await (client as any).rpc("cfm_join_live_viewer", {
-          p_live_id: liveId,
-        });
-        const joinPayload: any = joinData ?? null;
-        const joinPayloadError = String(joinPayload?.error ?? "").trim();
-        if (joinError || joinPayloadError) {
-          return NextResponse.json(
-            {
-              error: "Failed to register live viewer",
-              details: {
-                supabaseError: joinError?.message ?? null,
-                payloadError: joinPayloadError || null,
-              },
-            },
-            { status: 500 },
-          );
+        // should upsert the viewer row + insert the join system message when appropriate.
+        // IMPORTANT: do not hard-fail token issuance if this fails; allow watch to proceed.
+        try {
+          const { data: joinData, error: joinError } = await (client as any).rpc("cfm_join_live_viewer", {
+            p_live_id: liveId,
+          });
+          const joinPayload: any = joinData ?? null;
+          const joinPayloadError = String(joinPayload?.error ?? "").trim();
+          if (joinError || joinPayloadError) {
+            viewerRegisterWarning = {
+              supabaseError: joinError?.message ?? null,
+              payloadError: joinPayloadError || null,
+            };
+          }
+        } catch {
+          viewerRegisterWarning = { supabaseError: null, payloadError: "join_rpc_exception" };
         }
       }
     }
@@ -164,6 +164,7 @@ export async function POST(request: NextRequest) {
       token,
       role: isHost ? "host" : "viewer",
       expiresAt: expire,
+      viewerRegisterWarning,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
