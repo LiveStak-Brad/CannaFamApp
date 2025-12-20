@@ -573,7 +573,7 @@ export function GiftSummary({
           {top.map((g) => (
             <GifterRingAvatar
               key={g.favorited_username}
-              size={24}
+              size={28}
               imageUrl={g.photo_url}
               name={g.favorited_username}
               totalUsd={typeof g.lifetime_gifted_total_usd === "number" ? g.lifetime_gifted_total_usd : null}

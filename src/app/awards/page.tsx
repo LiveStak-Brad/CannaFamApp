@@ -99,24 +99,24 @@ export default async function AwardsPage() {
               return (
                 <div
                   key={cat}
-                  className="flex items-center justify-between rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                  className="flex items-center gap-4 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
                 >
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold">{cat}</div>
+                  <div className="shrink-0">
+                    <GifterRingAvatar
+                      size={52}
+                      imageUrl={profile?.photo_url ?? null}
+                      name={profile?.favorited_username ?? (win ? "Winner" : "You")}
+                      totalUsd={
+                        typeof profile?.lifetime_gifted_total_usd === "number" ? profile.lifetime_gifted_total_usd : null
+                      }
+                      showDiamondShimmer
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-bold leading-tight">{cat}</div>
                     {profile ? (
-                      <div className="mt-1 flex items-center gap-2 text-sm">
-                        <GifterRingAvatar
-                          size={24}
-                          imageUrl={profile.photo_url}
-                          name={profile.favorited_username}
-                          totalUsd={
-                            typeof profile.lifetime_gifted_total_usd === "number" ? profile.lifetime_gifted_total_usd : null
-                          }
-                          showDiamondShimmer
-                        />
-                        <div className="truncate text-[color:var(--muted)]">
-                          {profile.favorited_username}
-                        </div>
+                      <div className="mt-1 truncate text-sm text-[color:var(--muted)]">
+                        {profile.favorited_username}
                       </div>
                     ) : win ? (
                       <div className="mt-1 text-sm text-[color:var(--muted)]">
@@ -128,8 +128,6 @@ export default async function AwardsPage() {
                       </div>
                     )}
                   </div>
-
-                  <div className="text-sm text-[color:var(--muted)]">—</div>
                 </div>
               );
             })}
