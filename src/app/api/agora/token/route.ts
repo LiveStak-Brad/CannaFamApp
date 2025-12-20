@@ -126,6 +126,26 @@ export async function POST(request: NextRequest) {
             { status: 403 },
           );
         }
+
+        // Ensure DB-backed viewer tracking stays accurate: joining/refreshing a viewer token
+        // must upsert the viewer row + insert the join system message when appropriate.
+        const { data: joinData, error: joinError } = await (client as any).rpc("cfm_join_live_viewer", {
+          p_live_id: liveId,
+        });
+        const joinPayload: any = joinData ?? null;
+        const joinPayloadError = String(joinPayload?.error ?? "").trim();
+        if (joinError || joinPayloadError) {
+          return NextResponse.json(
+            {
+              error: "Failed to register live viewer",
+              details: {
+                supabaseError: joinError?.message ?? null,
+                payloadError: joinPayloadError || null,
+              },
+            },
+            { status: 500 },
+          );
+        }
       }
     }
 
