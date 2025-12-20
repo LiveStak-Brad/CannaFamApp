@@ -511,7 +511,7 @@ export default async function FeedPage({
             filteredPosts.map((p: any) => (
               <Card key={p.id} title={p.title ?? ""}>
                 <div id={p.id} className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs text-[color:var(--muted)]">
+                  <div className="flex items-center justify-between gap-3">
                     {p.author_user_id ? (() => {
                       const uid = String(p.author_user_id ?? "").trim();
                       const info = uid ? authorById.get(uid) ?? null : null;
@@ -521,20 +521,27 @@ export default async function FeedPage({
                         typeof info?.lifetime_gifted_total_usd === "number" ? info.lifetime_gifted_total_usd : null;
                       if (!uname) return null;
                       return (
-                        <Link href={`/u/${encodeURIComponent(uname)}`} className="flex items-center gap-2 hover:opacity-80">
+                        <Link
+                          href={`/u/${encodeURIComponent(uname)}`}
+                          className="flex min-w-0 items-center gap-3 hover:opacity-80"
+                        >
                           <GifterRingAvatar
-                            size={24}
+                            size={44}
                             imageUrl={photo}
                             name={uname}
                             totalUsd={totalUsd}
                             showDiamondShimmer
                           />
-                          <span className="font-semibold text-[color:var(--foreground)]">@{uname}</span>
+                          <span className="min-w-0 truncate text-base font-bold text-[color:var(--foreground)]">
+                            @{uname}
+                          </span>
                         </Link>
                       );
                     })() : null}
                     {p.created_at ? (
-                      <span>{new Date(p.created_at).toLocaleString()}</span>
+                      <span className="shrink-0 text-xs text-[color:var(--muted)]">
+                        {new Date(p.created_at).toLocaleString()}
+                      </span>
                     ) : null}
                   </div>
                   <FeedAdminPostControls post={p as FeedPost} isAdmin={canEditPosts} />
