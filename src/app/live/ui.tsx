@@ -349,6 +349,8 @@ export function LiveClient({
   const isLoggedIn = !!myUserId;
   const [kicked, setKicked] = useState(false);
   const [kickReason, setKickReason] = useState<string | null>(null);
+  const hostWasLiveRef = useRef(false);
+  const hostEndRedirectedRef = useRef(false);
 
   useEffect(() => {
     if (isHostMode) return;
@@ -366,6 +368,32 @@ export function LiveClient({
     }, 1200);
     return () => clearTimeout(t);
   }, [isHostMode, isLoggedIn, kicked, router]);
+
+  useEffect(() => {
+    if (!isHostMode) return;
+    if (live.is_live) hostWasLiveRef.current = true;
+  }, [isHostMode, live.is_live]);
+
+  useEffect(() => {
+    if (!isHostMode) return;
+    if (live.is_live) return;
+    if (!hostWasLiveRef.current) return;
+    if (hostEndRedirectedRef.current) return;
+    hostEndRedirectedRef.current = true;
+
+    const t = setTimeout(() => {
+      try {
+        if (typeof window !== "undefined") {
+          window.location.assign("/");
+          return;
+        }
+        router.replace("/");
+        router.refresh();
+      } catch {}
+    }, 300);
+
+    return () => clearTimeout(t);
+  }, [isHostMode, live.is_live, router]);
 
   const chatLiveId = useMemo(() => {
     const v = String((live as any)?.id ?? "").trim();
@@ -387,6 +415,8 @@ export function LiveClient({
     setStreamEnded(false);
     setKicked(false);
     setKickReason(null);
+    hostWasLiveRef.current = false;
+    hostEndRedirectedRef.current = false;
 
     if (giftFlashTimeoutRef.current) {
       clearTimeout(giftFlashTimeoutRef.current);
