@@ -350,6 +350,23 @@ export function LiveClient({
   const [kicked, setKicked] = useState(false);
   const [kickReason, setKickReason] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isHostMode) return;
+    if (!isLoggedIn) return;
+    if (!kicked) return;
+    const t = setTimeout(() => {
+      try {
+        if (typeof window !== "undefined") {
+          window.location.assign("/");
+          return;
+        }
+        router.replace("/");
+        router.refresh();
+      } catch {}
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [isHostMode, isLoggedIn, kicked, router]);
+
   const chatLiveId = useMemo(() => {
     const v = String((live as any)?.id ?? "").trim();
     if (v) return v;
@@ -852,13 +869,12 @@ export function LiveClient({
 
     const attemptJoin = async (uidRaw: string | null | undefined) => {
       const resolvedUserId = String(uidRaw ?? "").trim() || null;
-      const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !idlePaused;
+      const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !idlePaused && !!live.is_live;
       viewerLog("[join] gate", { liveId, liveSessionKey, resolvedUserId, isHostMode, kicked, idlePaused, isLive: live.is_live, shouldTrackMe });
       if (!shouldTrackMe) return;
 
       const joinKey = `${liveSessionKey}:${liveId}:${resolvedUserId}`;
       if (viewerJoinKeyRef.current === joinKey) return;
-      viewerJoinKeyRef.current = joinKey;
       viewerUserIdRef.current = resolvedUserId;
 
       try {
@@ -866,26 +882,54 @@ export function LiveClient({
         const { data, error } = await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId });
         viewerLog("[join] result", { data, error });
         const payload: any = data ?? null;
-        if (payload?.error) {
-          try { console.warn("[cfm_join_live_viewer]", payload.error); } catch {}
+        const payloadError = String(payload?.error ?? "").trim();
+
+        if (error || payloadError) {
+          try {
+            console.warn("[cfm_join_live_viewer]", {
+              liveId,
+              userId: resolvedUserId,
+              error: error?.message ?? payloadError,
+            });
+          } catch {}
+          return;
         }
-      } catch {}
+
+        viewerJoinKeyRef.current = joinKey;
+      } catch (e) {
+        try {
+          console.warn("[cfm_join_live_viewer]", { liveId, userId: resolvedUserId, error: e });
+        } catch {}
+        return;
+      }
 
       setTimeout(loadViewers, 500);
 
       if (viewerHeartbeatRef.current) {
         clearInterval(viewerHeartbeatRef.current);
       }
+
       viewerHeartbeatRef.current = setInterval(async () => {
         try {
           viewerLog("[heartbeat] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
           const { data, error } = await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId });
           viewerLog("[heartbeat] result", { data, error });
           const hbPayload: any = data ?? null;
-          if (hbPayload?.error) {
-            try { console.warn("[cfm_viewer_heartbeat]", hbPayload.error); } catch {}
+          const hbPayloadError = String(hbPayload?.error ?? "").trim();
+          if (error || hbPayloadError) {
+            try {
+              console.warn("[cfm_viewer_heartbeat]", {
+                liveId,
+                userId: resolvedUserId,
+                error: error?.message ?? hbPayloadError,
+              });
+            } catch {}
           }
-        } catch {}
+        } catch (e) {
+          try {
+            console.warn("[cfm_viewer_heartbeat]", { liveId, userId: resolvedUserId, error: e });
+          } catch {}
+        }
         loadViewers();
       }, 30000);
     };
@@ -934,9 +978,23 @@ export function LiveClient({
       const leaveUserId = String(viewerUserIdRef.current ?? myUserId ?? "").trim();
       if (leaveUserId && !isHostMode) {
         (async () => {
-          try { await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }); } catch {}
+          try {
+            const { data, error } = await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId });
+            const payload: any = data ?? null;
+            const payloadError = String(payload?.error ?? "").trim();
+            if (error || payloadError) {
+              try {
+                console.warn("[cfm_leave_live_viewer]", { liveId, userId: leaveUserId, error: error?.message ?? payloadError });
+              } catch {}
+            }
+          } catch (e) {
+            try {
+              console.warn("[cfm_leave_live_viewer]", { liveId, userId: leaveUserId, error: e });
+            } catch {}
+          }
         })();
       }
+
       if (viewerHeartbeatRef.current) {
         clearInterval(viewerHeartbeatRef.current);
       }
@@ -1443,9 +1501,7 @@ export function LiveClient({
                   <div className="mt-2 text-sm text-white/70">
                     {kickReason ? kickReason : "You were removed from this live."}
                   </div>
-                  <Button type="button" className="mt-4 w-full" onClick={() => router.push(nextPath)}>
-                    Go back
-                  </Button>
+                  <div className="mt-4 text-xs font-semibold text-white/70">Sending you home…</div>
                 </div>
               </div>
             ) : null}
@@ -1903,16 +1959,22 @@ export function LiveClient({
                     <div className="space-y-2 max-h-[300px] overflow-auto">
                       {sortedViewers.map((v) => (
                         <div key={v.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                          <div className="shrink-0">
-                            <GifterRingAvatar
-                              size={32}
-                              imageUrl={memberByUserId[String(v.id)]?.photo_url ?? null}
-                              name={v.name}
-                              totalUsd={parseLifetimeUsd((memberByUserId[String(v.id)] as any)?.lifetime_gifted_total_usd)}
-                              showDiamondShimmer
-                            />
-                          </div>
-                          <div className="text-sm text-white">{v.name}</div>
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                            onClick={() => showMiniProfile(String(v.id))}
+                          >
+                            <div className="shrink-0">
+                              <GifterRingAvatar
+                                size={32}
+                                imageUrl={memberByUserId[String(v.id)]?.photo_url ?? null}
+                                name={v.name}
+                                totalUsd={parseLifetimeUsd((memberByUserId[String(v.id)] as any)?.lifetime_gifted_total_usd)}
+                                showDiamondShimmer
+                              />
+                            </div>
+                            <div className="min-w-0 truncate text-sm text-white">{v.name}</div>
+                          </button>
                           {isHost && myUserId && v.isOnline && v.id !== myUserId ? (
                             <button
                               type="button"
@@ -1962,6 +2024,13 @@ export function LiveClient({
         leaderboard={miniProfileLeaderboard}
         awards={miniProfileAwards}
         myUserId={myUserId}
+        liveKick={{
+          liveId: chatLiveId,
+          canKick: !!isHost,
+          onKick: async (uid: string) => {
+            await kickViewer(uid);
+          },
+        }}
         onClose={() => {
           setMiniProfileOpen(false);
           setMiniProfileSubject(null);

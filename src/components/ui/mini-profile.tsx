@@ -52,6 +52,7 @@ export function MiniProfileModal({
   leaderboard,
   awards,
   myUserId,
+  liveKick,
   onClose,
 }: {
   open: boolean;
@@ -59,6 +60,11 @@ export function MiniProfileModal({
   leaderboard: MiniProfilePointsRow[];
   awards: MiniProfileAwardRow[];
   myUserId?: string | null;
+  liveKick?: {
+    liveId: string | null;
+    canKick: boolean;
+    onKick: (userId: string) => Promise<void> | void;
+  };
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -111,6 +117,17 @@ export function MiniProfileModal({
 
   const uname = String(subject.favorited_username ?? "").trim();
   const profileHref = uname ? `/u/${encodeURIComponent(uname)}` : "/members";
+
+  const canKickLive = (() => {
+    const liveId = String(liveKick?.liveId ?? "").trim();
+    const uid = String(lb?.user_id ?? subject.user_id ?? "").trim();
+    const mine = String(myUserId ?? "").trim();
+    if (!liveKick?.canKick) return false;
+    if (!liveId) return false;
+    if (!uid) return false;
+    if (mine && uid === mine) return false;
+    return true;
+  })();
 
   return (
     <div className="fixed inset-0 z-50">
@@ -248,9 +265,29 @@ export function MiniProfileModal({
             ) : null}
 
             <div className="flex justify-end">
-              <Button type="button" variant="secondary" onClick={onClose}>
-                Close
-              </Button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {canKickLive ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] text-[#f87171]"
+                    onClick={async () => {
+                      const uid = String(lb?.user_id ?? subject.user_id ?? "").trim();
+                      if (!uid) return;
+                      try {
+                        await liveKick?.onKick(uid);
+                      } finally {
+                        onClose();
+                      }
+                    }}
+                  >
+                    ⛔ Kick
+                  </Button>
+                ) : null}
+                <Button type="button" variant="secondary" onClick={onClose}>
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         </Card>
