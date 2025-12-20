@@ -1706,6 +1706,10 @@ begin
   from public.cfm_public_member_ids
   where user_id = v_user_id;
 
+  -- Prevent duplicate join system messages when join is called concurrently
+  -- (e.g. token endpoint + client join at the same time)
+  perform pg_advisory_xact_lock(hashtext(p_live_id::text), hashtext(v_user_id::text));
+
   -- Check if this is a new join (not already in viewers or left_at is set)
   select not exists(
     select 1 from public.cfm_live_viewers 
