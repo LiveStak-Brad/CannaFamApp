@@ -136,6 +136,12 @@ export function LiveClient({
     try { console.log("[RTC]", ...args); } catch {}
   }, [rtcDebugEnabled]);
 
+  const viewerDebugEnabled = process.env.NODE_ENV !== "production";
+  const viewerLog = useCallback((...args: any[]) => {
+    if (!viewerDebugEnabled) return;
+    try { console.log(...args); } catch {}
+  }, [viewerDebugEnabled]);
+
   const hardLeaveRtcSession = useCallback(async (reason: string) => {
     if (rtcLeftRef.current) return;
     rtcAbortJoinRef.current += 1;
@@ -329,6 +335,7 @@ export function LiveClient({
   type ViewerInfo = { id: string; name: string; joinedAt: number; isOnline: boolean };
   const [viewers, setViewers] = useState<ViewerInfo[]>([]);
   const viewerHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const viewerUserIdRef = useRef<string | null>(null);
   const agoraCleanupRef = useRef<(() => void) | null>(null);
   const [localRtc, setLocalRtc] = useState<{ appId: string; channel: string; uid: string; role: string } | null>(null);
   const videoRef = useRef<HTMLDivElement | null>(null);
@@ -840,36 +847,51 @@ export function LiveClient({
       }
     };
 
-    const shouldTrackMe = !!myUserId && !isHostMode && !kicked && !idlePaused;
+    viewerLog("[viewers] effect", { liveId, liveSessionKey, myUserId, isHostMode, kicked, idlePaused, isLive: live.is_live });
 
-    if (shouldTrackMe) {
-      (async () => {
-        try {
-          const r = await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId });
-          const payload: any = (r as any)?.data ?? null;
+    (async () => {
+      try {
+        let resolvedUserId = String(myUserId ?? "").trim() || null;
+        if (!resolvedUserId) {
+          try {
+            const { data } = await sb.auth.getUser();
+            resolvedUserId = String(data?.user?.id ?? "").trim() || null;
+          } catch {}
+        }
+
+        viewerUserIdRef.current = resolvedUserId;
+
+        const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !idlePaused;
+        viewerLog("[join] gate", { liveId, liveSessionKey, resolvedUserId, isHostMode, kicked, idlePaused, isLive: live.is_live, shouldTrackMe });
+
+        if (shouldTrackMe) {
+          viewerLog("[join] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
+          const { data, error } = await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId });
+          viewerLog("[join] result", { data, error });
+          const payload: any = data ?? null;
           if (payload?.error) {
             try { console.warn("[cfm_join_live_viewer]", payload.error); } catch {}
           }
           setTimeout(loadViewers, 500);
-        } catch {}
-      })();
-    }
+
+          viewerHeartbeatRef.current = setInterval(async () => {
+            try {
+              viewerLog("[heartbeat] attempting", { liveId, liveSessionKey, myUserId: resolvedUserId, isHostMode, kicked, isLive: live.is_live });
+              const { data, error } = await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId });
+              viewerLog("[heartbeat] result", { data, error });
+              const hbPayload: any = data ?? null;
+              if (hbPayload?.error) {
+                try { console.warn("[cfm_viewer_heartbeat]", hbPayload.error); } catch {}
+              }
+            } catch {}
+            loadViewers();
+          }, 30000);
+        }
+      } catch {}
+    })();
 
     loadViewers();
     const poll = setInterval(loadViewers, 10000);
-
-    if (shouldTrackMe) {
-      viewerHeartbeatRef.current = setInterval(async () => {
-        try {
-          const r = await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId });
-          const payload: any = (r as any)?.data ?? null;
-          if (payload?.error) {
-            try { console.warn("[cfm_viewer_heartbeat]", payload.error); } catch {}
-          }
-        } catch {}
-        loadViewers();
-      }, 30000);
-    }
 
     // Subscribe to realtime changes on cfm_live_viewers
     const viewerChannel = sb
@@ -888,7 +910,8 @@ export function LiveClient({
       if (poll) clearInterval(poll);
 
       // Leave as viewer (only if logged in)
-      if (myUserId && !isHostMode) {
+      const leaveUserId = String(viewerUserIdRef.current ?? myUserId ?? "").trim();
+      if (leaveUserId && !isHostMode) {
         (async () => {
           try { await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }); } catch {}
         })();
