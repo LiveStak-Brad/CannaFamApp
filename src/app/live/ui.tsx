@@ -10,6 +10,8 @@ import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
+const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
+
 const DEFAULT_EMOTES = ["🔥", "😂", "❤️", "👀", "😭"];
 
 type LiveState = {
@@ -181,6 +183,16 @@ export function LiveClient({
   const forceExitViewer = useCallback(
     async (reason: string) => {
       if (isHostMode) return;
+      try {
+        if (myUserId) {
+          const lid =
+            String((live as any)?.id ?? "").trim() ||
+            String((initialLive as any)?.id ?? "").trim();
+          if (lid) {
+            await sb.rpc("cfm_leave_live_viewer", { p_live_id: lid });
+          }
+        }
+      } catch {}
       setStreamEnded(true);
       await hardLeaveRtcSession(reason);
       try {
@@ -188,7 +200,7 @@ export function LiveClient({
         router.refresh();
       } catch {}
     },
-    [hardLeaveRtcSession, isHostMode, nextPath, router],
+    [hardLeaveRtcSession, initialLive, isHostMode, live, myUserId, nextPath, router, sb],
   );
 
   const [idlePaused, setIdlePaused] = useState(false);
@@ -337,6 +349,27 @@ export function LiveClient({
     return fallback;
   }, [initialLive, live]);
 
+  const liveSessionKey = useMemo(() => sessionKey(live), [live]);
+
+  useEffect(() => {
+    setRows([]);
+    setNameByUserId({});
+    setMemberByUserId({});
+    setViewers([]);
+    setViewerListOpen(false);
+    setTopLive([]);
+    setTopModalOpen(false);
+    setStreamEnded(false);
+    setKicked(false);
+    setKickReason(null);
+
+    if (giftFlashTimeoutRef.current) {
+      clearTimeout(giftFlashTimeoutRef.current);
+      giftFlashTimeoutRef.current = null;
+    }
+    setGiftFlash(null);
+  }, [liveSessionKey]);
+
   const loadTopGifters = useCallback(async () => {
     try {
       const [r1, r2, r3] = await Promise.all([
@@ -405,10 +438,12 @@ export function LiveClient({
     const uid = String(userId ?? "").trim();
     const cached = uid ? memberByUserId[uid] ?? null : null;
     const totalUsd = typeof cached?.lifetime_gifted_total_usd === "number" ? cached.lifetime_gifted_total_usd : null;
+
+    const resolvedUrl = url ?? cached?.photo_url ?? (DEFAULT_PROFILE_PHOTO_URL ? DEFAULT_PROFILE_PHOTO_URL : null);
     return (
       <GifterRingAvatar
         size={size}
-        imageUrl={url ?? cached?.photo_url ?? null}
+        imageUrl={resolvedUrl}
         name={name}
         totalUsd={totalUsd}
         showDiamondShimmer
@@ -437,13 +472,24 @@ export function LiveClient({
     return "";
   };
 
+  const sortedViewers = useMemo(() => {
+    const next = [...viewers];
+    next.sort((a, b) => {
+      const ao = !!a.isOnline;
+      const bo = !!b.isOnline;
+      if (ao !== bo) return ao ? -1 : 1;
+      return (b.joinedAt ?? 0) - (a.joinedAt ?? 0);
+    });
+    return next;
+  }, [viewers]);
+
   useEffect(() => {
     void loadTopLiveGifters();
     const t = setInterval(() => {
       void loadTopLiveGifters();
     }, 15000);
     return () => clearInterval(t);
-  }, [loadTopLiveGifters]);
+  }, [liveSessionKey, loadTopLiveGifters]);
 
   const kickViewer = useCallback(
     async (viewerUserId: string) => {
@@ -612,6 +658,7 @@ export function LiveClient({
                   clearTimeout(giftFlashTimeoutRef.current);
                 }
                 setGiftFlash({ message: msg, key: Date.now() });
+                void loadTopLiveGifters();
                 giftFlashTimeoutRef.current = setTimeout(() => {
                   setGiftFlash(null);
                 }, 5000);
@@ -643,7 +690,7 @@ export function LiveClient({
     return () => {
       mounted = false;
     };
-  }, [loadTopGifters, sb, chatLiveId]);
+  }, [liveSessionKey, loadTopGifters, loadTopLiveGifters, sb, chatLiveId]);
 
   // Subscribe to live state changes to auto-disconnect when stream ends
   useEffect(() => {
@@ -763,21 +810,19 @@ export function LiveClient({
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("pageshow", handlePageShow);
     };
-  }, [forceExitViewer, isHostMode]);
+  }, [chatLiveId, forceExitViewer, isHostMode, myUserId, sb]);
 
   // Database-backed viewer tracking
   useEffect(() => {
     const liveId = String(chatLiveId ?? "").trim();
     if (!liveId) return;
-    if (!live.is_live) return;
-    if (idlePaused) return;
-    if (!isLoggedIn && !isHostMode) return;
-    if (!isHostMode && kicked) return;
+    let cancelled = false;
 
     // Load viewers (works for all users)
     const loadViewers = async () => {
       try {
         const { data, error } = await sb.rpc("cfm_get_live_viewers", { p_live_id: liveId });
+        if (cancelled) return;
         console.log("[loadViewers] data:", data, "error:", error);
         if (data && Array.isArray(data)) {
           setViewers(
@@ -786,38 +831,44 @@ export function LiveClient({
               name: String(v.display_name ?? "Viewer"),
               joinedAt: new Date(v.joined_at).getTime(),
               isOnline: Boolean(v.is_online),
-            }))
+            })),
           );
         }
       } catch (e) {
+        if (cancelled) return;
         console.error("[loadViewers] error:", e);
       }
     };
 
-    // Join as viewer (only if logged in)
-    if (myUserId) {
+    const shouldTrackMe = !!myUserId && !isHostMode && !kicked && !idlePaused;
+
+    if (shouldTrackMe) {
       (async () => {
-        try { 
-          await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId }); 
-          // Reload viewers after joining
+        try {
+          const r = await sb.rpc("cfm_join_live_viewer", { p_live_id: liveId });
+          const payload: any = (r as any)?.data ?? null;
+          if (payload?.error) {
+            try { console.warn("[cfm_join_live_viewer]", payload.error); } catch {}
+          }
           setTimeout(loadViewers, 500);
         } catch {}
       })();
     }
 
     loadViewers();
-    // Quick poll to catch new viewers faster
-    const quickPoll = setTimeout(loadViewers, 2000);
-    const quickPoll2 = setTimeout(loadViewers, 5000);
+    const poll = setInterval(loadViewers, 10000);
 
-    // Heartbeat every 30 seconds (only if logged in)
-    if (myUserId) {
+    if (shouldTrackMe) {
       viewerHeartbeatRef.current = setInterval(async () => {
-        try { await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId }); } catch {}
+        try {
+          const r = await sb.rpc("cfm_viewer_heartbeat", { p_live_id: liveId });
+          const payload: any = (r as any)?.data ?? null;
+          if (payload?.error) {
+            try { console.warn("[cfm_viewer_heartbeat]", payload.error); } catch {}
+          }
+        } catch {}
         loadViewers();
       }, 30000);
-    } else {
-      // Logged-out viewers cannot watch; don't poll viewer list.
     }
 
     // Subscribe to realtime changes on cfm_live_viewers
@@ -828,13 +879,16 @@ export function LiveClient({
         { event: "*", schema: "public", table: "cfm_live_viewers", filter: `live_id=eq.${liveId}` },
         () => {
           loadViewers();
-        }
+        },
       )
       .subscribe();
 
     return () => {
+      cancelled = true;
+      if (poll) clearInterval(poll);
+
       // Leave as viewer (only if logged in)
-      if (myUserId) {
+      if (myUserId && !isHostMode) {
         (async () => {
           try { await sb.rpc("cfm_leave_live_viewer", { p_live_id: liveId }); } catch {}
         })();
@@ -842,11 +896,9 @@ export function LiveClient({
       if (viewerHeartbeatRef.current) {
         clearInterval(viewerHeartbeatRef.current);
       }
-      clearTimeout(quickPoll);
-      clearTimeout(quickPoll2);
       sb.removeChannel(viewerChannel);
     };
-  }, [idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, sb, chatLiveId, myUserId]);
+  }, [idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, liveSessionKey, sb, chatLiveId, myUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1551,14 +1603,17 @@ export function LiveClient({
                         const badge = getBadge(senderId);
                         const isJoin = t === "system" && meta?.event === "join";
                         const isGift = t === "tip" || (t === "system" && meta?.event === "gift");
+
+                        const avatar = renderAvatar(senderId, senderName, null, 24);
                         
                         // Green for joins, red for gifts/tips, default for others
                         if (isJoin) {
                           return (
-                            <div key={r.id} className="text-[15px] text-green-400 font-semibold">
+                            <div key={r.id} className="flex items-center gap-2 text-[15px] text-green-400 font-semibold">
+                              <div className="shrink-0">{avatar}</div>
                               <button
                                 type="button"
-                                className="hover:underline"
+                                className="min-w-0 truncate hover:underline"
                                 onClick={() => senderId && showMiniProfile(senderId)}
                               >
                                 {badge ? <span className="mr-1">{badge}</span> : null}{msg}
@@ -1569,10 +1624,11 @@ export function LiveClient({
                         
                         if (isGift) {
                           return (
-                            <div key={r.id} className="text-[15px] text-red-400 font-semibold">
+                            <div key={r.id} className="flex items-center gap-2 text-[15px] text-red-400 font-semibold">
+                              <div className="shrink-0">{avatar}</div>
                               <button
                                 type="button"
-                                className="hover:underline"
+                                className="min-w-0 truncate hover:underline"
                                 onClick={() => senderId && showMiniProfile(senderId)}
                               >
                                 {badge ? <span className="mr-1">{badge}</span> : null}{msg}
@@ -1583,15 +1639,18 @@ export function LiveClient({
                         
                         const cls = t === "system" ? "text-white/70" : "text-white";
                         return (
-                          <div key={r.id} className={`text-[15px] font-medium ${cls}`}>
-                            <button
-                              type="button"
-                              className="text-white/70 font-semibold hover:underline"
-                              onClick={() => senderId && showMiniProfile(senderId)}
-                            >
-                              {badge ? <span className="mr-1">{badge}</span> : null}{senderName}:
-                            </button>{" "}
-                            {msg}
+                          <div key={r.id} className={`flex items-start gap-2 text-[15px] font-medium ${cls}`}>
+                            <div className="shrink-0">{avatar}</div>
+                            <div className="min-w-0">
+                              <button
+                                type="button"
+                                className="text-white/70 font-semibold hover:underline"
+                                onClick={() => senderId && showMiniProfile(senderId)}
+                              >
+                                {badge ? <span className="mr-1">{badge}</span> : null}{senderName}:
+                              </button>{" "}
+                              {msg}
+                            </div>
                           </div>
                         );
                       })}
@@ -1799,7 +1858,7 @@ export function LiveClient({
                   <div className="mt-4">
                     <div className="text-sm font-semibold text-white mb-2">Viewers</div>
                     <div className="space-y-2 max-h-[300px] overflow-auto">
-                      {viewers.map((v) => (
+                      {sortedViewers.map((v) => (
                         <div key={v.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                           <div className="shrink-0">
                             <GifterRingAvatar
@@ -1827,9 +1886,9 @@ export function LiveClient({
                             <span className="ml-auto" />
                           )}
                           {v.isOnline ? (
-                            <span className="text-xs text-green-400">● Online</span>
+                            <span className="text-xs font-semibold text-green-400">IN LIVE</span>
                           ) : (
-                            <span className="text-xs text-white/40">Offline</span>
+                            <span className="text-xs text-white/40"> </span>
                           )}
                         </div>
                       ))}

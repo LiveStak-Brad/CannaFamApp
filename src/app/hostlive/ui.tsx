@@ -6,6 +6,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toast";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 
+const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
+
 type LiveState = {
   id: string;
   is_live: boolean;
@@ -40,6 +42,7 @@ type ViewerRow = {
   display_name: string | null;
   is_online: boolean;
   joined_at: string;
+  last_seen_at?: string;
 };
 
 export function HostLiveClient({
@@ -58,6 +61,7 @@ export function HostLiveClient({
   const [error, setError] = useState<string | null>(null);
   const [viewerCount, setViewerCount] = useState(0);
   const [totalViews, setTotalViews] = useState(0);
+  const [rtcViewerCount, setRtcViewerCount] = useState(0);
 
   // Top gifters state (Today, Weekly, All-Time like web view)
   const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
@@ -121,20 +125,48 @@ export function HostLiveClient({
 
   const liveId = live?.id ?? "";
 
+  const liveSessionKey = useMemo(() => {
+    return (
+      String((live as any)?.started_at ?? "").trim() ||
+      String((live as any)?.updated_at ?? "").trim() ||
+      String((live as any)?.id ?? "").trim() ||
+      "live"
+    );
+  }, [live]);
+
   const renderAvatar = (userId: string, name: string, url: string | null, size = 28) => {
     const uid = String(userId ?? "").trim();
     const cached = uid ? memberByUserId[uid] ?? null : null;
     const totalUsd = typeof cached?.lifetime_gifted_total_usd === "number" ? cached.lifetime_gifted_total_usd : null;
+
+    const resolvedUrl =
+      url ??
+      cached?.photo_url ??
+      (DEFAULT_PROFILE_PHOTO_URL ? DEFAULT_PROFILE_PHOTO_URL : null);
+
     return (
       <GifterRingAvatar
         size={size}
-        imageUrl={url ?? cached?.photo_url ?? null}
+        imageUrl={resolvedUrl}
         name={name}
         totalUsd={totalUsd}
         showDiamondShimmer
       />
     );
   };
+
+  const sortedViewers = useMemo(() => {
+    const next = [...viewers];
+    next.sort((a, b) => {
+      const ao = !!a.is_online;
+      const bo = !!b.is_online;
+      if (ao !== bo) return ao ? -1 : 1;
+      const at = new Date(String(a.joined_at ?? 0)).getTime();
+      const bt = new Date(String(b.joined_at ?? 0)).getTime();
+      return bt - at;
+    });
+    return next;
+  }, [viewers]);
 
   // Load top gifters (Today, Weekly, All-Time)
   const loadTopGifters = useCallback(async () => {
@@ -177,6 +209,7 @@ export function HostLiveClient({
           display_name: v.display_name,
           is_online: v.is_online,
           joined_at: v.joined_at,
+          last_seen_at: v.last_seen_at,
         }));
         setViewers(rows as ViewerRow[]);
         setTotalViews(rows.length);
@@ -187,20 +220,67 @@ export function HostLiveClient({
     }
   }, [sb, liveId]);
 
+  // Viewer history: always fetch immediately + repoll + realtime subscription (never gate on auth/is_live)
+  useEffect(() => {
+    if (!liveId) return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+      await loadViewers();
+    };
+
+    void tick();
+    const poll = setInterval(tick, 10000);
+
+    const viewerChannel = sb
+      .channel(`live-viewers-host-${liveId}-${liveSessionKey}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "cfm_live_viewers", filter: `live_id=eq.${liveId}` },
+        () => {
+          void tick();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      sb.removeChannel(viewerChannel);
+    };
+  }, [liveId, liveSessionKey, loadViewers, sb]);
+
+  useEffect(() => {
+    setChatRows([]);
+    setNameByUserId({});
+    setMemberByUserId({});
+    setViewers([]);
+    setViewerCount(0);
+    setTotalViews(0);
+    setTopLive([]);
+    setTopModalOpen(false);
+    setViewerListOpen(false);
+
+    if (giftFlashTimeoutRef.current) {
+      clearTimeout(giftFlashTimeoutRef.current);
+      giftFlashTimeoutRef.current = null;
+    }
+    setGiftFlash(null);
+  }, [liveSessionKey]);
+
   // Load data on mount and periodically
   useEffect(() => {
     loadTopGifters();
     loadTopLiveGifters();
-    loadViewers();
     const t1 = setInterval(loadTopGifters, 30000);
     const t1b = setInterval(loadTopLiveGifters, 15000);
-    const t2 = setInterval(loadViewers, 10000);
     return () => {
       clearInterval(t1);
       clearInterval(t1b);
-      clearInterval(t2);
     };
-  }, [loadTopGifters, loadTopLiveGifters, loadViewers]);
+  }, [liveSessionKey, loadTopGifters, loadTopLiveGifters, loadViewers]);
 
   // Auto-start live on mount
   useEffect(() => {
@@ -326,12 +406,12 @@ export function HostLiveClient({
       setBroadcasting(true);
       setAgoraReady(true);
 
-      // Track viewer count
+      // Track RTC remote users separately (do not overwrite DB-backed viewerCount)
       client.on("user-joined", () => {
-        setViewerCount(client.remoteUsers?.length ?? 0);
+        setRtcViewerCount(client.remoteUsers?.length ?? 0);
       });
       client.on("user-left", () => {
-        setViewerCount(client.remoteUsers?.length ?? 0);
+        setRtcViewerCount(client.remoteUsers?.length ?? 0);
       });
 
     } catch (e) {
@@ -396,6 +476,7 @@ export function HostLiveClient({
               clearTimeout(giftFlashTimeoutRef.current);
             }
             setGiftFlash({ message: msg, key: Date.now() });
+            void loadTopLiveGifters();
             giftFlashTimeoutRef.current = setTimeout(() => {
               setGiftFlash(null);
             }, 5000);
@@ -424,7 +505,7 @@ export function HostLiveClient({
     return () => {
       sb.removeChannel(channel);
     };
-  }, [liveId, sb]);
+  }, [liveId, liveSessionKey, loadTopLiveGifters, sb]);
 
   // Load usernames for chat
   useEffect(() => {
@@ -673,12 +754,14 @@ export function HostLiveClient({
               const senderName = String(nameByUserId[senderId] ?? "Member");
               const isGift = kind === "tip" || (kind === "system" && meta?.event === "gift");
               const isJoin = kind === "system" && meta?.event === "join";
+              const avatar = renderAvatar(senderId, senderName, null, 24);
               
               // Green for joins (like mobile)
               if (isJoin) {
                 return (
-                  <div key={row.id} className="text-[15px] text-green-400 font-semibold">
-                    {msg}
+                  <div key={row.id} className="flex items-center gap-2 text-[15px] text-green-400 font-semibold">
+                    <div className="shrink-0">{avatar}</div>
+                    <div className="min-w-0 truncate">{msg}</div>
                   </div>
                 );
               }
@@ -686,17 +769,21 @@ export function HostLiveClient({
               // Red for gifts (like mobile)
               if (isGift) {
                 return (
-                  <div key={row.id} className="text-[15px] text-red-400 font-semibold">
-                    {msg}
+                  <div key={row.id} className="flex items-center gap-2 text-[15px] text-red-400 font-semibold">
+                    <div className="shrink-0">{avatar}</div>
+                    <div className="min-w-0 truncate">{msg}</div>
                   </div>
                 );
               }
               
               // Regular chat
               return (
-                <div key={row.id} className="text-[15px] font-medium text-white">
-                  <span className="text-white/70 font-semibold">{senderName}:</span>{" "}
-                  {msg}
+                <div key={row.id} className="flex items-start gap-2 text-[15px] font-medium text-white">
+                  <div className="shrink-0">{avatar}</div>
+                  <div className="min-w-0">
+                    <span className="text-white/70 font-semibold">{senderName}:</span>{" "}
+                    {msg}
+                  </div>
                 </div>
               );
             })}
@@ -756,14 +843,14 @@ export function HostLiveClient({
                 <div className="mt-4">
                   <div className="text-sm font-semibold text-white mb-2">Viewers</div>
                   <div className="space-y-2 max-h-[300px] overflow-auto">
-                    {viewers.map((v) => (
+                    {sortedViewers.map((v) => (
                       <div key={v.user_id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
                         {renderAvatar(String(v.user_id ?? ""), String(v.display_name ?? "Member"), null, 32)}
                         <div className="text-sm text-white">{v.display_name || "Member"}</div>
                         {v.is_online ? (
-                          <span className="ml-auto text-xs text-green-400">● Online</span>
+                          <span className="ml-auto text-xs font-semibold text-green-400">IN LIVE</span>
                         ) : (
-                          <span className="ml-auto text-xs text-white/40">Offline</span>
+                          <span className="ml-auto text-xs text-white/40"> </span>
                         )}
                       </div>
                     ))}
