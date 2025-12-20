@@ -77,3 +77,16 @@ export function centralDayRangeUTC(dateStr: string) {
   const endMs = utcMillisForTimeZoneMidnight(next, tz);
   return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
 }
+
+ export function parseLifetimeUsd(value: unknown): number | null {
+   if (value == null) return null;
+   if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+   // Supabase numeric often returns string
+   if (typeof value === "string") {
+     const n = Number(value);
+     return Number.isFinite(n) ? n : null;
+   }
+
+   return null;
+ }
