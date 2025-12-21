@@ -138,6 +138,8 @@ export function LiveAlertsToggle() {
               const sb = supabaseBrowser();
               const next = !enabled;
 
+              let canEnable = true;
+
               if (typeof window !== "undefined") {
                 const OneSignal = (window as any).OneSignal;
                 if (!OneSignal) {
@@ -158,9 +160,24 @@ export function LiveAlertsToggle() {
                     await OneSignal.Notifications.requestPermission();
                   } catch {
                   }
+
+                  const hasPerm = Boolean(OneSignal?.Notifications?.permission);
+                  if (!hasPerm) {
+                    setMsg({ tone: "error", text: "Notifications are blocked. Allow notifications for this site, then try again." });
+                    return;
+                  }
+
                   try {
                     await OneSignal.User.PushSubscription.optIn();
                   } catch {
+                  }
+
+                  const optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                  const subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
+                  const token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
+                  if (!optedIn || (!subId && !token)) {
+                    canEnable = false;
+                    setMsg({ tone: "error", text: "Push subscription not active yet. Please refresh and try again." });
                   }
                 } else {
                   try {
@@ -175,7 +192,7 @@ export function LiveAlertsToggle() {
               }
 
               const { data, error } = await (sb as any).rpc("cfm_upsert_notification_prefs", {
-                p_live_alerts_enabled: next,
+                p_live_alerts_enabled: next && canEnable,
                 p_post_alerts_enabled: false,
               });
 
