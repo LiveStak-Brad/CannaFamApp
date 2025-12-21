@@ -91,7 +91,9 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <TopNav right={<TopNavAuth />} />
-        <OneSignalWebInit appId={String(process.env.ONESIGNAL_APP_ID ?? "")} />
+        <OneSignalWebInit
+          appId={String(process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ?? process.env.ONESIGNAL_APP_ID ?? "")}
+        />
         {children}
         <BottomNav state={navState} anonymousGiftTotalCents={anonymousGiftTotalCents} isLive={isLive} isHost={isHost} />
       </body>
