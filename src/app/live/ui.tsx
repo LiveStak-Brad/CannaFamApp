@@ -791,6 +791,17 @@ export function LiveClient({
     };
   }, [chatLiveId, hardLeaveRtcSession, isHostMode, isLoggedIn, myUserId, sb]);
 
+  const triggerOwnerLivePush = useCallback(async () => {
+    try {
+      await fetch("/api/push/owner-live", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {
+    }
+  }, []);
+
   // Auto-start live when host opens /hostlive
   useEffect(() => {
     if (!isHostMode) return;
@@ -805,6 +816,7 @@ export function LiveClient({
         } as any);
         if (!error && data) {
           setLive((prev) => ({ ...(prev as any), ...(data as any) }));
+          void triggerOwnerLivePush();
         }
       } catch {
         // Fallback
@@ -819,10 +831,11 @@ export function LiveClient({
           const { data: fresh } = await sb.rpc("cfm_get_live_state");
           const row = Array.isArray(fresh) ? (fresh[0] as any) : (fresh as any);
           if (row) setLive(row);
+          void triggerOwnerLivePush();
         } catch {}
       }
     })();
-  }, [isHostMode]);
+  }, [isHostMode, live.id, live.is_live, live.started_at, live.title, sb, triggerOwnerLivePush]);
 
   useEffect(() => {
     let mounted = true;

@@ -57,6 +57,17 @@ export function HostLiveClient({
   const router = useRouter();
   const sb = useMemo(() => supabaseBrowser(), []);
 
+  const triggerOwnerLivePush = useCallback(async () => {
+    try {
+      await fetch("/api/push/owner-live", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {
+    }
+  }, []);
+
   const [live, setLive] = useState<LiveState>(initialLive);
   const [broadcasting, setBroadcasting] = useState(false);
   const [agoraReady, setAgoraReady] = useState(false);
@@ -481,6 +492,7 @@ export function HostLiveClient({
     try {
       // Set live state first
       await setLiveState(true);
+      void triggerOwnerLivePush();
 
       // Get host token
       const res = await fetch("/api/agora/token", {
