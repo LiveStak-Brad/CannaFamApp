@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           app_id: onesignalAppId,
-          include_aliases: { external_id: batch },
+          include_external_user_ids: batch,
           headings: { en: "CannaStreams is LIVE" },
           contents: { en: "Tap to join now." },
           url: deepLinkUrl,
