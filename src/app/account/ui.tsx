@@ -223,8 +223,37 @@ export function LiveAlertsToggle() {
                         }
 
                         try {
-                          await OneSignal.User.PushSubscription.optOut();
+                          try {
+                            OneSignal.setConsentGiven(true);
+                          } catch {
+                          }
+
+                          if (OneSignal?.User?.PushSubscription?.optOut) {
+                            await OneSignal.User.PushSubscription.optOut();
+                          }
+
+                          if (OneSignal?.setSubscription) {
+                            await OneSignal.setSubscription(false);
+                          }
+
+                          if (OneSignal?.logout) {
+                            await OneSignal.logout();
+                          }
                         } catch {
+                        }
+
+                        let optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                        for (let i = 0; i < 10 && optedIn; i += 1) {
+                          await new Promise((r) => setTimeout(r, 200));
+                          optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                        }
+
+                        if (optedIn) {
+                          resolve({
+                            canEnable: false,
+                            errorText: "Could not unsubscribe yet. Refresh and try again.",
+                          });
+                          return;
                         }
                         try {
                           OneSignal.setConsentGiven(false);
