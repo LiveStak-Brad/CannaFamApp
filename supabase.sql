@@ -412,6 +412,74 @@ create table if not exists public.cfm_live_kicks (
   unique (live_id, kicked_user_id)
 );
 
+create table if not exists public.cfm_live_bans (
+  id uuid primary key default gen_random_uuid(),
+  host_user_id uuid not null,
+  banned_user_id uuid not null,
+  reason text,
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  unique (banned_user_id)
+);
+
+ do $$
+ begin
+   begin
+     if not exists (
+       select 1
+       from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'cfm_live_bans'
+     ) then
+       alter publication supabase_realtime add table public.cfm_live_bans;
+     end if;
+   exception
+     when undefined_table then null;
+     when undefined_object then null;
+   end;
+ end
+ $$;
+
+create index if not exists cfm_live_bans_banned_user_idx
+  on public.cfm_live_bans (banned_user_id)
+  where revoked_at is null;
+
+alter table public.cfm_live_bans enable row level security;
+
+create policy "live_bans_select_host_or_banned_or_admin"
+on public.cfm_live_bans
+for select
+to authenticated
+using (
+  public.cfm_is_admin()
+  or public.cfm_is_mod()
+  or host_user_id = auth.uid()
+  or banned_user_id = auth.uid()
+  or exists (
+    select 1
+    from public.cfm_live_state ls
+    where ls.is_live = true
+      and ls.host_user_id = auth.uid()
+  )
+);
+
+create policy "live_bans_insert_host_or_admin"
+on public.cfm_live_bans
+for insert
+to authenticated
+with check (
+  public.cfm_is_admin() or public.cfm_is_mod() or host_user_id = auth.uid()
+);
+
+create policy "live_bans_update_host_or_admin"
+on public.cfm_live_bans
+for update
+to authenticated
+using (
+  public.cfm_is_admin() or public.cfm_is_mod() or host_user_id = auth.uid()
+);
+
 create index if not exists cfm_live_kicks_live_user_idx
   on public.cfm_live_kicks (live_id, kicked_user_id);
 
@@ -1375,11 +1443,23 @@ with check (
     sender_user_id = auth.uid()
     and type = 'system'
     and coalesce(metadata->>'event','') = 'join'
+    and not exists (
+      select 1
+      from public.cfm_live_bans b
+      where b.banned_user_id = auth.uid()
+        and b.revoked_at is null
+    )
   )
   or (
     public.cfm_is_approved_member()
     and sender_user_id = auth.uid()
     and type in ('chat','emote')
+    and not exists (
+      select 1
+      from public.cfm_live_bans b
+      where b.banned_user_id = auth.uid()
+        and b.revoked_at is null
+    )
     and not exists (
       select 1
       from public.cfm_live_mutes m
@@ -1694,6 +1774,15 @@ begin
 
   if exists (
     select 1
+    from public.cfm_live_bans b
+    where b.banned_user_id = v_user_id
+      and b.revoked_at is null
+  ) then
+    return json_build_object('error', 'You are banned');
+  end if;
+
+  if exists (
+    select 1
     from public.cfm_live_kicks k
     where k.live_id = p_live_id
       and k.kicked_user_id = v_user_id
@@ -1910,13 +1999,25 @@ begin
 
   if exists (
     select 1
+    from public.cfm_live_bans b
+    where b.banned_user_id = v_user_id
+      and b.revoked_at is null
+  ) then
+    update public.cfm_live_viewers
+    set left_at = now()
+    where user_id = v_user_id and left_at is null;
+    return json_build_object('error', 'You are banned');
+  end if;
+
+  if exists (
+    select 1
     from public.cfm_live_kicks k
     where k.live_id = p_live_id
       and k.kicked_user_id = v_user_id
   ) then
     update public.cfm_live_viewers
     set left_at = now()
-    where live_id = p_live_id and user_id = v_user_id;
+    where user_id = v_user_id and left_at is null;
     return json_build_object('error', 'You were removed by the host');
   end if;
 
@@ -1924,7 +2025,7 @@ begin
   if not coalesce(v_live_is_live, false) then
     update public.cfm_live_viewers
     set left_at = now()
-    where live_id = p_live_id and user_id = v_user_id;
+    where user_id = v_user_id and left_at is null;
     return json_build_object('error', 'Live is not active');
   end if;
 
@@ -1937,6 +2038,158 @@ end;
 $$;
 
 grant execute on function public.cfm_viewer_heartbeat(uuid) to authenticated;
+
+create or replace function public.cfm_is_banned(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.cfm_live_bans b
+    where b.banned_user_id = p_user_id
+      and b.revoked_at is null
+  );
+$$;
+
+grant execute on function public.cfm_is_banned(uuid) to authenticated;
+
+create or replace function public.cfm_ban_user(
+  p_banned_user_id uuid,
+  p_reason text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_live_id uuid;
+  v_host uuid;
+  v_is_live boolean;
+  v_banned_name text;
+begin
+  if v_actor is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  select id, host_user_id, is_live
+  into v_live_id, v_host, v_is_live
+  from public.cfm_live_state
+  order by updated_at desc
+  limit 1;
+
+  if not (public.cfm_is_admin() or public.cfm_is_mod() or (coalesce(v_is_live, false) and v_host = v_actor)) then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  if p_banned_user_id is null then
+    return json_build_object('error', 'Missing user');
+  end if;
+
+  insert into public.cfm_live_bans (host_user_id, banned_user_id, reason, created_at, revoked_at)
+  values (v_actor, p_banned_user_id, p_reason, now(), null)
+  on conflict (banned_user_id)
+  do update set
+    host_user_id = excluded.host_user_id,
+    reason = excluded.reason,
+    created_at = now(),
+    revoked_at = null;
+
+  update public.cfm_live_viewers
+  set left_at = now()
+  where user_id = p_banned_user_id and left_at is null;
+
+  select favorited_username
+  into v_banned_name
+  from public.cfm_public_member_ids
+  where user_id = p_banned_user_id;
+
+  if v_live_id is not null and coalesce(v_is_live, false) then
+    begin
+      insert into public.cfm_live_chat (live_id, sender_user_id, message, type, metadata)
+      values (
+        v_live_id,
+        v_actor,
+        coalesce(v_banned_name, 'Member') || ' was banned',
+        'system',
+        jsonb_build_object('event', 'ban', 'user_id', p_banned_user_id::text)
+      );
+    exception
+      when others then
+        null;
+    end;
+  end if;
+
+  return json_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.cfm_ban_user(uuid, text) to authenticated;
+
+create or replace function public.cfm_unban_user(p_banned_user_id uuid)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_live_id uuid;
+  v_host uuid;
+  v_is_live boolean;
+  v_banned_name text;
+begin
+  if v_actor is null then
+    return json_build_object('error', 'Not authenticated');
+  end if;
+
+  select id, host_user_id, is_live
+  into v_live_id, v_host, v_is_live
+  from public.cfm_live_state
+  order by updated_at desc
+  limit 1;
+
+  if not (public.cfm_is_admin() or public.cfm_is_mod() or (coalesce(v_is_live, false) and v_host = v_actor)) then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  update public.cfm_live_bans
+  set revoked_at = now()
+  where banned_user_id = p_banned_user_id
+    and revoked_at is null;
+
+  select favorited_username
+  into v_banned_name
+  from public.cfm_public_member_ids
+  where user_id = p_banned_user_id;
+
+  if v_live_id is not null and coalesce(v_is_live, false) then
+    begin
+      insert into public.cfm_live_chat (live_id, sender_user_id, message, type, metadata)
+      values (
+        v_live_id,
+        v_actor,
+        coalesce(v_banned_name, 'Member') || ' was unbanned',
+        'system',
+        jsonb_build_object('event', 'unban', 'user_id', p_banned_user_id::text)
+      );
+    exception
+      when others then
+        null;
+    end;
+  end if;
+
+  return json_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.cfm_unban_user(uuid) to authenticated;
 
 create or replace function public.cfm_kick_live_viewer(
   p_live_id uuid,
@@ -2350,7 +2603,7 @@ $$;
 grant execute on function public.cfm_timeout_user(uuid, int, text) to authenticated;
 
 -- Function to ban a user permanently (admin only)
-create or replace function public.cfm_ban_user(
+create or replace function public.cfm_admin_ban_user(
   p_user_id uuid,
   p_reason text default null
 )
@@ -2379,10 +2632,10 @@ exception
 end;
 $$;
 
-grant execute on function public.cfm_ban_user(uuid, text) to authenticated;
+grant execute on function public.cfm_admin_ban_user(uuid, text) to authenticated;
 
 -- Function to unban a user (admin only)
-create or replace function public.cfm_unban_user(p_user_id uuid)
+create or replace function public.cfm_admin_unban_user(p_user_id uuid)
 returns json
 language plpgsql
 security definer
@@ -2404,7 +2657,7 @@ exception
 end;
 $$;
 
-grant execute on function public.cfm_unban_user(uuid) to authenticated;
+grant execute on function public.cfm_admin_unban_user(uuid) to authenticated;
 
 -- Function to list banned users (admin only)
 create or replace function public.cfm_list_bans(p_limit int default 100)

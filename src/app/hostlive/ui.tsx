@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toast";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { parseLifetimeUsd } from "@/lib/utils";
+import { MiniProfileModal } from "@/components/ui/mini-profile";
 
 const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
 
@@ -64,6 +65,12 @@ export function HostLiveClient({
   const [totalViews, setTotalViews] = useState(0);
   const [rtcViewerCount, setRtcViewerCount] = useState(0);
 
+  const [miniProfileOpen, setMiniProfileOpen] = useState(false);
+  const [miniProfileSubject, setMiniProfileSubject] = useState<any | null>(null);
+  const [miniProfileLeaderboard, setMiniProfileLeaderboard] = useState<any[]>([]);
+  const [miniProfileAwards, setMiniProfileAwards] = useState<any[]>([]);
+  const [bannedUserIdMap, setBannedUserIdMap] = useState<Record<string, true>>({});
+
   // Top gifters state (Today, Weekly, All-Time like web view)
   const [topToday, setTopToday] = useState<TopGifterRow[]>([]);
   const [topWeekly, setTopWeekly] = useState<TopGifterRow[]>([]);
@@ -74,6 +81,122 @@ export function HostLiveClient({
 
   const top3 = topLive.slice(0, 3);
   const modalRows = topTab === "today" ? topLive : topTab === "weekly" ? topWeekly : topAllTime;
+
+  const showMiniProfile = useCallback(
+    async (userId: string) => {
+      const uid = String(userId ?? "").trim();
+      if (!uid) return;
+
+      try {
+        const profileRes = await sb
+          .from("cfm_public_member_ids")
+          .select("user_id,favorited_username")
+          .eq("user_id", uid)
+          .maybeSingle();
+
+        const subject = {
+          user_id: uid,
+          favorited_username: String((profileRes.data as any)?.favorited_username ?? "Member"),
+        };
+        setMiniProfileSubject(subject);
+        setMiniProfileLeaderboard([]);
+        setMiniProfileAwards([]);
+        setMiniProfileOpen(true);
+      } catch {
+        setMiniProfileSubject({ user_id: uid, favorited_username: "Member" });
+        setMiniProfileLeaderboard([]);
+        setMiniProfileAwards([]);
+        setMiniProfileOpen(true);
+      }
+
+      void (async () => {
+        try {
+          const { data } = await sb
+            .from("cfm_live_bans")
+            .select("banned_user_id")
+            .eq("banned_user_id", uid)
+            .is("revoked_at", null)
+            .maybeSingle();
+          const isB = !!(data as any)?.banned_user_id;
+          setBannedUserIdMap((prev) => {
+            const next = { ...prev };
+            if (isB) next[uid] = true;
+            else delete (next as any)[uid];
+            return next;
+          });
+        } catch {
+        }
+      })();
+    },
+    [sb],
+  );
+
+  const refreshBans = useCallback(
+    async (idsRaw: string[]) => {
+      const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? "").trim()).filter(Boolean)));
+      if (!ids.length) {
+        setBannedUserIdMap({});
+        return;
+      }
+      try {
+        const { data } = await sb
+          .from("cfm_live_bans")
+          .select("banned_user_id")
+          .in("banned_user_id", ids)
+          .is("revoked_at", null);
+        const next: Record<string, true> = {};
+        for (const row of (data ?? []) as any[]) {
+          const uid = String((row as any)?.banned_user_id ?? "").trim();
+          if (uid) next[uid] = true;
+        }
+        setBannedUserIdMap(next);
+      } catch {
+      }
+    },
+    [sb],
+  );
+
+  const banUser = useCallback(
+    async (userId: string) => {
+      const uid = String(userId ?? "").trim();
+      if (!uid) return;
+      if (uid === myUserId) return;
+      try {
+        const { data, error } = await sb.rpc("cfm_ban_user", { p_banned_user_id: uid, p_reason: null });
+        const payload: any = data ?? null;
+        const payloadError = String(payload?.error ?? "").trim();
+        if (error || payloadError) throw new Error(error?.message ?? payloadError);
+        setBannedUserIdMap((prev) => ({ ...prev, [uid]: true }));
+        toast("User banned", "success");
+      } catch {
+        toast("Ban failed", "error");
+      }
+    },
+    [myUserId, sb],
+  );
+
+  const unbanUser = useCallback(
+    async (userId: string) => {
+      const uid = String(userId ?? "").trim();
+      if (!uid) return;
+      if (uid === myUserId) return;
+      try {
+        const { data, error } = await sb.rpc("cfm_unban_user", { p_banned_user_id: uid });
+        const payload: any = data ?? null;
+        const payloadError = String(payload?.error ?? "").trim();
+        if (error || payloadError) throw new Error(error?.message ?? payloadError);
+        setBannedUserIdMap((prev) => {
+          const next = { ...prev };
+          delete (next as any)[uid];
+          return next;
+        });
+        toast("User unbanned", "success");
+      } catch {
+        toast("Unban failed", "error");
+      }
+    },
+    [myUserId, sb],
+  );
 
   const allTimeRankByUserId = useMemo(() => {
     const map: Record<string, number> = {};
@@ -87,6 +210,11 @@ export function HostLiveClient({
   // Viewers state
   const [viewers, setViewers] = useState<ViewerRow[]>([]);
   const [viewerListOpen, setViewerListOpen] = useState(false);
+
+  useEffect(() => {
+    if (!viewerListOpen) return;
+    void refreshBans(viewers.map((v) => String((v as any)?.user_id ?? "").trim()).filter(Boolean));
+  }, [refreshBans, viewerListOpen, viewers]);
 
   // Gift flash animation state
   const [giftFlash, setGiftFlash] = useState<{ message: string; key: number } | null>(null);
@@ -758,32 +886,53 @@ export function HostLiveClient({
               // Green for joins (like mobile)
               if (isJoin) {
                 return (
-                  <div key={row.id} className="flex items-center gap-2 text-[15px] text-green-400 font-semibold">
+                  <button
+                    key={row.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 text-left text-[15px] text-green-400 font-semibold"
+                    onClick={() => {
+                      if (senderId) showMiniProfile(senderId);
+                    }}
+                  >
                     <div className="shrink-0">{avatar}</div>
                     <div className="min-w-0 truncate">{msg}</div>
-                  </div>
+                  </button>
                 );
               }
               
               // Red for gifts (like mobile)
               if (isGift) {
                 return (
-                  <div key={row.id} className="flex items-center gap-2 text-[15px] text-red-400 font-semibold">
+                  <button
+                    key={row.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 text-left text-[15px] text-red-400 font-semibold"
+                    onClick={() => {
+                      if (senderId) showMiniProfile(senderId);
+                    }}
+                  >
                     <div className="shrink-0">{avatar}</div>
                     <div className="min-w-0 truncate">{msg}</div>
-                  </div>
+                  </button>
                 );
               }
               
               // Regular chat
               return (
-                <div key={row.id} className="flex items-start gap-2 text-[15px] font-medium text-white">
+                <button
+                  key={row.id}
+                  type="button"
+                  className="flex w-full items-start gap-2 text-left text-[15px] font-medium text-white"
+                  onClick={() => {
+                    if (senderId) showMiniProfile(senderId);
+                  }}
+                >
                   <div className="shrink-0">{avatar}</div>
                   <div className="min-w-0">
                     <span className="text-white/70 font-semibold">{senderName}:</span>{" "}
                     {msg}
                   </div>
-                </div>
+                </button>
               );
             })}
             <div ref={chatEndRef} />
@@ -842,17 +991,50 @@ export function HostLiveClient({
                 <div className="mt-4">
                   <div className="text-sm font-semibold text-white mb-2">Viewers</div>
                   <div className="space-y-2 max-h-[300px] overflow-auto">
-                    {sortedViewers.map((v) => (
-                      <div key={v.user_id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                        {renderAvatar(String(v.user_id ?? ""), String(v.display_name ?? "Member"), null, 32)}
-                        <div className="text-sm text-white">{v.display_name || "Member"}</div>
-                        {v.is_online ? (
-                          <span className="ml-auto text-xs font-semibold text-green-400">IN LIVE</span>
-                        ) : (
-                          <span className="ml-auto text-xs text-white/40"> </span>
-                        )}
-                      </div>
-                    ))}
+                    {sortedViewers.map((v) => {
+                      const uid = String((v as any)?.user_id ?? "").trim();
+                      const name = String((v as any)?.display_name ?? "Member");
+                      const isOnline = !!(v as any)?.is_online;
+                      const isBanned = !!bannedUserIdMap[uid];
+                      return (
+                        <div key={uid} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                            onClick={() => uid && showMiniProfile(uid)}
+                          >
+                            {renderAvatar(uid, name, null, 32)}
+                            <div className="min-w-0 truncate text-sm text-white">{name}</div>
+                          </button>
+                          {uid && uid !== myUserId ? (
+                            <div className="ml-auto flex items-center gap-2">
+                              {isBanned ? (
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-white"
+                                  onClick={() => unbanUser(uid)}
+                                >
+                                  Unban
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#d11f2a] px-3 py-1 text-xs font-bold text-white"
+                                  onClick={() => banUser(uid)}
+                                >
+                                  Ban
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
+                          {isOnline ? (
+                            <span className="text-xs font-semibold text-green-400">IN LIVE</span>
+                          ) : (
+                            <span className="text-xs text-white/40"> </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -864,6 +1046,30 @@ export function HostLiveClient({
           </div>
         </div>
       ) : null}
+
+      {/* Mini Profile Modal */}
+      <MiniProfileModal
+        open={miniProfileOpen}
+        subject={miniProfileSubject}
+        leaderboard={miniProfileLeaderboard}
+        awards={miniProfileAwards}
+        myUserId={myUserId}
+        liveKick={undefined}
+        liveBan={{
+          canBan: true,
+          isBanned: !!bannedUserIdMap[String(miniProfileSubject?.user_id ?? "").trim()],
+          onBan: async (uid: string) => {
+            await banUser(uid);
+          },
+          onUnban: async (uid: string) => {
+            await unbanUser(uid);
+          },
+        }}
+        onClose={() => {
+          setMiniProfileOpen(false);
+          setMiniProfileSubject(null);
+        }}
+      />
 
       {/* Leaderboard Modal - same as web view screen with Daily/Weekly/All-Time tabs */}
       {topModalOpen ? (

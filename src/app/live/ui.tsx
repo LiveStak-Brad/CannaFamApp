@@ -329,6 +329,27 @@ export function LiveClient({
       });
       setMiniProfileOpen(true);
     }
+
+    if (isHost) {
+      void (async () => {
+        try {
+          const { data } = await sb
+            .from("cfm_live_bans")
+            .select("banned_user_id")
+            .eq("banned_user_id", uid)
+            .is("revoked_at", null)
+            .maybeSingle();
+          const isB = !!(data as any)?.banned_user_id;
+          setBannedUserIdMap((prev) => {
+            const next = { ...prev };
+            if (isB) next[uid] = true;
+            else delete (next as any)[uid];
+            return next;
+          });
+        } catch {
+        }
+      })();
+    }
   }
 
   // Database-backed viewer tracking
@@ -349,6 +370,8 @@ export function LiveClient({
   const isLoggedIn = !!myUserId;
   const [kicked, setKicked] = useState(false);
   const [kickReason, setKickReason] = useState<string | null>(null);
+  const [banned, setBanned] = useState(false);
+  const [banReason, setBanReason] = useState<string | null>(null);
   const hostWasLiveRef = useRef(false);
   const hostEndRedirectedRef = useRef(false);
 
@@ -415,6 +438,8 @@ export function LiveClient({
     setStreamEnded(false);
     setKicked(false);
     setKickReason(null);
+    setBanned(false);
+    setBanReason(null);
     hostWasLiveRef.current = false;
     hostEndRedirectedRef.current = false;
 
@@ -566,11 +591,86 @@ export function LiveClient({
     [chatLiveId, myUserId, sb],
   );
 
+  const [bannedUserIdMap, setBannedUserIdMap] = useState<Record<string, true>>({});
+
+  const refreshBans = useCallback(
+    async (idsRaw: string[]) => {
+      const ids = Array.from(new Set(idsRaw.map((x) => String(x ?? "").trim()).filter(Boolean)));
+      if (!ids.length) {
+        setBannedUserIdMap({});
+        return;
+      }
+      try {
+        const { data } = await sb
+          .from("cfm_live_bans")
+          .select("banned_user_id")
+          .in("banned_user_id", ids)
+          .is("revoked_at", null);
+        const next: Record<string, true> = {};
+        for (const row of (data ?? []) as any[]) {
+          const uid = String((row as any)?.banned_user_id ?? "").trim();
+          if (uid) next[uid] = true;
+        }
+        setBannedUserIdMap(next);
+      } catch {
+      }
+    },
+    [sb],
+  );
+
+  const banUser = useCallback(
+    async (userId: string) => {
+      const uid = String(userId ?? "").trim();
+      if (!uid) return;
+      try {
+        const { data, error } = await sb.rpc("cfm_ban_user", { p_banned_user_id: uid, p_reason: null });
+        const payload: any = data ?? null;
+        const payloadError = String(payload?.error ?? "").trim();
+        if (error || payloadError) throw new Error(error?.message ?? payloadError);
+        setBannedUserIdMap((prev) => ({ ...prev, [uid]: true }));
+        toast("User banned", "success");
+      } catch {
+        toast("Ban failed", "error");
+      }
+    },
+    [sb],
+  );
+
+  const unbanUser = useCallback(
+    async (userId: string) => {
+      const uid = String(userId ?? "").trim();
+      if (!uid) return;
+      try {
+        const { data, error } = await sb.rpc("cfm_unban_user", { p_banned_user_id: uid });
+        const payload: any = data ?? null;
+        const payloadError = String(payload?.error ?? "").trim();
+        if (error || payloadError) throw new Error(error?.message ?? payloadError);
+        setBannedUserIdMap((prev) => {
+          const next = { ...prev };
+          delete (next as any)[uid];
+          return next;
+        });
+        toast("User unbanned", "success");
+      } catch {
+        toast("Unban failed", "error");
+      }
+    },
+    [sb],
+  );
+
+  useEffect(() => {
+    if (!isHost) return;
+    if (!viewerListOpen) return;
+    void refreshBans(viewers.map((v) => String((v as any)?.id ?? "").trim()).filter(Boolean));
+  }, [isHost, refreshBans, viewerListOpen, viewers]);
+
   useEffect(() => {
     if (isHostMode) return;
     if (!isLoggedIn || !myUserId) {
       setKicked(false);
       setKickReason(null);
+      setBanned(false);
+      setBanReason(null);
       return;
     }
 
@@ -624,6 +724,72 @@ export function LiveClient({
       sb.removeChannel(ch);
     };
   }, [chatLiveId, isHostMode, isLoggedIn, myUserId, sb]);
+
+  useEffect(() => {
+    if (isHostMode) return;
+    if (!isLoggedIn || !myUserId) return;
+
+    const liveId = String(chatLiveId ?? "").trim();
+    if (!liveId) return;
+
+    let cancelled = false;
+
+    const disconnect = () => {
+      void hardLeaveRtcSession("banned");
+    };
+
+    (async () => {
+      try {
+        const { data } = await sb
+          .from("cfm_live_bans")
+          .select("id,reason")
+          .eq("banned_user_id", myUserId)
+          .is("revoked_at", null)
+          .maybeSingle();
+        if (cancelled) return;
+        if ((data as any)?.id) {
+          setBanned(true);
+          setBanReason(String((data as any)?.reason ?? "").trim() || "You have been banned");
+          disconnect();
+          toast("You have been banned", "error");
+        }
+      } catch {
+      }
+    })();
+
+    const ch = sb
+      .channel(`live-bans-${liveId}-${myUserId}`)
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "cfm_live_bans", filter: `banned_user_id=eq.${myUserId}` },
+        (payload: any) => {
+          const row = (payload as any)?.new ?? null;
+          const bannedUserId = String(row?.banned_user_id ?? "").trim();
+          const revokedAt = row?.revoked_at ?? null;
+          if (bannedUserId && bannedUserId === myUserId && revokedAt == null) {
+            setBanned(true);
+            setBanReason(String(row?.reason ?? "").trim() || "You have been banned");
+            disconnect();
+            toast("You have been banned", "error");
+            return;
+          }
+
+          if (bannedUserId && bannedUserId === myUserId && revokedAt != null) {
+            setBanned(false);
+            setBanReason(null);
+
+            // Allow re-join attempts immediately after unban (no restart required)
+            viewerJoinKeyRef.current = "";
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      sb.removeChannel(ch);
+    };
+  }, [chatLiveId, hardLeaveRtcSession, isHostMode, isLoggedIn, myUserId, sb]);
 
   // Auto-start live when host opens /hostlive
   useEffect(() => {
@@ -899,7 +1065,7 @@ export function LiveClient({
 
     const attemptJoin = async (uidRaw: string | null | undefined) => {
       const resolvedUserId = String(uidRaw ?? "").trim() || null;
-      const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !idlePaused && !!live.is_live;
+      const shouldTrackMe = !!resolvedUserId && !isHostMode && !kicked && !banned && !idlePaused && !!live.is_live;
       viewerLog("[join] gate", { liveId, liveSessionKey, resolvedUserId, isHostMode, kicked, idlePaused, isLive: live.is_live, shouldTrackMe });
       if (!shouldTrackMe) return;
 
@@ -915,6 +1081,12 @@ export function LiveClient({
         const payloadError = String(payload?.error ?? "").trim();
 
         if (error || payloadError) {
+          if (String(error?.message ?? payloadError) === "You are banned") {
+            setBanned(true);
+            setBanReason("You have been banned");
+            void hardLeaveRtcSession("banned");
+            toast("You have been banned", "error");
+          }
           try {
             console.warn("[cfm_join_live_viewer]", {
               liveId,
@@ -947,6 +1119,13 @@ export function LiveClient({
           const hbPayload: any = data ?? null;
           const hbPayloadError = String(hbPayload?.error ?? "").trim();
           if (error || hbPayloadError) {
+            if (String(error?.message ?? hbPayloadError) === "You are banned") {
+              setBanned(true);
+              setBanReason("You have been banned");
+              void hardLeaveRtcSession("banned");
+              toast("You have been banned", "error");
+              return;
+            }
             try {
               console.warn("[cfm_viewer_heartbeat]", {
                 liveId,
@@ -1030,7 +1209,7 @@ export function LiveClient({
       }
       sb.removeChannel(viewerChannel);
     };
-  }, [idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, liveSessionKey, sb, chatLiveId, myUserId]);
+  }, [banned, idlePaused, isHostMode, isLoggedIn, kicked, live.is_live, liveSessionKey, sb, chatLiveId, myUserId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1470,6 +1649,19 @@ export function LiveClient({
       } as any);
 
       if (error) {
+        if (myUserId) {
+          try {
+            const { data: isBanned } = await sb.rpc("cfm_is_banned", { p_user_id: myUserId } as any);
+            if (isBanned) {
+              setBanned(true);
+              setBanReason("You have been banned");
+              void hardLeaveRtcSession("banned");
+              toast("You have been banned", "error");
+              return;
+            }
+          } catch {
+          }
+        }
         toast(error.message, "error");
         return;
       }
@@ -1532,6 +1724,21 @@ export function LiveClient({
                     {kickReason ? kickReason : "You were removed from this live."}
                   </div>
                   <div className="mt-4 text-xs font-semibold text-white/70">Sending you home…</div>
+                </div>
+              </div>
+            ) : null}
+
+            {!isHostMode && isLoggedIn && banned ? (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6">
+                <div className="w-full max-w-[320px] rounded-2xl border border-white/10 bg-black/60 p-5 text-center backdrop-blur">
+                  <div className="text-base font-semibold text-white">You have been banned</div>
+                  <div className="mt-2 text-sm text-white/70">
+                    {banReason ? banReason : "You are banned from this live."}
+                  </div>
+                  <Button type="button" className="mt-4 w-full" onClick={() => forceExitViewer("banned")}
+                  >
+                    Go Back
+                  </Button>
                 </div>
               </div>
             ) : null}
@@ -2005,14 +2212,35 @@ export function LiveClient({
                             </div>
                             <div className="min-w-0 truncate text-sm text-white">{v.name}</div>
                           </button>
-                          {isHost && myUserId && v.isOnline && v.id !== myUserId ? (
-                            <button
-                              type="button"
-                              className="ml-auto rounded-full bg-[#d11f2a] px-3 py-1 text-xs font-bold text-white"
-                              onClick={() => kickViewer(v.id)}
-                            >
-                              Kick
-                            </button>
+                          {isHost && myUserId && v.id !== myUserId ? (
+                            <div className="ml-auto flex items-center gap-2">
+                              {bannedUserIdMap[String(v.id)] ? (
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-white"
+                                  onClick={() => unbanUser(v.id)}
+                                >
+                                  Unban
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#d11f2a] px-3 py-1 text-xs font-bold text-white"
+                                  onClick={() => banUser(v.id)}
+                                >
+                                  Ban
+                                </button>
+                              )}
+                              {v.isOnline ? (
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-[#d11f2a] px-3 py-1 text-xs font-bold text-white"
+                                  onClick={() => kickViewer(v.id)}
+                                >
+                                  Kick
+                                </button>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="ml-auto" />
                           )}
@@ -2059,6 +2287,16 @@ export function LiveClient({
           canKick: !!isHost,
           onKick: async (uid: string) => {
             await kickViewer(uid);
+          },
+        }}
+        liveBan={{
+          canBan: !!isHost,
+          isBanned: !!bannedUserIdMap[String(miniProfileSubject?.user_id ?? "").trim()],
+          onBan: async (uid: string) => {
+            await banUser(uid);
+          },
+          onUnban: async (uid: string) => {
+            await unbanUser(uid);
           },
         }}
         onClose={() => {

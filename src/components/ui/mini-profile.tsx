@@ -53,6 +53,7 @@ export function MiniProfileModal({
   awards,
   myUserId,
   liveKick,
+  liveBan,
   onClose,
 }: {
   open: boolean;
@@ -64,6 +65,12 @@ export function MiniProfileModal({
     liveId: string | null;
     canKick: boolean;
     onKick: (userId: string) => Promise<void> | void;
+  };
+  liveBan?: {
+    canBan: boolean;
+    isBanned: boolean;
+    onBan: (userId: string) => Promise<void> | void;
+    onUnban: (userId: string) => Promise<void> | void;
   };
   onClose: () => void;
 }) {
@@ -124,6 +131,15 @@ export function MiniProfileModal({
     const mine = String(myUserId ?? "").trim();
     if (!liveKick?.canKick) return false;
     if (!liveId) return false;
+    if (!uid) return false;
+    if (mine && uid === mine) return false;
+    return true;
+  })();
+
+  const canBanLive = (() => {
+    const uid = String(lb?.user_id ?? subject.user_id ?? "").trim();
+    const mine = String(myUserId ?? "").trim();
+    if (!liveBan?.canBan) return false;
     if (!uid) return false;
     if (mine && uid === mine) return false;
     return true;
@@ -282,6 +298,28 @@ export function MiniProfileModal({
                     }}
                   >
                     ⛔ Kick
+                  </Button>
+                ) : null}
+                {canBanLive ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="border-[rgba(239,68,68,0.45)] bg-[rgba(239,68,68,0.12)] text-[#f87171]"
+                    onClick={async () => {
+                      const uid = String(lb?.user_id ?? subject.user_id ?? "").trim();
+                      if (!uid) return;
+                      try {
+                        if (liveBan?.isBanned) {
+                          await liveBan?.onUnban(uid);
+                        } else {
+                          await liveBan?.onBan(uid);
+                        }
+                      } finally {
+                        onClose();
+                      }
+                    }}
+                  >
+                    {liveBan?.isBanned ? "Unban" : "Ban"}
                   </Button>
                 ) : null}
                 <Button type="button" variant="secondary" onClick={onClose}>
