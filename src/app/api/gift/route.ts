@@ -6,6 +6,20 @@ import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 
+function buildReturnUrl(siteUrl: string, returnPathRaw: string, params: Record<string, string>) {
+  const site = String(siteUrl ?? "").trim();
+  const base = site.endsWith("/") ? site.slice(0, -1) : site;
+  const returnPath = String(returnPathRaw ?? "/").trim() || "/";
+  const path = returnPath.startsWith("/") ? returnPath : `/${returnPath}`;
+  const url = new URL(`${base}${path}`);
+
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v);
+  }
+
+  return url.toString();
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -78,8 +92,14 @@ export async function POST(req: NextRequest) {
     const s = stripe();
     const session = await s.checkout.sessions.create({
       mode: "payment",
-      success_url: `${env.siteUrl}${returnPath}?gift=success&gift_id=${encodeURIComponent(String(giftRow.id))}`,
-      cancel_url: `${env.siteUrl}${returnPath}?gift=cancel&gift_id=${encodeURIComponent(String(giftRow.id))}`,
+      success_url: buildReturnUrl(env.siteUrl, returnPath, {
+        gift: "success",
+        gift_id: String(giftRow.id),
+      }),
+      cancel_url: buildReturnUrl(env.siteUrl, returnPath, {
+        gift: "cancel",
+        gift_id: String(giftRow.id),
+      }),
       line_items: [
         {
           quantity: 1,
