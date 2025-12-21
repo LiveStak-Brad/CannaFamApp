@@ -12,6 +12,14 @@ function isAllowedDuringLive(pathname: string) {
 }
 
 export async function middleware(request: NextRequest) {
+  const hostname = request.nextUrl.hostname;
+  if (hostname === "cannafamapp.com") {
+    const url = request.nextUrl.clone();
+    url.hostname = "www.cannafamapp.com";
+    url.protocol = "https:";
+    return NextResponse.redirect(url, 308);
+  }
+
   const response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -81,5 +89,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icon|apple-icon).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|icon|apple-icon|OneSignalSDKWorker.js|OneSignalSDKUpdaterWorker.js).*)",
+  ],
 };

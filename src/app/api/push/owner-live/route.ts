@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     if (!externalIds.length) return safeJson({ ok: true, sent: 0, reason: "No opted-in users" });
 
-    const webBaseUrl = String(process.env.NEXT_PUBLIC_SITE_URL ?? "https://cannafamapp.com").trim();
+    const webBaseUrl = String(process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.cannafamapp.com").trim();
     const normalizedWebBaseUrl = webBaseUrl.endsWith("/") ? webBaseUrl.slice(0, -1) : webBaseUrl;
     const deepLinkUrl = `${normalizedWebBaseUrl}/viewlive?stream_id=${encodeURIComponent(streamId)}`;
 
