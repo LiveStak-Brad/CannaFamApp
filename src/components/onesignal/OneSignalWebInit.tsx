@@ -26,7 +26,8 @@ export function OneSignalWebInit({ appId }: { appId: string }) {
         await OneSignal.init({
           appId: id,
           notifyButton: { enable: false },
-          serviceWorkerPath: "OneSignalSDKWorker.js",
+          serviceWorkerPath: "/OneSignalSDKWorker.js",
+          serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
           serviceWorkerParam: { scope: "/" },
         });
       } catch {
