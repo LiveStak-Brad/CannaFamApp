@@ -56,6 +56,14 @@ export default async function AdminPage() {
           <p className="text-sm text-[color:var(--muted)]">
             Application review, member management, feed posts, and awards.
           </p>
+          {isOwner ? (
+            <a
+              href="/admin/monetization-test"
+              className="inline-block text-sm font-medium text-[color:var(--foreground)] underline underline-offset-4 opacity-90 hover:opacity-100"
+            >
+              Monetization Test
+            </a>
+          ) : null}
         </div>
 
         {appsErr ? (
