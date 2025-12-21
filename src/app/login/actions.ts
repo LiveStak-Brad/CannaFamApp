@@ -158,12 +158,12 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
       .trim()
       .toLowerCase();
     const password = String(formData.get("password") ?? "");
-    const favorited_username = String(formData.get("favorited_username") ?? "")
+    const username = String(formData.get("username") ?? formData.get("favorited_username") ?? "")
       .trim()
       .replace(/^@/, "");
     if (!email) return { ok: false, message: "Email is required." };
     if (!password) return { ok: false, message: "Password is required." };
-    if (!favorited_username) return { ok: false, message: "Favorited username is required." };
+    if (!username) return { ok: false, message: "Username is required." };
 
     const baseUrl = await getBaseUrlFromRequestOrEnv();
     if (!baseUrl) return { ok: false, message: "Missing site URL." };
@@ -176,7 +176,8 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
       options: {
         emailRedirectTo,
         data: {
-          favorited_username,
+          username,
+          favorited_username: username,
         },
       },
     });
@@ -192,7 +193,8 @@ export async function signUpWithPassword(formData: FormData): Promise<Result> {
             .upsert(
               {
                 user_id: newUserId,
-                favorited_username,
+                username,
+                favorited_username: username,
                 points: 0,
               },
               { onConflict: "user_id" },

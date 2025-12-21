@@ -11,7 +11,7 @@ export function SignupForm() {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<null | { ok: boolean; message?: string }>(null);
   const [email, setEmail] = useState<string>("");
-  const [favoritedUsername, setFavoritedUsername] = useState<string>("");
+  const [username, setUsername] = useState<string>("");
 
   return (
     <form
@@ -51,14 +51,14 @@ export function SignupForm() {
       />
 
       <Input
-        label="Favorited username"
-        name="favorited_username"
+        label="Username"
+        name="username"
         type="text"
         required
         autoComplete="username"
-        placeholder="Your exact Favorited username"
-        value={favoritedUsername}
-        onChange={(e) => setFavoritedUsername(e.target.value)}
+        placeholder="Choose a username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
       />
 
       <Input

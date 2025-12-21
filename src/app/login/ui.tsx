@@ -108,7 +108,7 @@ export function LoginForm() {
         type="text"
         required
         autoComplete="username"
-        placeholder="you@example.com or Favorited username"
+        placeholder="you@example.com or username"
       />
 
       {mode === "password" ? (

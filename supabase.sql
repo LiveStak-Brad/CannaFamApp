@@ -113,6 +113,19 @@ $$;
 create unique index if not exists cfm_members_username_unique
   on public.cfm_members (lower(btrim(favorited_username)));
 
+alter table public.cfm_members add column if not exists username text;
+
+alter table public.cfm_members add column if not exists favorited_handle text;
+
+update public.cfm_members
+set username = btrim(favorited_username)
+where (username is null or btrim(username) = '')
+  and favorited_username is not null;
+
+create unique index if not exists cfm_members_username_unique_2
+  on public.cfm_members (lower(btrim(username)))
+  where username is not null;
+
 create unique index if not exists cfm_members_user_id_unique
   on public.cfm_members (user_id)
   where user_id is not null;
@@ -128,6 +141,7 @@ alter table public.cfm_members add column if not exists lifetime_gifted_total_us
 create or replace view public.cfm_public_members as
   select
     id,
+    username,
     favorited_username,
     photo_url,
     bio,
@@ -143,7 +157,9 @@ create or replace view public.cfm_public_members as
 create or replace view public.cfm_public_member_ids as
   select
     user_id,
+    username,
     favorited_username,
+    favorited_handle,
     photo_url,
     bio,
     public_link,
@@ -154,6 +170,43 @@ create or replace view public.cfm_public_member_ids as
     lifetime_gifted_total_usd
   from public.cfm_members
   where user_id is not null;
+
+create or replace function public.cfm_handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uname text;
+begin
+  uname := coalesce(
+    new.raw_user_meta_data->>'username',
+    new.raw_user_meta_data->>'favorited_username',
+    ''
+  );
+
+  uname := btrim(regexp_replace(coalesce(uname, ''), '^@+', ''));
+  if uname = '' then
+    return new;
+  end if;
+
+  insert into public.cfm_members (user_id, username, favorited_username, points)
+  values (new.id, uname, uname, 0)
+  on conflict (user_id)
+  do update set
+    username = excluded.username,
+    favorited_username = excluded.favorited_username;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists cfm_handle_new_user on auth.users;
+create trigger cfm_handle_new_user
+after insert on auth.users
+for each row
+execute function public.cfm_handle_new_user();
 
 grant select on public.cfm_public_member_ids to anon, authenticated;
 
