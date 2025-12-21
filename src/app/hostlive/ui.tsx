@@ -492,7 +492,6 @@ export function HostLiveClient({
     try {
       // Set live state first
       await setLiveState(true);
-      void triggerOwnerLivePush();
 
       // Get host token
       const res = await fetch("/api/agora/token", {
@@ -504,6 +503,7 @@ export function HostLiveClient({
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
         setError(`Failed to get host token: ${errText}`);
+        try { await setLiveState(false); } catch {}
         return;
       }
 
@@ -512,6 +512,7 @@ export function HostLiveClient({
 
       if (json.role !== "host") {
         setError("Not authorized as host");
+        try { await setLiveState(false); } catch {}
         return;
       }
 
@@ -543,6 +544,8 @@ export function HostLiveClient({
 
       // Publish tracks
       await client.publish([mic, cam].filter(Boolean));
+
+      void triggerOwnerLivePush();
 
       setBroadcasting(true);
       setAgoraReady(true);

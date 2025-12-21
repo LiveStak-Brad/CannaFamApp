@@ -816,7 +816,6 @@ export function LiveClient({
         } as any);
         if (!error && data) {
           setLive((prev) => ({ ...(prev as any), ...(data as any) }));
-          void triggerOwnerLivePush();
         }
       } catch {
         // Fallback
@@ -831,11 +830,10 @@ export function LiveClient({
           const { data: fresh } = await sb.rpc("cfm_get_live_state");
           const row = Array.isArray(fresh) ? (fresh[0] as any) : (fresh as any);
           if (row) setLive(row);
-          void triggerOwnerLivePush();
         } catch {}
       }
     })();
-  }, [isHostMode, live.id, live.is_live, live.started_at, live.title, sb, triggerOwnerLivePush]);
+  }, [isHostMode, live.id, live.is_live, live.started_at, live.title, sb]);
 
   useEffect(() => {
     let mounted = true;
@@ -1537,6 +1535,7 @@ export function LiveClient({
           rtcLocalTracksRef.current = { mic, cam };
           cam?.play(videoRef.current!);
           await client.publish([mic, cam].filter(Boolean));
+          void triggerOwnerLivePush();
           setBroadcasting(true);
         } else {
           await client.setClientRole("audience");
