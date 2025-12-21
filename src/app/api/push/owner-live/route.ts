@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     const ownerProfileId = mustEnv("CFM_OWNER_PROFILE_ID");
     const onesignalAppId = mustEnv("ONESIGNAL_APP_ID");
     const onesignalRestApiKey = mustEnv("ONESIGNAL_REST_API_KEY");
+    const onesignalAndroidLiveAlertsChannelId = mustEnv("ONESIGNAL_ANDROID_LIVE_ALERTS_CHANNEL_ID");
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -137,6 +138,8 @@ export async function POST(request: NextRequest) {
           channel_for_external_user_ids: "push",
           headings: { en: "CannaStreams is LIVE" },
           contents: { en: "Tap to join now." },
+          ios_sound: "live_alert.wav",
+          android_channel_id: onesignalAndroidLiveAlertsChannelId,
           chrome_web_icon: webIconUrl,
           url: deepLinkUrl,
           data: {
