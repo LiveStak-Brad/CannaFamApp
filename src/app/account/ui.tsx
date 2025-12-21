@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -80,5 +80,121 @@ export function AccountPasswordForm() {
         Tip: accounts created with magic links can set a password here after logging in once.
       </div>
     </form>
+  );
+}
+
+export function LiveAlertsToggle() {
+  const [pending, startTransition] = useTransition();
+  const [enabled, setEnabled] = useState(false);
+  const [msg, setMsg] = useState<null | { tone: "success" | "error"; text: string }>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = supabaseBrowser();
+        const {
+          data: { user },
+        } = await sb.auth.getUser();
+        if (!user?.id) return;
+
+        const { data, error } = await sb
+          .from("cfm_notification_prefs")
+          .select("live_alerts_enabled")
+          .eq("profile_id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) return;
+        setEnabled(Boolean((data as any)?.live_alerts_enabled));
+      } catch {
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="space-y-3">
+      {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant={enabled ? "primary" : "secondary"}
+          disabled={pending}
+          onClick={() => {
+            setMsg(null);
+            startTransition(async () => {
+              const sb = supabaseBrowser();
+              const {
+                data: { user },
+              } = await sb.auth.getUser();
+              if (!user?.id) {
+                setMsg({ tone: "error", text: "Please log in again." });
+                return;
+              }
+
+              const next = !enabled;
+
+              if (typeof window !== "undefined") {
+                (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
+                (window as any).OneSignalDeferred.push(async function (OneSignal: any) {
+                  if (next) {
+                    try {
+                      OneSignal.setConsentGiven(true);
+                    } catch {
+                    }
+                    try {
+                      await OneSignal.login(user.id);
+                    } catch {
+                    }
+                    try {
+                      await OneSignal.Notifications.requestPermission();
+                    } catch {
+                    }
+                    try {
+                      await OneSignal.User.PushSubscription.optIn();
+                    } catch {
+                    }
+                  } else {
+                    try {
+                      await OneSignal.User.PushSubscription.optOut();
+                    } catch {
+                    }
+                    try {
+                      OneSignal.setConsentGiven(false);
+                    } catch {
+                    }
+                  }
+                });
+              }
+
+              const { data, error } = await (sb as any).rpc("cfm_upsert_notification_prefs", {
+                p_live_alerts_enabled: next,
+                p_post_alerts_enabled: false,
+              });
+
+              if (error) {
+                setMsg({ tone: "error", text: error.message });
+                return;
+              }
+
+              const ok = Boolean((data as any)?.live_alerts_enabled);
+              setEnabled(ok);
+              setMsg({
+                tone: "success",
+                text: ok ? "Live alerts enabled." : "Live alerts disabled.",
+              });
+            });
+          }}
+        >
+          {enabled ? "Live Alerts: ON" : "Live Alerts: OFF"}
+        </Button>
+        <div className="text-xs text-[color:var(--muted)]">
+          You will only be notified when the owner account goes live.
+        </div>
+      </div>
+    </div>
   );
 }

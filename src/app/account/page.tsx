@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
-import { AccountPasswordForm } from "./ui";
+import { AccountPasswordForm, LiveAlertsToggle } from "./ui";
 
 export const runtime = "nodejs";
 
@@ -21,6 +21,10 @@ export default async function AccountPage() {
 
         <Card title="Password">
           <AccountPasswordForm />
+        </Card>
+
+        <Card title="Live Alerts">
+          <LiveAlertsToggle />
         </Card>
 
         <Card title="Danger Zone">

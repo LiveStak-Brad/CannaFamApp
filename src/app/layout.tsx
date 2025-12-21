@@ -6,6 +6,7 @@ import { TopNavAuth } from "@/components/shell/topnav-auth";
 import { BottomNav, type NavSessionState } from "@/components/shell/bottomnav";
 import { getAuthedUserOrNull } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
+import { OneSignalWebInit } from "@/components/onesignal/OneSignalWebInit";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <TopNav right={<TopNavAuth />} />
+        <OneSignalWebInit appId={String(process.env.ONESIGNAL_APP_ID ?? "")} />
         {children}
         <BottomNav state={navState} anonymousGiftTotalCents={anonymousGiftTotalCents} isLive={isLive} isHost={isHost} />
       </body>
