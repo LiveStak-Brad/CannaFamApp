@@ -85,6 +85,7 @@ export function AccountPasswordForm() {
 
 export function LiveAlertsToggle() {
   const [pending, startTransition] = useTransition();
+  const [userId, setUserId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [msg, setMsg] = useState<null | { tone: "success" | "error"; text: string }>(null);
 
@@ -96,12 +97,14 @@ export function LiveAlertsToggle() {
         const {
           data: { user },
         } = await sb.auth.getUser();
-        if (!user?.id) return;
+        const uid = String(user?.id ?? "").trim();
+        if (!uid) return;
+        if (!cancelled) setUserId(uid);
 
         const { data, error } = await sb
           .from("cfm_notification_prefs")
           .select("live_alerts_enabled")
-          .eq("profile_id", user.id)
+          .eq("profile_id", uid)
           .maybeSingle();
         if (cancelled) return;
         if (error) return;
@@ -126,48 +129,49 @@ export function LiveAlertsToggle() {
           onClick={() => {
             setMsg(null);
             startTransition(async () => {
-              const sb = supabaseBrowser();
-              const {
-                data: { user },
-              } = await sb.auth.getUser();
-              if (!user?.id) {
+              const uid = String(userId ?? "").trim();
+              if (!uid) {
                 setMsg({ tone: "error", text: "Please log in again." });
                 return;
               }
 
+              const sb = supabaseBrowser();
               const next = !enabled;
 
               if (typeof window !== "undefined") {
-                (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
-                (window as any).OneSignalDeferred.push(async function (OneSignal: any) {
-                  if (next) {
-                    try {
-                      OneSignal.setConsentGiven(true);
-                    } catch {
-                    }
-                    try {
-                      await OneSignal.login(user.id);
-                    } catch {
-                    }
-                    try {
-                      await OneSignal.Notifications.requestPermission();
-                    } catch {
-                    }
-                    try {
-                      await OneSignal.User.PushSubscription.optIn();
-                    } catch {
-                    }
-                  } else {
-                    try {
-                      await OneSignal.User.PushSubscription.optOut();
-                    } catch {
-                    }
-                    try {
-                      OneSignal.setConsentGiven(false);
-                    } catch {
-                    }
+                const OneSignal = (window as any).OneSignal;
+                if (!OneSignal) {
+                  setMsg({ tone: "error", text: "Push is still loading. Refresh and try again." });
+                  return;
+                }
+
+                if (next) {
+                  try {
+                    OneSignal.setConsentGiven(true);
+                  } catch {
                   }
-                });
+                  try {
+                    await OneSignal.login(uid);
+                  } catch {
+                  }
+                  try {
+                    await OneSignal.Notifications.requestPermission();
+                  } catch {
+                  }
+                  try {
+                    await OneSignal.User.PushSubscription.optIn();
+                  } catch {
+                  }
+                } else {
+                  try {
+                    await OneSignal.User.PushSubscription.optOut();
+                  } catch {
+                  }
+                  try {
+                    OneSignal.setConsentGiven(false);
+                  } catch {
+                  }
+                }
               }
 
               const { data, error } = await (sb as any).rpc("cfm_upsert_notification_prefs", {
