@@ -58,9 +58,30 @@ export function OneSignalWebInit({ appId }: { appId: string }) {
   }, [appId]);
 
   return (
-    <Script
-      src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-      strategy="afterInteractive"
-    />
+    <>
+      <Script
+        id="onesignal-deferred-bootstrap"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: "window.OneSignalDeferred = window.OneSignalDeferred || [];",
+        }}
+      />
+      <Script
+        src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+        strategy="afterInteractive"
+        onLoad={() => {
+          try {
+            console.log("[OneSignal] SDK loaded");
+          } catch {
+          }
+        }}
+        onError={() => {
+          try {
+            console.error("[OneSignal] SDK failed to load");
+          } catch {
+          }
+        }}
+      />
+    </>
   );
 }
