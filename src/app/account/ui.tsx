@@ -110,30 +110,6 @@ export function LiveAlertsToggle() {
         if (error) return;
         const dbEnabled = Boolean((data as any)?.live_alerts_enabled);
         setEnabled(dbEnabled);
-
-        if (dbEnabled && typeof window !== "undefined") {
-          const OneSignalDeferred = (window as any).OneSignalDeferred;
-          if (Array.isArray(OneSignalDeferred)) {
-            OneSignalDeferred.push(async (OneSignal: any) => {
-              try {
-                const browserPerm = typeof Notification !== "undefined" ? Notification.permission : "default";
-                const optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
-                const subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
-                const token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
-                const hasSub = optedIn && (subId || token);
-
-                if (browserPerm !== "granted" || !hasSub) {
-                  await (sb as any).rpc("cfm_upsert_notification_prefs", {
-                    p_live_alerts_enabled: false,
-                    p_post_alerts_enabled: false,
-                  });
-                  if (!cancelled) setEnabled(false);
-                }
-              } catch {
-              }
-            });
-          }
-        }
       } catch {
       }
     })();
@@ -176,6 +152,11 @@ export function LiveAlertsToggle() {
                   }
 
                   if (next) {
+                    try {
+                      OneSignal.setConsentGiven(true);
+                    } catch {
+                    }
+
                     const browserPermBefore = typeof Notification !== "undefined" ? Notification.permission : "default";
                     if (browserPermBefore === "denied") {
                       setMsg({
@@ -185,15 +166,12 @@ export function LiveAlertsToggle() {
                       return;
                     }
 
-                    if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
-                      try {
-                        await Notification.requestPermission();
-                      } catch {
-                      }
-                    }
-
                     try {
-                      OneSignal.setConsentGiven(true);
+                      if (OneSignal?.Slidedown?.promptPush) {
+                        await OneSignal.Slidedown.promptPush();
+                      } else if (OneSignal?.Notifications?.requestPermission) {
+                        await OneSignal.Notifications.requestPermission();
+                      }
                     } catch {
                     }
 
