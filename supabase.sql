@@ -84,6 +84,9 @@ create table if not exists public.cfm_members (
   youtube_link text,
   points int default 0,
   lifetime_gifted_total_usd numeric not null default 0,
+  lifetime_gifted_total_coins bigint not null default 0,
+  vip_tier text,
+  is_verified boolean not null default false,
   created_at timestamp default now()
 );
 
@@ -743,7 +746,7 @@ as $$
   events as (
     select
       g.gifter_user_id as user_id,
-      g.amount_cents::bigint as amount_cents,
+      g.amount_cents::bigint as coins,
       coalesce(g.paid_at, g.created_at) as ts
     from public.cfm_post_gifts g
     where g.status = 'paid'
@@ -754,24 +757,36 @@ as $$
     select
       lc.sender_user_id as user_id,
       case
+        when (lc.metadata->>'coins') ~ '^[0-9]+$'
+          then (lc.metadata->>'coins')::bigint
         when (lc.metadata->>'amount_cents') ~ '^[0-9]+$'
           then (lc.metadata->>'amount_cents')::bigint
         else null
-      end as amount_cents,
+      end as coins,
       lc.created_at as ts
     from public.cfm_live_chat lc
     where lc.type = 'tip'
       and lc.is_deleted = false
       and lc.sender_user_id is not null
-      and lc.metadata ? 'amount_cents'
+      and (lc.metadata ? 'coins' or lc.metadata ? 'amount_cents')
+
+    union all
+
+    select
+      ct.user_id,
+      ct.amount::bigint as coins,
+      ct.created_at as ts
+    from public.coin_transactions ct
+    where ct.type = 'gift_spend'
+      and ct.direction = 'debit'
   ),
   filtered as (
-    select e.user_id, e.amount_cents
+    select e.user_id, e.coins
     from events e
     cross join bounds b
     where e.user_id is not null
-      and e.amount_cents is not null
-      and e.amount_cents > 0
+      and e.coins is not null
+      and e.coins > 0
       and (
         b.start_local is null
         or (e.ts at time zone 'America/Chicago') >= b.start_local
@@ -780,7 +795,7 @@ as $$
   totals as (
     select
       f.user_id,
-      sum(f.amount_cents)::bigint as total_cents
+      sum(f.coins)::bigint as total_coins
     from filtered f
     group by f.user_id
   )
@@ -788,8 +803,8 @@ as $$
     t.user_id as profile_id,
     coalesce(pm.favorited_username, 'Member') as display_name,
     pm.photo_url as avatar_url,
-    (t.total_cents / 100.0)::numeric as total_amount,
-    rank() over (order by t.total_cents desc, coalesce(pm.favorited_username, 'Member') asc)::int as rank
+    (t.total_coins)::numeric as total_amount,
+    rank() over (order by t.total_coins desc, coalesce(pm.favorited_username, 'Member') asc)::int as rank
   from totals t
   left join public.cfm_public_member_ids pm
     on pm.user_id = t.user_id
@@ -909,6 +924,23 @@ create table if not exists public.cfm_monetization_settings (
   created_at timestamptz not null default now()
 );
 
+alter table public.cfm_monetization_settings add column if not exists vip_bronze_coins bigint not null default 25000;
+alter table public.cfm_monetization_settings add column if not exists vip_silver_coins bigint not null default 50000;
+alter table public.cfm_monetization_settings add column if not exists vip_gold_coins bigint not null default 100000;
+alter table public.cfm_monetization_settings add column if not exists vip_diamond_coins bigint not null default 200000;
+
+alter table public.cfm_monetization_settings alter column vip_bronze_coins set default 25000;
+alter table public.cfm_monetization_settings alter column vip_silver_coins set default 50000;
+alter table public.cfm_monetization_settings alter column vip_gold_coins set default 100000;
+alter table public.cfm_monetization_settings alter column vip_diamond_coins set default 200000;
+
+update public.cfm_monetization_settings
+set vip_bronze_coins = 25000,
+    vip_silver_coins = 50000,
+    vip_gold_coins = 100000,
+    vip_diamond_coins = 200000
+where vip_bronze_coins is not null;
+
 create table if not exists public.cfm_gift_presets (
   id uuid primary key default gen_random_uuid(),
   amount_cents int not null,
@@ -932,6 +964,233 @@ create table if not exists public.cfm_post_gifts (
   paid_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+create table if not exists public.coin_wallets (
+  user_id uuid primary key,
+  balance bigint not null default 0,
+  lifetime_purchased bigint not null default 0,
+  lifetime_spent bigint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.coin_transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  type text not null,
+  direction text not null,
+  amount bigint not null,
+  source text not null,
+  related_id uuid,
+  idempotency_key text not null,
+  created_at timestamptz not null default now(),
+  unique (idempotency_key)
+);
+
+alter table public.coin_transactions drop constraint if exists coin_transactions_type_check;
+alter table public.coin_transactions
+add constraint coin_transactions_type_check
+check (type in ('purchase','gift_spend','admin_adjust','refund'));
+
+alter table public.coin_transactions drop constraint if exists coin_transactions_direction_check;
+alter table public.coin_transactions
+add constraint coin_transactions_direction_check
+check (direction in ('credit','debit'));
+
+revoke update, delete on public.coin_transactions from anon, authenticated, service_role;
+
+create or replace function public.cfm_block_coin_transactions_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if current_user in ('postgres', 'supabase_admin') then
+    if tg_op = 'UPDATE' then
+      return new;
+    end if;
+    return old;
+  end if;
+
+  raise exception 'coin_transactions is insert-only';
+end;
+$$;
+
+drop trigger if exists coin_transactions_block_update on public.coin_transactions;
+create trigger coin_transactions_block_update
+before update on public.coin_transactions
+for each row
+execute function public.cfm_block_coin_transactions_mutation();
+
+drop trigger if exists coin_transactions_block_delete on public.coin_transactions;
+create trigger coin_transactions_block_delete
+before delete on public.coin_transactions
+for each row
+execute function public.cfm_block_coin_transactions_mutation();
+
+create table if not exists public.coin_purchase_orders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  provider text not null,
+  provider_order_id text not null,
+  status text not null default 'pending',
+  amount_usd_cents int not null,
+  coins_awarded bigint not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (provider_order_id)
+);
+
+alter table public.coin_purchase_orders drop constraint if exists coin_purchase_orders_provider_order_id_key;
+create unique index if not exists coin_purchase_orders_provider_order_id_unique_idx
+  on public.coin_purchase_orders (provider_order_id);
+
+create index if not exists coin_purchase_orders_user_created_at_idx
+  on public.coin_purchase_orders (user_id, created_at desc);
+
+create index if not exists coin_transactions_user_created_at_idx
+  on public.coin_transactions (user_id, created_at desc);
+
+do $$
+begin
+  if to_regclass('public.gifts') is not null then
+    execute 'create index if not exists gifts_to_user_created_at_idx on public.gifts (to_user_id, created_at desc)';
+    execute 'create index if not exists gifts_from_user_created_at_idx on public.gifts (from_user_id, created_at desc)';
+  end if;
+end;
+$$;
+
+create table if not exists public.coin_packages (
+  platform text not null,
+  sku text not null,
+  price_usd_cents int not null,
+  coins bigint not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  primary key (platform, sku)
+);
+
+create table if not exists public.gifts (
+  id uuid primary key default gen_random_uuid(),
+  from_user_id uuid not null,
+  to_user_id uuid not null,
+  stream_id uuid,
+  gift_type text,
+  coins bigint not null,
+  created_at timestamptz not null default now()
+);
+
+drop table if exists public.coin_conversions;
+drop function if exists public.cfm_convert_earned_coins(bigint, text);
+
+create table if not exists public.vip_monthly_status (
+  user_id uuid not null,
+  month_start date not null,
+  tier text,
+  monthly_spent_coins bigint not null default 0,
+  computed_at timestamptz not null default now(),
+  primary key (user_id, month_start)
+);
+
+create table if not exists public.verification_subscriptions (
+  user_id uuid primary key,
+  platform text not null,
+  is_active boolean not null default false,
+  expires_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+revoke insert, update, delete on public.vip_monthly_status from anon, authenticated;
+revoke insert, update, delete on public.verification_subscriptions from anon, authenticated;
+
+create or replace function public.cfm_block_service_only_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if current_user in ('postgres', 'supabase_admin') then
+    if tg_op = 'UPDATE' then
+      return new;
+    end if;
+    return old;
+  end if;
+
+  if coalesce(auth.role(), '') = 'service_role' then
+    if tg_op = 'UPDATE' then
+      return new;
+    end if;
+    return old;
+  end if;
+
+  if public.cfm_is_admin() then
+    if tg_op = 'UPDATE' then
+      return new;
+    end if;
+    return old;
+  end if;
+
+  raise exception 'mutation requires service_role';
+end;
+$$;
+
+drop trigger if exists vip_monthly_status_block_update on public.vip_monthly_status;
+create trigger vip_monthly_status_block_update
+before update on public.vip_monthly_status
+for each row
+execute function public.cfm_block_service_only_mutation();
+
+drop trigger if exists vip_monthly_status_block_delete on public.vip_monthly_status;
+create trigger vip_monthly_status_block_delete
+before delete on public.vip_monthly_status
+for each row
+execute function public.cfm_block_service_only_mutation();
+
+drop trigger if exists verification_subscriptions_block_update on public.verification_subscriptions;
+create trigger verification_subscriptions_block_update
+before update on public.verification_subscriptions
+for each row
+execute function public.cfm_block_service_only_mutation();
+
+drop trigger if exists verification_subscriptions_block_delete on public.verification_subscriptions;
+create trigger verification_subscriptions_block_delete
+before delete on public.verification_subscriptions
+for each row
+execute function public.cfm_block_service_only_mutation();
+
+insert into public.coin_packages (platform, sku, price_usd_cents, coins, is_active)
+values
+  ('ios', 'coins_0_99', 99, 60, true),
+  ('ios', 'coins_4_99', 499, 300, true),
+  ('ios', 'coins_9_99', 999, 600, true),
+  ('ios', 'coins_19_99', 1999, 1200, true),
+  ('ios', 'coins_49_99', 4999, 3000, true),
+  ('ios', 'coins_99_99', 9999, 6000, true),
+  ('android', 'coins_0_99', 99, 60, true),
+  ('android', 'coins_4_99', 499, 300, true),
+  ('android', 'coins_9_99', 999, 600, true),
+  ('android', 'coins_19_99', 1999, 1200, true),
+  ('android', 'coins_49_99', 4999, 3000, true),
+  ('android', 'coins_99_99', 9999, 6000, true),
+  ('web', 'coins_0_99', 99, 90, true),
+  ('web', 'coins_4_99', 499, 450, true),
+  ('web', 'coins_9_99', 999, 900, true),
+  ('web', 'coins_19_99', 1999, 1800, true),
+  ('web', 'coins_49_99', 4999, 4500, true),
+  ('web', 'coins_99_99', 9999, 9000, true),
+  ('web', 'coins_249_99', 24999, 22500, true),
+  ('web', 'coins_499_99', 49999, 45000, true),
+  ('web', 'coins_999_99', 99999, 90000, true),
+  ('web', 'coins_2499_99', 249999, 225000, true),
+  ('web', 'coins_4999_99', 499999, 450000, true),
+  ('web', 'coins_9999_99', 999999, 900000, true),
+  ('web', 'coins_24999_99', 2499999, 2500000, true)
+on conflict (platform, sku) do update set
+  price_usd_cents = excluded.price_usd_cents,
+  coins = excluded.coins,
+  is_active = excluded.is_active;
 
 alter table public.cfm_post_gifts alter column post_id drop not null;
 alter table public.cfm_post_gifts alter column gifter_user_id drop not null;
@@ -960,6 +1219,7 @@ begin
     if new.gifter_user_id is not null then
       update public.cfm_members m
       set lifetime_gifted_total_usd = coalesce(m.lifetime_gifted_total_usd, 0) + (new.amount_cents::numeric / 100)
+        , lifetime_gifted_total_coins = coalesce(m.lifetime_gifted_total_coins, 0) + (new.amount_cents::bigint)
       where m.user_id = new.gifter_user_id;
     end if;
   end if;
@@ -975,14 +1235,409 @@ execute function public.cfm_apply_paid_gift_to_lifetime();
 
 update public.cfm_members m
 set lifetime_gifted_total_usd = coalesce(t.total_usd, 0)
+  , lifetime_gifted_total_coins = coalesce(t.total_coins, 0)
 from (
-  select g.gifter_user_id, (sum(g.amount_cents)::numeric / 100) as total_usd
+  select g.gifter_user_id, (sum(g.amount_cents)::numeric / 100) as total_usd, sum(g.amount_cents)::bigint as total_coins
   from public.cfm_post_gifts g
   where g.status = 'paid'
     and g.gifter_user_id is not null
   group by g.gifter_user_id
 ) t
 where m.user_id = t.gifter_user_id;
+
+update public.cfm_members m
+set lifetime_gifted_total_coins = greatest(coalesce(m.lifetime_gifted_total_coins, 0), floor(coalesce(m.lifetime_gifted_total_usd, 0) * 100)::bigint)
+where m.user_id is not null;
+
+insert into public.coin_wallets (user_id, balance, lifetime_purchased, lifetime_spent)
+select m.user_id, 0, 0, 0
+from public.cfm_members m
+where m.user_id is not null
+on conflict (user_id) do nothing;
+
+create or replace function public.cfm_get_wallet(p_user_id uuid default auth.uid())
+returns table (
+  user_id uuid,
+  balance bigint,
+  lifetime_purchased bigint,
+  lifetime_spent bigint,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select w.user_id, w.balance, w.lifetime_purchased, w.lifetime_spent, w.created_at, w.updated_at
+  from public.coin_wallets w
+  where w.user_id = coalesce(p_user_id, auth.uid());
+$$;
+
+grant execute on function public.cfm_get_wallet(uuid) to authenticated;
+
+create or replace function public.cfm_create_coin_purchase_order(
+  p_package_sku text,
+  p_platform text
+)
+returns table (
+  id uuid,
+  user_id uuid,
+  provider text,
+  amount_usd_cents int,
+  coins_awarded bigint,
+  status text
+)
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_platform text := lower(btrim(coalesce(p_platform, '')));
+  v_sku text := btrim(coalesce(p_package_sku, ''));
+  v_provider text;
+  v_price int;
+  v_coins bigint;
+  v_order_id uuid;
+begin
+  if v_user_id is null then
+    raise exception 'not authenticated';
+  end if;
+
+  if v_platform not in ('web','ios','android') then
+    raise exception 'invalid platform';
+  end if;
+
+  if v_sku = '' then
+    raise exception 'missing sku';
+  end if;
+
+  select cp.price_usd_cents, cp.coins
+  into v_price, v_coins
+  from public.coin_packages cp
+  where cp.platform = v_platform
+    and cp.sku = v_sku
+    and cp.is_active = true;
+
+  if v_price is null or v_coins is null then
+    raise exception 'invalid package';
+  end if;
+
+  v_provider := case when v_platform = 'web' then 'stripe' when v_platform = 'ios' then 'apple' else 'google' end;
+
+  insert into public.coin_purchase_orders (user_id, provider, provider_order_id, status, amount_usd_cents, coins_awarded, updated_at)
+  values (v_user_id, v_provider, ('pending:' || gen_random_uuid()::text), 'pending', v_price, v_coins, now())
+  returning coin_purchase_orders.id into v_order_id;
+
+  return query
+  select v_order_id, v_user_id, v_provider, v_price, v_coins, 'pending'::text;
+end;
+$$;
+
+grant execute on function public.cfm_create_coin_purchase_order(text, text) to authenticated;
+
+create or replace function public.cfm_finalize_coin_purchase(
+  p_provider text,
+  p_provider_order_id text,
+  p_user_id uuid,
+  p_coins bigint,
+  p_amount_usd_cents int,
+  p_idempotency_key text
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_provider text := lower(btrim(coalesce(p_provider, '')));
+  v_provider_order_id text := btrim(coalesce(p_provider_order_id, ''));
+  v_user_id uuid := p_user_id;
+  v_coins bigint := coalesce(p_coins, 0);
+  v_amount int := coalesce(p_amount_usd_cents, 0);
+  v_key text := btrim(coalesce(p_idempotency_key, ''));
+  v_existing_tx uuid;
+begin
+  if v_provider not in ('stripe','apple','google') then
+    raise exception 'invalid provider';
+  end if;
+  if v_provider_order_id = '' then
+    raise exception 'missing provider_order_id';
+  end if;
+  if v_user_id is null then
+    raise exception 'missing user_id';
+  end if;
+  if v_coins <= 0 then
+    raise exception 'invalid coins';
+  end if;
+  if v_key = '' then
+    raise exception 'missing idempotency_key';
+  end if;
+
+  select ct.id into v_existing_tx
+  from public.coin_transactions ct
+  where ct.idempotency_key = v_key
+  limit 1;
+
+  if v_existing_tx is not null then
+    return json_build_object('ok', true, 'duplicate', true, 'transaction_id', v_existing_tx);
+  end if;
+
+  insert into public.coin_purchase_orders (user_id, provider, provider_order_id, status, amount_usd_cents, coins_awarded, updated_at)
+  values (v_user_id, v_provider, v_provider_order_id, 'paid', v_amount, v_coins, now())
+  on conflict (provider_order_id)
+  do update set
+    status = 'paid',
+    amount_usd_cents = excluded.amount_usd_cents,
+    coins_awarded = excluded.coins_awarded,
+    updated_at = now();
+
+  insert into public.coin_wallets (user_id, balance, lifetime_purchased, lifetime_spent, updated_at)
+  values (v_user_id, 0, 0, 0, now())
+  on conflict (user_id) do nothing;
+
+  perform 1 from public.coin_wallets w where w.user_id = v_user_id for update;
+
+  update public.coin_wallets
+  set balance = balance + v_coins,
+      lifetime_purchased = lifetime_purchased + v_coins,
+      updated_at = now()
+  where user_id = v_user_id;
+
+  insert into public.coin_transactions (user_id, type, direction, amount, source, related_id, idempotency_key)
+  values (v_user_id, 'purchase', 'credit', v_coins, v_provider, null, v_key)
+  returning id into v_existing_tx;
+
+  return json_build_object('ok', true, 'transaction_id', v_existing_tx);
+end;
+$$;
+
+grant execute on function public.cfm_finalize_coin_purchase(text, text, uuid, bigint, int, text) to authenticated;
+
+create or replace function public.cfm_send_gift(
+  p_to_user_id uuid,
+  p_stream_id uuid,
+  p_gift_type text,
+  p_coins bigint,
+  p_idempotency_key text
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_from uuid := auth.uid();
+  v_to uuid := p_to_user_id;
+  v_coins bigint := coalesce(p_coins, 0);
+  v_key text := btrim(coalesce(p_idempotency_key, ''));
+  v_existing uuid;
+  v_gift_id uuid;
+begin
+  if v_from is null then
+    raise exception 'not authenticated';
+  end if;
+  if v_to is null then
+    raise exception 'missing recipient';
+  end if;
+  if v_coins <= 0 then
+    raise exception 'invalid coins';
+  end if;
+  if v_key = '' then
+    raise exception 'missing idempotency_key';
+  end if;
+
+  select ct.id into v_existing
+  from public.coin_transactions ct
+  where ct.idempotency_key = v_key
+  limit 1;
+  if v_existing is not null then
+    return json_build_object('ok', true, 'duplicate', true);
+  end if;
+
+  insert into public.coin_wallets (user_id, balance, lifetime_purchased, lifetime_spent, updated_at)
+  values (v_from, 0, 0, 0, now())
+  on conflict (user_id) do nothing;
+
+  perform 1 from public.coin_wallets w where w.user_id = v_from for update;
+
+  if (select balance from public.coin_wallets where user_id = v_from) < v_coins then
+    raise exception 'insufficient balance';
+  end if;
+
+  update public.coin_wallets
+  set balance = balance - v_coins,
+      lifetime_spent = lifetime_spent + v_coins,
+      updated_at = now()
+  where user_id = v_from;
+
+  insert into public.gifts (from_user_id, to_user_id, stream_id, gift_type, coins)
+  values (v_from, v_to, p_stream_id, nullif(btrim(coalesce(p_gift_type, '')), ''), v_coins)
+  returning id into v_gift_id;
+
+  insert into public.coin_transactions (user_id, type, direction, amount, source, related_id, idempotency_key)
+  values (v_from, 'gift_spend', 'debit', v_coins, 'system', v_gift_id, v_key);
+
+  update public.cfm_members
+  set lifetime_gifted_total_coins = coalesce(lifetime_gifted_total_coins, 0) + v_coins
+  where user_id = v_from;
+
+  return json_build_object('ok', true, 'gift_id', v_gift_id);
+end;
+$$;
+
+grant execute on function public.cfm_send_gift(uuid, uuid, text, bigint, text) to authenticated;
+
+create or replace function public.cfm_get_gifter_level(p_user_id uuid default auth.uid())
+returns json
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with u as (
+    select coalesce(p_user_id, auth.uid()) as user_id
+  )
+  select json_build_object(
+    'user_id', u.user_id,
+    'total_coins', coalesce(t.total_spent_coins, 0),
+    'lifetime_spent', coalesce(t.total_spent_coins, 0)
+  )
+  from u
+  left join lateral (
+    select coalesce(sum(x.coins), 0)::bigint as total_spent_coins
+    from (
+      select pg.amount_cents::bigint as coins
+      from public.cfm_post_gifts pg
+      where pg.gifter_user_id = u.user_id
+        and pg.status = 'paid'
+
+      union all
+
+      select ct.amount::bigint as coins
+      from public.coin_transactions ct
+      where ct.user_id = u.user_id
+        and ct.type = 'gift_spend'
+        and ct.direction = 'debit'
+    ) x
+  ) t on true;
+$$;
+
+create or replace function public.cfm_run_vip_monthly_rollup(p_month_start date default (date_trunc('month', (now() at time zone 'utc'))::date))
+returns void
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_month_start date := p_month_start;
+  v_start timestamptz := (v_month_start::timestamp at time zone 'utc');
+  v_end timestamptz := ((v_month_start + interval '1 month')::timestamp at time zone 'utc');
+  v_bronze bigint := 25000;
+  v_silver bigint := 50000;
+  v_gold bigint := 100000;
+  v_diamond bigint := 200000;
+begin
+  select
+    ms.vip_bronze_coins,
+    ms.vip_silver_coins,
+    ms.vip_gold_coins,
+    ms.vip_diamond_coins
+  into v_bronze, v_silver, v_gold, v_diamond
+  from public.cfm_monetization_settings ms
+  order by ms.created_at desc
+  limit 1;
+
+  with spend as (
+    select
+      e.user_id,
+      sum(e.coins)::bigint as monthly_spent_coins
+    from (
+      select
+        pg.gifter_user_id as user_id,
+        pg.amount_cents::bigint as coins,
+        coalesce(pg.paid_at, pg.created_at) as ts
+      from public.cfm_post_gifts pg
+      where pg.status = 'paid'
+        and pg.gifter_user_id is not null
+        and coalesce(pg.paid_at, pg.created_at) >= v_start
+        and coalesce(pg.paid_at, pg.created_at) < v_end
+
+      union all
+
+      select
+        ct.user_id,
+        ct.amount::bigint as coins,
+        ct.created_at as ts
+      from public.coin_transactions ct
+      where ct.type = 'gift_spend'
+        and ct.direction = 'debit'
+        and ct.created_at >= v_start
+        and ct.created_at < v_end
+    ) e
+    group by e.user_id
+  ), tiers as (
+    select
+      s.user_id,
+      s.monthly_spent_coins,
+      case
+        when s.monthly_spent_coins >= v_diamond then 'diamond'
+        when s.monthly_spent_coins >= v_gold then 'gold'
+        when s.monthly_spent_coins >= v_silver then 'silver'
+        when s.monthly_spent_coins >= v_bronze then 'bronze'
+        else null
+      end as tier
+    from spend s
+  )
+  insert into public.vip_monthly_status (user_id, month_start, tier, monthly_spent_coins, computed_at)
+  select t.user_id, v_month_start, t.tier, t.monthly_spent_coins, now()
+  from tiers t
+  on conflict (user_id, month_start) do update set
+    tier = excluded.tier,
+    monthly_spent_coins = excluded.monthly_spent_coins,
+    computed_at = excluded.computed_at;
+
+  if v_month_start = date_trunc('month', (now() at time zone 'utc'))::date then
+    update public.cfm_members m
+    set vip_tier = v.tier
+    from public.vip_monthly_status v
+    where v.month_start = v_month_start
+      and v.user_id = m.user_id;
+
+    update public.cfm_members m
+    set vip_tier = null
+    where m.vip_tier is not null
+      and not exists (
+        select 1
+        from public.vip_monthly_status v
+        where v.user_id = m.user_id
+          and v.month_start = v_month_start
+          and v.tier is not null
+      );
+  end if;
+end;
+$$;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if not exists (select 1 from cron.job where jobname = 'cfm_vip_monthly_rollup_daily') then
+      perform cron.schedule(
+        'cfm_vip_monthly_rollup_daily',
+        '10 0 * * *',
+        $$select public.cfm_run_vip_monthly_rollup();$$
+      );
+    end if;
+  end if;
+end;
+$$;
+
+grant execute on function public.cfm_get_gifter_level(uuid) to authenticated;
 
 grant execute on function public.cfm_anonymous_gift_total_cents() to anon, authenticated;
 
@@ -1007,6 +1662,14 @@ alter table public.cfm_live_chat enable row level security;
 alter table public.cfm_live_mods enable row level security;
 alter table public.cfm_live_mutes enable row level security;
 alter table public.cfm_live_kicks enable row level security;
+
+alter table public.coin_wallets enable row level security;
+alter table public.coin_transactions enable row level security;
+alter table public.coin_purchase_orders enable row level security;
+alter table public.coin_packages enable row level security;
+alter table public.gifts enable row level security;
+alter table public.vip_monthly_status enable row level security;
+alter table public.verification_subscriptions enable row level security;
 
 -- cfm_applications
 create policy "applications_insert_anyone"
@@ -1073,6 +1736,8 @@ for update
 to authenticated
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
+
+revoke update (points, lifetime_gifted_total_usd, lifetime_gifted_total_coins, vip_tier, is_verified) on public.cfm_members from authenticated;
 
 create policy "members_delete_admin_only"
 on public.cfm_members
@@ -1385,6 +2050,52 @@ for update
 to authenticated
 using (public.cfm_is_admin())
 with check (public.cfm_is_admin());
+
+create policy "coin_wallets_select_own_or_admin"
+on public.coin_wallets
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "coin_transactions_select_own_or_admin"
+on public.coin_transactions
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "coin_purchase_orders_select_own_or_admin"
+on public.coin_purchase_orders
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "coin_packages_select_anyone"
+on public.coin_packages
+for select
+to anon, authenticated
+using (true);
+
+create policy "gifts_select_related_or_admin"
+on public.gifts
+for select
+to authenticated
+using (
+  public.cfm_is_admin()
+  or from_user_id = auth.uid()
+  or to_user_id = auth.uid()
+);
+
+create policy "vip_monthly_select_own_or_admin"
+on public.vip_monthly_status
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+create policy "verification_select_own_or_admin"
+on public.verification_subscriptions
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
 
 create policy "live_state_select_anyone"
 on public.cfm_live_state
@@ -1708,10 +2419,19 @@ begin
     where v.user_id = m.user_id
   ) lv on true
   left join lateral (
-    select (coalesce(sum(pg.amount_cents), 0) / 100)::int as gift_points
-    from public.cfm_post_gifts pg
-    where pg.gifter_user_id = m.user_id
-      and pg.status = 'paid'
+    select coalesce(sum(x.coins), 0)::int as gift_points
+    from (
+      select pg.amount_cents::bigint as coins
+      from public.cfm_post_gifts pg
+      where pg.gifter_user_id = m.user_id
+        and pg.status = 'paid'
+      union all
+      select ct.amount::bigint as coins
+      from public.coin_transactions ct
+      where ct.user_id = m.user_id
+        and ct.type = 'gift_spend'
+        and ct.direction = 'debit'
+    ) x
   ) gp on true
   left join lateral (
     select count(*)::int as following_points

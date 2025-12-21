@@ -4,10 +4,8 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
-import { getAuthedUserOrNull, requireAdmin, requireApprovedMember } from "@/lib/auth";
+import { requireAdmin, requireApprovedMember } from "@/lib/auth";
 import { todayISODate } from "@/lib/utils";
-import { env } from "@/lib/env";
-import { stripe } from "@/lib/stripe";
 
 type PublicMemberIdRow = { user_id: string | null };
 type AdminRow = { user_id: string | null };
@@ -172,7 +170,6 @@ export async function createAdminPost(formData: FormData) {
 
   revalidatePath("/feed");
   revalidatePath("/admin");
-  revalidatePath("/u");
 }
 
 export async function upsertMyDailyPost(formData: FormData) {
@@ -479,7 +476,7 @@ export async function toggleLike(postId: string, liked: boolean) {
       if (!admin) {
         console.error("Notifications disabled: missing SUPABASE_SERVICE_ROLE_KEY");
       }
-      if (admin) {
+      if (admin && postId) {
         const { data: post } = await admin
           .from("cfm_feed_posts")
           .select("id,author_user_id")
@@ -553,7 +550,7 @@ export async function logFeedPostShare(postId: string) {
   const wasDuplicate = insertMsg.includes("duplicate") || insertMsg.includes("unique");
   if (insertErr && !wasDuplicate) throw new Error(insertErr.message);
 
-  if (insertedNew) {
+  if (insertErr && wasDuplicate) {
   }
 
   revalidatePath("/feed");
@@ -568,161 +565,15 @@ export async function logFeedPostShare(postId: string) {
 }
 
 export async function createPostGiftCheckoutSession(postId: string, amountCents: number) {
-  return createGiftCheckoutSession({ postId, amountCents, returnPath: "/feed" });
+  void postId;
+  void amountCents;
+  throw new Error("Legacy USD gifting has been removed. Use coin gifting via POST /api/gifts/send.");
 }
 
 export async function createSiteGiftCheckoutSession(amountCents: number, returnPath: string) {
-  const rp = String(returnPath ?? "").trim() || "/";
-  return createGiftCheckoutSession({ postId: null, amountCents, returnPath: rp });
-}
-
-function buildReturnUrl(siteUrl: string, returnPathRaw: string, params: Record<string, string>) {
-  const site = String(siteUrl ?? "").trim();
-  const base = site.endsWith("/") ? site.slice(0, -1) : site;
-  const returnPath = String(returnPathRaw ?? "/").trim() || "/";
-  const path = returnPath.startsWith("/") ? returnPath : `/${returnPath}`;
-  const url = new URL(`${base}${path}`);
-
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
-
-  return url.toString();
-}
-
-async function createGiftCheckoutSession({
-  postId,
-  amountCents,
-  returnPath,
-}: {
-  postId: string | null;
-  amountCents: number;
-  returnPath: string;
-}) {
-  const sb = await supabaseServer();
-
-  const user = await getAuthedUserOrNull();
-  let gifterUserId: string | null = null;
-  if (user) {
-    const { data: adminRow } = await sb
-      .from("cfm_admins")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const { data: memberRow } = await sb
-      .from("cfm_members")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (adminRow?.role || memberRow?.id) gifterUserId = user.id;
-  }
-
-  const pid = postId ? String(postId).trim() : "";
-
-  const cents = Number(amountCents);
-  if (!Number.isFinite(cents) || cents <= 0) throw new Error("Invalid amount.");
-
-  const { data: settings } = await sb
-    .from("cfm_monetization_settings")
-    .select(
-      "enable_post_gifts,allow_custom_amount,min_gift_cents,max_gift_cents,currency",
-    )
-    .limit(1)
-    .maybeSingle();
-
-  const enablePostGifts = (settings as any)?.enable_post_gifts ?? false;
-  if (!enablePostGifts) throw new Error("Gifting is currently disabled.");
-
-  const allowCustom = (settings as any)?.allow_custom_amount ?? false;
-  const minCents = Number((settings as any)?.min_gift_cents ?? 100);
-  const maxCents = Number((settings as any)?.max_gift_cents ?? 20000);
-  const currency = String((settings as any)?.currency ?? "usd").toLowerCase();
-
-  const { data: presets } = await sb
-    .from("cfm_gift_presets")
-    .select("amount_cents")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true });
-
-  const presetCents = new Set<number>((presets ?? []).map((p: any) => Number(p.amount_cents)));
-
-  const isPreset = presetCents.size ? presetCents.has(cents) : [100, 300, 500, 1000, 2000].includes(cents);
-  if (!isPreset) {
-    if (!allowCustom) throw new Error("Custom amount is disabled.");
-    if (cents < minCents || cents > maxCents) {
-      throw new Error(`Amount must be between ${minCents} and ${maxCents} cents.`);
-    }
-  }
-
-  if (pid) {
-    const { data: post, error: postErr } = await sb
-      .from("cfm_feed_posts")
-      .select("id")
-      .eq("id", pid)
-      .maybeSingle();
-    if (postErr) throw new Error(postErr.message);
-    if (!post) throw new Error("Post not found.");
-  }
-
-  const recipientUserId: string | null = null;
-
-  const { data: giftRow, error: giftErr } = await sb
-    .from("cfm_post_gifts")
-    .insert({
-      post_id: pid || null,
-      gifter_user_id: gifterUserId,
-      recipient_user_id: recipientUserId,
-      amount_cents: cents,
-      currency,
-      provider: "stripe",
-      status: "pending",
-    })
-    .select("id")
-    .maybeSingle();
-  if (giftErr) throw new Error(giftErr.message);
-  if (!giftRow?.id) throw new Error("Failed to create gift record.");
-
-  const s = stripe();
-  const session = await s.checkout.sessions.create({
-    mode: "payment",
-    success_url: buildReturnUrl(env.siteUrl, returnPath, {
-      gift: "success",
-      gift_id: String(giftRow.id),
-      ...(pid ? { post_id: pid } : {}),
-    }),
-    cancel_url: buildReturnUrl(env.siteUrl, returnPath, {
-      gift: "cancel",
-      gift_id: String(giftRow.id),
-      ...(pid ? { post_id: pid } : {}),
-    }),
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency,
-          unit_amount: cents,
-          product_data: {
-            name: "Gift",
-          },
-        },
-      },
-    ],
-    metadata: {
-      gift_id: String(giftRow.id),
-      post_id: pid,
-      gifter_user_id: gifterUserId ?? "",
-      recipient_user_id: recipientUserId ?? "",
-    },
-  });
-
-  await sb
-    .from("cfm_post_gifts")
-    .update({ stripe_session_id: session.id })
-    .eq("id", giftRow.id);
-
-  return { ok: true as const, url: session.url };
+  void amountCents;
+  void returnPath;
+  throw new Error("Legacy USD gifting has been removed. Use coin gifting via POST /api/gifts/send.");
 }
 
 export async function updateFeedPost(formData: FormData) {

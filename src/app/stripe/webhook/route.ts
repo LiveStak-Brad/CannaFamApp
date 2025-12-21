@@ -38,94 +38,50 @@ export async function POST(req: Request) {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      const giftId = String(session.metadata?.gift_id ?? "").trim();
-      if (!giftId) return safeJson({ ok: true, ignored: true });
 
-      const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : null;
-      const { data: existing } = await admin
-        .from("cfm_post_gifts")
-        .select("id,status,stripe_event_id,gifter_user_id,amount_cents,post_id")
-        .eq("id", giftId)
-        .maybeSingle();
-
-      if (existing?.stripe_event_id && existing.stripe_event_id === event.id) {
-        return safeJson({ ok: true, duplicate: true });
+      const type = String(session.metadata?.type ?? "").trim();
+      if (type !== "coin_purchase") {
+        return safeJson({ ok: true, ignored: true });
       }
 
-      const { error } = await admin
-        .from("cfm_post_gifts")
-        .update({
-          status: "paid",
-          stripe_payment_intent_id: paymentIntentId,
-          stripe_event_id: event.id,
-          paid_at: new Date().toISOString(),
-        })
-        .eq("id", giftId);
+      const userId = String(session.metadata?.user_id ?? "").trim();
+      const coins = Number(session.metadata?.coins ?? 0);
 
-      if (error) return safeJson({ ok: false, error: error.message }, 500);
+      const amountUsdCents =
+        typeof session.amount_total === "number" ? session.amount_total : Number(session.amount_total ?? 0);
 
-      // If this is a site gift (post_id is "Live" or null), insert a chat message into the active live stream
-      const postId = existing?.post_id;
-      const isLiveGift = !postId || postId === "Live";
-      
-      if (isLiveGift) {
-        // Get the current active live stream
-        const { data: liveState } = await admin
-          .from("cfm_live_state")
-          .select("id,is_live")
-          .eq("is_live", true)
-          .maybeSingle();
-
-        if (liveState?.id) {
-          // Get gifter's display name
-          const gifterUserId = existing?.gifter_user_id;
-          let gifterName = "Anonymous";
-          
-          if (gifterUserId) {
-            const { data: profile } = await admin
-              .from("cfm_public_member_ids")
-              .select("favorited_username")
-              .eq("user_id", gifterUserId)
-              .maybeSingle();
-            if (profile?.favorited_username) {
-              gifterName = profile.favorited_username;
-            }
-          }
-
-          const amountCents = existing?.amount_cents ?? 0;
-          const amountDollars = (amountCents / 100).toFixed(2);
-
-          // Insert gift notification into live chat
-          await admin.from("cfm_live_chat").insert({
-            live_id: liveState.id,
-            sender_user_id: gifterUserId || null,
-            message: `🎁 ${gifterName} gifted $${amountDollars}!`,
-            type: "system",
-            metadata: { event: "gift", amount_cents: amountCents, gifter_name: gifterName },
-          });
-        }
+      if (!userId) return safeJson({ ok: false, error: "Missing user_id metadata" }, 400);
+      if (!Number.isFinite(coins) || coins <= 0) return safeJson({ ok: false, error: "Invalid coins metadata" }, 400);
+      if (!Number.isFinite(amountUsdCents) || amountUsdCents <= 0) {
+        return safeJson({ ok: false, error: "Invalid amount_total" }, 400);
       }
 
-      return safeJson({ ok: true });
-    }
+      const providerOrderId = String(session.id ?? "").trim();
+      if (!providerOrderId) return safeJson({ ok: false, error: "Missing session id" }, 400);
 
-    if (event.type === "checkout.session.expired") {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const giftId = String(session.metadata?.gift_id ?? "").trim();
-      if (!giftId) return safeJson({ ok: true, ignored: true });
+      const idempotencyKey =
+        String(session.metadata?.idempotency_key ?? "").trim() || `stripe:event:${event.id}`;
 
-      const { error } = await admin
-        .from("cfm_post_gifts")
-        .update({ status: "canceled", stripe_event_id: event.id })
-        .eq("id", giftId)
-        .in("status", ["pending"]);
+      const { data, error } = await (admin as any).rpc("cfm_finalize_coin_purchase", {
+        p_provider: "stripe",
+        p_provider_order_id: providerOrderId,
+        p_user_id: userId,
+        p_coins: Math.floor(coins),
+        p_amount_usd_cents: Math.floor(amountUsdCents),
+        p_idempotency_key: idempotencyKey,
+      });
 
-      if (error) return safeJson({ ok: false, error: error.message }, 500);
-      return safeJson({ ok: true });
+      if (error) {
+        const msg = String(error.message ?? "").toLowerCase();
+        const isDup = msg.includes("duplicate") || msg.includes("already") || msg.includes("unique");
+        if (isDup) return safeJson({ ok: true, duplicate: true }, 200);
+        return safeJson({ ok: false, error: error.message }, 500);
+      }
+      return safeJson({ ok: true, result: data ?? null });
     }
 
     return safeJson({ ok: true, ignored: true, type: event.type });
   } catch (e) {
     return safeJson({ ok: false, error: e instanceof Error ? e.message : "Webhook handler failed" }, 500);
   }
-}
+ }
