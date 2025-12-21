@@ -84,7 +84,7 @@ export function AccountPasswordForm() {
 }
 
 export function LiveAlertsToggle() {
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [msg, setMsg] = useState<null | { tone: "success" | "error"; text: string }>(null);
@@ -128,86 +128,105 @@ export function LiveAlertsToggle() {
           disabled={pending}
           onClick={() => {
             setMsg(null);
-            startTransition(async () => {
-              const uid = String(userId ?? "").trim();
-              if (!uid) {
-                setMsg({ tone: "error", text: "Please log in again." });
-                return;
-              }
-
-              const sb = supabaseBrowser();
-              const next = !enabled;
-
-              let canEnable = true;
-
-              if (typeof window !== "undefined") {
-                const OneSignal = (window as any).OneSignal;
-                if (!OneSignal) {
-                  setMsg({ tone: "error", text: "Push is still loading. Refresh and try again." });
+            if (pending) return;
+            setPending(true);
+            (async () => {
+              try {
+                const uid = String(userId ?? "").trim();
+                if (!uid) {
+                  setMsg({ tone: "error", text: "Please log in again." });
                   return;
                 }
 
-                if (next) {
-                  try {
-                    OneSignal.setConsentGiven(true);
-                  } catch {
-                  }
-                  try {
-                    await OneSignal.login(uid);
-                  } catch {
-                  }
-                  try {
-                    await OneSignal.Notifications.requestPermission();
-                  } catch {
-                  }
+                const sb = supabaseBrowser();
+                const next = !enabled;
 
-                  const hasPerm = Boolean(OneSignal?.Notifications?.permission);
-                  if (!hasPerm) {
-                    setMsg({ tone: "error", text: "Notifications are blocked. Allow notifications for this site, then try again." });
+                let canEnable = true;
+
+                if (typeof window !== "undefined") {
+                  const OneSignal = (window as any).OneSignal;
+                  if (!OneSignal) {
+                    setMsg({ tone: "error", text: "Push is still loading. Refresh and try again." });
                     return;
                   }
 
-                  try {
-                    await OneSignal.User.PushSubscription.optIn();
-                  } catch {
-                  }
+                  if (next) {
+                    try {
+                      OneSignal.setConsentGiven(true);
+                    } catch {
+                    }
 
-                  const optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
-                  const subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
-                  const token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
-                  if (!optedIn || (!subId && !token)) {
-                    canEnable = false;
-                    setMsg({ tone: "error", text: "Push subscription not active yet. Please refresh and try again." });
-                  }
-                } else {
-                  try {
-                    await OneSignal.User.PushSubscription.optOut();
-                  } catch {
-                  }
-                  try {
-                    OneSignal.setConsentGiven(false);
-                  } catch {
+                    try {
+                      await OneSignal.Notifications.requestPermission();
+                    } catch {
+                    }
+
+                    const browserPerm = typeof Notification !== "undefined" ? Notification.permission : "default";
+                    if (browserPerm !== "granted") {
+                      setMsg({
+                        tone: "error",
+                        text: "Notifications are not granted yet. In the browser address bar site settings, set Notifications to Allow, then refresh and try again.",
+                      });
+                      return;
+                    }
+
+                    try {
+                      await OneSignal.login(uid);
+                    } catch {
+                    }
+
+                    try {
+                      await OneSignal.User.PushSubscription.optIn();
+                    } catch {
+                    }
+
+                    let optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                    let subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
+                    let token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
+
+                    for (let i = 0; i < 10 && (!optedIn || (!subId && !token)); i += 1) {
+                      await new Promise((r) => setTimeout(r, 200));
+                      optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                      subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
+                      token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
+                    }
+
+                    if (!optedIn || (!subId && !token)) {
+                      canEnable = false;
+                      setMsg({ tone: "error", text: "Push subscription not active yet. Refresh and try again." });
+                    }
+                  } else {
+                    try {
+                      await OneSignal.User.PushSubscription.optOut();
+                    } catch {
+                    }
+                    try {
+                      OneSignal.setConsentGiven(false);
+                    } catch {
+                    }
                   }
                 }
+
+                const { data, error } = await (sb as any).rpc("cfm_upsert_notification_prefs", {
+                  p_live_alerts_enabled: next && canEnable,
+                  p_post_alerts_enabled: false,
+                });
+
+                if (error) {
+                  setMsg({ tone: "error", text: error.message });
+                  return;
+                }
+
+                const ok = Boolean((data as any)?.live_alerts_enabled);
+                setEnabled(ok);
+                setMsg({
+                  tone: "success",
+                  text: ok ? "Live alerts enabled." : "Live alerts disabled.",
+                });
+              } finally {
+                setPending(false);
               }
-
-              const { data, error } = await (sb as any).rpc("cfm_upsert_notification_prefs", {
-                p_live_alerts_enabled: next && canEnable,
-                p_post_alerts_enabled: false,
-              });
-
-              if (error) {
-                setMsg({ tone: "error", text: error.message });
-                return;
-              }
-
-              const ok = Boolean((data as any)?.live_alerts_enabled);
-              setEnabled(ok);
-              setMsg({
-                tone: "success",
-                text: ok ? "Live alerts enabled." : "Live alerts disabled.",
-              });
-            });
+            })();
           }}
         >
           {enabled ? "Live Alerts: ON" : "Live Alerts: OFF"}
