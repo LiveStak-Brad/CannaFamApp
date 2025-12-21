@@ -21,7 +21,7 @@ export default function AppleIcon() {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://cannafamapp.com/favicon.png"
+          src="https://www.cannafamapp.com/icon.png"
           alt="CF"
           width={180}
           height={180}

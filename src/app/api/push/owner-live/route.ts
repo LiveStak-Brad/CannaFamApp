@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
     const webBaseUrl = String(process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.cannafamapp.com").trim();
     const normalizedWebBaseUrl = webBaseUrl.endsWith("/") ? webBaseUrl.slice(0, -1) : webBaseUrl;
     const deepLinkUrl = `${normalizedWebBaseUrl}/viewlive?stream_id=${encodeURIComponent(streamId)}`;
+    const webIconUrl = `${normalizedWebBaseUrl}/icon.png`;
 
     const batches = chunk(externalIds, 2000);
 
@@ -136,6 +137,7 @@ export async function POST(request: NextRequest) {
           channel_for_external_user_ids: "push",
           headings: { en: "CannaStreams is LIVE" },
           contents: { en: "Tap to join now." },
+          chrome_web_icon: webIconUrl,
           url: deepLinkUrl,
           data: {
             type: "live",

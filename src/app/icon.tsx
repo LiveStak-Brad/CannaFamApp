@@ -21,7 +21,7 @@ export default function Icon() {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://cannafamapp.com/favicon.png"
+          src="https://www.cannafamapp.com/icon.png"
           alt="CF"
           width={32}
           height={32}

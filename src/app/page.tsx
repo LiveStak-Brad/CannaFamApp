@@ -10,7 +10,6 @@ import { HomeLinkVisits } from "./ui";
 import { SiteGiftButton } from "@/app/feed/ui";
 import { HubCheckInButton, HubSpinButton } from "@/app/hub/ui";
 import { SupportChecklist } from "@/app/support/ui";
-import { LiveAlertsToggle } from "@/app/account/ui";
 
 export const runtime = "nodejs";
 
@@ -162,19 +161,6 @@ export default async function Home() {
             </p>
             <p className="text-[color:var(--muted)]">50 free coins are available via the link in the Favorited bio.</p>
           </div>
-        </Card>
-
-        <Card title="Live Alerts">
-          {user ? (
-            <LiveAlertsToggle />
-          ) : (
-            <div className="space-y-2 text-sm text-[color:var(--muted)]">
-              <div>Log in to enable push notifications when the owner account goes live.</div>
-              <Button as="link" href="/login" variant="secondary">
-                Login
-              </Button>
-            </div>
-          )}
         </Card>
 
         {canEarn ? (
