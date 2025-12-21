@@ -20,6 +20,12 @@ function chunk<T>(arr: T[], size: number) {
   return out;
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value ?? "").trim(),
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const ownerProfileId = mustEnv("CFM_OWNER_PROFILE_ID");
@@ -75,7 +81,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json().catch(() => ({}))) as { stream_id?: string };
-    const streamId = String(body?.stream_id ?? liveId).trim() || liveId;
+    const providedStreamId = String(body?.stream_id ?? "").trim();
+    const streamId = isUuid(providedStreamId) ? providedStreamId : liveId;
 
     const idempotencyKey = `owner_live:${liveId}:${startedAt}`;
 
