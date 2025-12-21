@@ -120,6 +120,8 @@ export async function POST(request: NextRequest) {
     const webBaseUrl = String(process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.cannafamapp.com").trim();
     const normalizedWebBaseUrl = webBaseUrl.endsWith("/") ? webBaseUrl.slice(0, -1) : webBaseUrl;
     const deepLinkUrl = `${normalizedWebBaseUrl}/viewlive?stream_id=${encodeURIComponent(streamId)}`;
+    const appUrl = `cannafam://viewlive?stream_id=${encodeURIComponent(streamId)}`;
+    const appTarget = `/viewlive?stream_id=${encodeURIComponent(streamId)}`;
     const webIconUrl = `${normalizedWebBaseUrl}/icon.png`;
 
     const batches = chunk(externalIds, 2000);
@@ -141,12 +143,14 @@ export async function POST(request: NextRequest) {
           ios_sound: "live_alert.wav",
           android_channel_id: onesignalAndroidLiveAlertsChannelId,
           chrome_web_icon: webIconUrl,
-          url: deepLinkUrl,
+          web_url: deepLinkUrl,
+          app_url: appUrl,
           data: {
             type: "live",
             streamer_id: ownerProfileId,
             stream_id: streamId,
-            deep_link_url: `cannafam://viewlive?stream_id=${encodeURIComponent(streamId)}`,
+            target: appTarget,
+            deep_link_url: appUrl,
           },
         }),
       });
