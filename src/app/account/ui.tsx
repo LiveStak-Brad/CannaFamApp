@@ -151,121 +151,152 @@ export function LiveAlertsToggle() {
                     return;
                   }
 
-                  const res = await new Promise<{ canEnable: boolean; errorText: string | null }>((resolve) => {
-                    deferred.push(async (OneSignal: any) => {
-                      try {
-                        const initP = (window as any).__cfmOneSignalInitPromise;
-                        if (initP) await initP;
+                  const res = (await Promise.race([
+                    new Promise<{ canEnable: boolean; errorText: string | null }>((resolve) => {
+                      deferred.push(async (OneSignal: any) => {
+                        try {
+                          const initP = (window as any).__cfmOneSignalInitPromise;
+                          if (initP) await initP;
 
-                        if (next) {
-                          try {
-                            OneSignal.setConsentGiven(true);
-                          } catch {
-                          }
+                          if (next) {
+                            try {
+                              OneSignal.setConsentGiven(true);
+                            } catch {
+                            }
 
-                          const browserPermBefore = typeof Notification !== "undefined" ? Notification.permission : "default";
-                          if (browserPermBefore === "denied") {
-                            resolve({
-                              canEnable: false,
-                              errorText:
-                                "Notifications are blocked for this browser. In the address bar site settings, set Notifications to Allow, then refresh and try again.",
-                            });
+                            const browserPermBefore = typeof Notification !== "undefined" ? Notification.permission : "default";
+                            if (browserPermBefore === "denied") {
+                              resolve({
+                                canEnable: false,
+                                errorText:
+                                  "Notifications are blocked for this browser. In the address bar site settings, set Notifications to Allow, then refresh and try again.",
+                              });
+                              return;
+                            }
+
+                            try {
+                              if (OneSignal?.Slidedown?.promptPush) {
+                                await OneSignal.Slidedown.promptPush();
+                              } else if (OneSignal?.Notifications?.requestPermission) {
+                                await OneSignal.Notifications.requestPermission();
+                              }
+                            } catch {
+                            }
+
+                            const browserPerm = typeof Notification !== "undefined" ? Notification.permission : "default";
+                            if (browserPerm !== "granted") {
+                              resolve({
+                                canEnable: false,
+                                errorText:
+                                  "Notifications are not granted yet. In the browser address bar site settings, set Notifications to Allow, then refresh and try again.",
+                              });
+                              return;
+                            }
+
+                            try {
+                              await OneSignal.login(uid);
+                            } catch {
+                            }
+
+                            try {
+                              await OneSignal.User.PushSubscription.optIn();
+                            } catch {
+                            }
+
+                            let optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                            let subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
+                            let token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
+
+                            for (let i = 0; i < 10 && (!optedIn || (!subId && !token)); i += 1) {
+                              await new Promise((r) => setTimeout(r, 200));
+                              optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                              subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
+                              token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
+                            }
+
+                            if (!optedIn || (!subId && !token)) {
+                              resolve({ canEnable: false, errorText: "Push subscription not active yet. Refresh and try again." });
+                              return;
+                            }
+
+                            resolve({ canEnable: true, errorText: null });
                             return;
                           }
 
                           try {
-                            if (OneSignal?.Slidedown?.promptPush) {
-                              await OneSignal.Slidedown.promptPush();
-                            } else if (OneSignal?.Notifications?.requestPermission) {
-                              await OneSignal.Notifications.requestPermission();
+                            try {
+                              OneSignal.setConsentGiven(true);
+                            } catch {
+                            }
+
+                            if (OneSignal?.User?.PushSubscription?.optOut) {
+                              await OneSignal.User.PushSubscription.optOut();
+                            }
+
+                            if (OneSignal?.setSubscription) {
+                              await OneSignal.setSubscription(false);
+                            }
+
+                            if (OneSignal?.logout) {
+                              await OneSignal.logout();
                             }
                           } catch {
                           }
 
-                          const browserPerm = typeof Notification !== "undefined" ? Notification.permission : "default";
-                          if (browserPerm !== "granted") {
+                          let optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                          for (let i = 0; i < 10 && optedIn; i += 1) {
+                            await new Promise((r) => setTimeout(r, 200));
+                            optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                          }
+
+                          if (optedIn && typeof navigator !== "undefined" && navigator.serviceWorker?.getRegistrations) {
+                            try {
+                              const regs = await navigator.serviceWorker.getRegistrations();
+                              for (const reg of regs) {
+                                try {
+                                  const sub = await reg.pushManager.getSubscription();
+                                  if (sub) await sub.unsubscribe();
+                                } catch {
+                                }
+                              }
+                            } catch {
+                            }
+
+                            optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                            for (let i = 0; i < 10 && optedIn; i += 1) {
+                              await new Promise((r) => setTimeout(r, 200));
+                              optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
+                            }
+                          }
+
+                          if (optedIn) {
                             resolve({
                               canEnable: false,
-                              errorText:
-                                "Notifications are not granted yet. In the browser address bar site settings, set Notifications to Allow, then refresh and try again.",
+                              errorText: "Could not unsubscribe yet. Refresh and try again.",
                             });
                             return;
                           }
-
                           try {
-                            await OneSignal.login(uid);
+                            OneSignal.setConsentGiven(false);
                           } catch {
-                          }
-
-                          try {
-                            await OneSignal.User.PushSubscription.optIn();
-                          } catch {
-                          }
-
-                          let optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
-                          let subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
-                          let token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
-
-                          for (let i = 0; i < 10 && (!optedIn || (!subId && !token)); i += 1) {
-                            await new Promise((r) => setTimeout(r, 200));
-                            optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
-                            subId = String(OneSignal?.User?.PushSubscription?.id ?? "").trim();
-                            token = String(OneSignal?.User?.PushSubscription?.token ?? "").trim();
-                          }
-
-                          if (!optedIn || (!subId && !token)) {
-                            resolve({ canEnable: false, errorText: "Push subscription not active yet. Refresh and try again." });
-                            return;
                           }
 
                           resolve({ canEnable: true, errorText: null });
-                          return;
-                        }
-
-                        try {
-                          try {
-                            OneSignal.setConsentGiven(true);
-                          } catch {
-                          }
-
-                          if (OneSignal?.User?.PushSubscription?.optOut) {
-                            await OneSignal.User.PushSubscription.optOut();
-                          }
-
-                          if (OneSignal?.setSubscription) {
-                            await OneSignal.setSubscription(false);
-                          }
-
-                          if (OneSignal?.logout) {
-                            await OneSignal.logout();
-                          }
                         } catch {
+                          resolve({ canEnable: false, errorText: "Push setup failed. Refresh and try again." });
                         }
-
-                        let optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
-                        for (let i = 0; i < 10 && optedIn; i += 1) {
-                          await new Promise((r) => setTimeout(r, 200));
-                          optedIn = Boolean(OneSignal?.User?.PushSubscription?.optedIn);
-                        }
-
-                        if (optedIn) {
-                          resolve({
-                            canEnable: false,
-                            errorText: "Could not unsubscribe yet. Refresh and try again.",
-                          });
-                          return;
-                        }
-                        try {
-                          OneSignal.setConsentGiven(false);
-                        } catch {
-                        }
-
-                        resolve({ canEnable: true, errorText: null });
-                      } catch {
-                        resolve({ canEnable: false, errorText: "Push setup failed. Refresh and try again." });
-                      }
-                    });
-                  });
+                      });
+                    }),
+                    new Promise<{ canEnable: boolean; errorText: string | null }>((resolve) => {
+                      setTimeout(() => {
+                        resolve({
+                          canEnable: false,
+                          errorText:
+                            "Push SDK did not load/respond. Disable content blockers/VPN for this site, then refresh and try again.",
+                        });
+                      }, 8000);
+                    }),
+                  ])) as { canEnable: boolean; errorText: string | null };
 
                   canEnable = res.canEnable;
                   if (res.errorText) {
