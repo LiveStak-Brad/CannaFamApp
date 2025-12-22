@@ -70,6 +70,12 @@ export async function TopNavAuth() {
             Admin
           </Button>
         ) : null}
+        <Button as="link" href="/members" variant="secondary" className={navBtnClass}>
+          Members
+        </Button>
+        <Button as="link" href="/wallet" variant="secondary" className={navBtnClass}>
+          Wallet
+        </Button>
         <Button as="link" href="/leaderboard" variant="secondary" className={navBtnClass}>
           🏆
         </Button>
@@ -173,6 +179,12 @@ export async function TopNavAuth() {
                 Admin
               </Link>
             ) : null}
+            <Link href="/members" className={mobileMenuItemClass}>
+              Members
+            </Link>
+            <Link href="/wallet" className={mobileMenuItemClass}>
+              Wallet
+            </Link>
             {username ? (
               <Link href={`/u/${username}`} className={mobileMenuItemClass}>
                 👤 View Profile

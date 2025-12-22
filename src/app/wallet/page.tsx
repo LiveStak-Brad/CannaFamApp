@@ -2,6 +2,7 @@ import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
+import { WalletBankClient } from "./bank";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,12 @@ type TxRow = {
   created_at: string;
 };
 
+type CoinPackage = {
+  sku: string;
+  price_usd_cents: number;
+  coins: number;
+};
+
 export default async function WalletPage() {
   const user = await requireUser();
   const sb = await supabaseServer();
@@ -41,8 +48,16 @@ export default async function WalletPage() {
     .order("created_at", { ascending: false })
     .limit(50);
 
+  const { data: webPackages } = await sb
+    .from("coin_packages")
+    .select("sku,price_usd_cents,coins")
+    .eq("platform", "web")
+    .eq("is_active", true)
+    .order("price_usd_cents", { ascending: true });
+
   const w = (wallet ?? null) as any as WalletRow | null;
   const tx = ((txRows ?? []) as any[]) as TxRow[];
+  const packs = ((webPackages ?? []) as any[]) as CoinPackage[];
 
   return (
     <Container>
@@ -63,6 +78,13 @@ export default async function WalletPage() {
             <div>
               <span className="font-semibold">Lifetime spent:</span> {Number(w?.lifetime_spent ?? 0).toLocaleString()}
             </div>
+          </div>
+        </Card>
+
+        <Card title="Bank">
+          <div className="space-y-2">
+            <div className="text-sm text-[color:var(--muted)]">Purchase coins.</div>
+            <WalletBankClient webPackages={packs} />
           </div>
         </Card>
 
