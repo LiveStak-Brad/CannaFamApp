@@ -2467,19 +2467,14 @@ begin
     where v.user_id = m.user_id
   ) lv on true
   left join lateral (
-    -- Legacy USD gifts: 1 point per $1 (amount_cents / 100)
-    -- New coin gifts: 1 point per 100 coins (from coin_transactions only, not cfm_post_gifts to avoid double-count)
-    select (coalesce(sum(x.points), 0))::int as gift_points
+    select coalesce(sum(x.coins), 0)::int as gift_points
     from (
-      -- Legacy USD gifts (currency != 'coins')
-      select (pg.amount_cents / 100)::bigint as points
+      select pg.amount_cents::bigint as coins
       from public.cfm_post_gifts pg
       where pg.gifter_user_id = m.user_id
         and pg.status = 'paid'
-        and coalesce(pg.currency, 'usd') != 'coins'
       union all
-      -- New coin gifts (1 point per 100 coins)
-      select (ct.amount / 100)::bigint as points
+      select ct.amount::bigint as coins
       from public.coin_transactions ct
       where ct.user_id = m.user_id
         and ct.type = 'gift_spend'

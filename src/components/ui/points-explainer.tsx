@@ -71,7 +71,7 @@ function PointsExplainerModal({ open, onClose }: { open: boolean; onClose: () =>
               </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">🎁 Gifts</div>
-                <div className="text-[color:var(--muted)]">+1 per 100 coins gifted</div>
+                <div className="text-[color:var(--muted)]">100 coins = 1 point</div>
               </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">🎁 Gift bonus</div>
