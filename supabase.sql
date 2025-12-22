@@ -2737,6 +2737,7 @@ as $$
     where id = p_live_id
   ),
   events as (
+    -- Legacy: cfm_post_gifts
     select
       g.gifter_user_id as user_id,
       g.amount_cents::bigint as amount_cents,
@@ -2749,6 +2750,7 @@ as $$
 
     union all
 
+    -- Legacy: cfm_live_chat tip messages with amount_cents metadata
     select
       lc.sender_user_id as user_id,
       case
@@ -2764,6 +2766,18 @@ as $$
       and lc.is_deleted = false
       and lc.sender_user_id is not null
       and lc.metadata ? 'amount_cents'
+
+    union all
+
+    -- New: gifts table (coin-based gifting)
+    select
+      g.from_user_id as user_id,
+      g.coins as amount_cents,
+      g.created_at as ts
+    from public.gifts g
+    where g.stream_id = p_live_id
+      and g.from_user_id is not null
+      and g.coins > 0
   ),
   filtered as (
     select e.user_id, e.amount_cents

@@ -371,6 +371,9 @@ export function HostLiveClient({
     }
   }, [sb, liveId]);
 
+  // Track previous online state to detect leaves
+  const prevOnlineRef = useRef<Record<string, boolean>>({});
+
   // Viewer history: always fetch immediately + repoll + realtime subscription (never gate on auth/is_live)
   useEffect(() => {
     if (!liveId) return;
@@ -390,7 +393,29 @@ export function HostLiveClient({
       .on(
         "postgres_changes" as any,
         { event: "*", schema: "public", table: "cfm_live_viewers", filter: `live_id=eq.${liveId}` },
-        () => {
+        (payload: any) => {
+          // Detect leave events: UPDATE where is_online goes from true to false
+          if (payload?.eventType === "UPDATE" && payload?.new && payload?.old) {
+            const wasOnline = payload.old.is_online === true;
+            const nowOffline = payload.new.is_online === false;
+            if (wasOnline && nowOffline) {
+              const uid = String(payload.new.user_id ?? "").trim();
+              const displayName = nameByUserId[uid] || memberByUserId[uid]?.favorited_username || "Someone";
+              // Add a synthetic leave message to chat
+              setChatRows((prev) => [
+                ...prev,
+                {
+                  id: `leave-${uid}-${Date.now()}`,
+                  live_id: liveId,
+                  sender_user_id: uid,
+                  message: `${displayName} has left`,
+                  type: "system",
+                  metadata: { event: "leave" },
+                  created_at: new Date().toISOString(),
+                },
+              ]);
+            }
+          }
           void tick();
         },
       )
@@ -401,7 +426,7 @@ export function HostLiveClient({
       clearInterval(poll);
       sb.removeChannel(viewerChannel);
     };
-  }, [liveId, liveSessionKey, loadViewers, sb]);
+  }, [liveId, liveSessionKey, loadViewers, memberByUserId, nameByUserId, sb]);
 
   useEffect(() => {
     setChatRows([]);
@@ -892,6 +917,14 @@ export function HostLiveClient({
           .animate-vip-entrance {
             animation: vip-entrance 1.2s ease-out forwards;
           }
+          @keyframes fade-out {
+            0% { opacity: 1; }
+            70% { opacity: 0.7; }
+            100% { opacity: 0.5; }
+          }
+          .animate-fade-out {
+            animation: fade-out 2s ease-out forwards;
+          }
         `}</style>
 
         {/* Status messages */}
@@ -947,6 +980,29 @@ export function HostLiveClient({
                       {isVip ? <span className="mr-0.5">✨</span> : null}
                       {msg}
                       <VipBadge tier={vipTier} />
+                    </div>
+                  </button>
+                );
+              }
+              
+              // Red name for leaves (host-only)
+              const isLeave = kind === "system" && meta?.event === "leave";
+              if (isLeave) {
+                const vipTier = (senderId ? (memberByUserId[senderId] as any)?.vip_tier : null) as VipTier | null;
+                return (
+                  <button
+                    key={row.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 text-left text-[15px] font-medium animate-fade-out"
+                    onClick={() => {
+                      if (senderId) showMiniProfile(senderId);
+                    }}
+                  >
+                    <div className="shrink-0">{avatar}</div>
+                    <div className="inline-flex items-center gap-1 min-w-0 truncate">
+                      <span className="text-red-400 font-semibold">{senderName}</span>
+                      <VipBadge tier={vipTier} />
+                      <span className="text-white/60">has left</span>
                     </div>
                   </button>
                 );
