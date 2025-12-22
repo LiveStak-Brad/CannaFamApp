@@ -1536,6 +1536,10 @@ begin
   insert into public.coin_transactions (user_id, type, direction, amount, source, related_id, idempotency_key)
   values (v_from, 'gift_spend', 'debit', v_coins, 'system', v_gift_id, v_key);
 
+  -- Also write to legacy cfm_post_gifts so leaderboards pick it up
+  insert into public.cfm_post_gifts (post_id, gifter_user_id, recipient_user_id, amount_cents, currency, provider, status, paid_at)
+  values (null, v_from, v_to, v_coins, 'coins', 'coins', 'paid', now());
+
   update public.cfm_members
   set lifetime_gifted_total_coins = coalesce(lifetime_gifted_total_coins, 0) + v_coins
   where user_id = v_from;
