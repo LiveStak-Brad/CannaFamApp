@@ -1,12 +1,13 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { PointsExplainerButton } from "@/components/ui/points-explainer";
-import { getAuthedUserOrNull } from "@/lib/auth";
+import { getAuthedUserOrNull, getMyAdminRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { todayISODate } from "@/lib/utils";
 import {
   FeedAdminPostControls,
   FeedMedia,
+  FeedPostReportButton,
   GiftButton,
   GiftSummary,
   FeedShareButton,
@@ -43,7 +44,9 @@ export default async function FeedPage({
         .maybeSingle()
     : { data: null };
 
+  const role = await getMyAdminRole();
   const isAdmin = !!adminRow?.role;
+  const isMod = role === "owner" || role === "admin" || role === "moderator";
   const canEditPosts = !!adminRow?.role && (adminRow.role === "owner" || adminRow.role === "admin");
   const { data: member } = user
     ? await sb.from("cfm_members").select("id").eq("user_id", user.id).maybeSingle()
@@ -86,11 +89,18 @@ export default async function FeedPage({
     leaderboard = [];
   }
 
-  const { data: posts, error: postsErr } = await sb
+  // Fetch posts - mods see all, regular users only see non-removed
+  let postsQuery = sb
     .from("cfm_feed_posts")
-    .select("id,title,content,post_type,created_at,media_url,media_type,author_user_id,post_date")
+    .select("id,title,content,post_type,created_at,media_url,media_type,author_user_id,post_date,is_removed")
     .order("created_at", { ascending: false })
     .limit(50);
+  
+  if (!isMod) {
+    postsQuery = postsQuery.or("is_removed.is.null,is_removed.eq.false");
+  }
+  
+  const { data: posts, error: postsErr } = await postsQuery;
 
   if (postsErr) {
     return (
@@ -532,6 +542,11 @@ export default async function FeedPage({
           {filteredPosts?.length ? (
             filteredPosts.map((p: any) => (
               <Card key={p.id} title={p.title ?? ""}>
+                {p.is_removed && isMod && (
+                  <div className="mb-2 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-400">
+                    🚫 Removed by moderation
+                  </div>
+                )}
                 <div id={p.id} className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     {p.author_user_id ? (() => {
@@ -630,6 +645,7 @@ export default async function FeedPage({
                         canEarn={canEarn}
                         myUserId={user?.id ?? null}
                       />
+                      <FeedPostReportButton postId={p.id} authorUserId={p.author_user_id} />
                     </div>
                   </div>
                 </div>
