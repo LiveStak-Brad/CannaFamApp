@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { logLinkVisit } from "@/app/support/actions";
 const HOME_LINK_ITEMS = [
-  { type: "buy_coins", label: "💰 Buy Coins", url: "https://favorited.com/coins" },
   { type: "instagram", label: "📸 Instagram", url: "https://instagram.com/cannastreams_official" },
   { type: "facebook", label: "📘 Facebook", url: "https://facebook.com/cannastreamsstl" },
   { type: "tiktok", label: "🎵 TikTok", url: "https://tiktok.com/@cannastreams" },

@@ -79,7 +79,7 @@ function PointsExplainerModal({ open, onClose }: { open: boolean; onClose: () =>
               </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">🔎 Link visits</div>
-                <div className="text-[color:var(--muted)]">+1 each, max 7/day</div>
+                <div className="text-[color:var(--muted)]">+1 each, max 6/day</div>
               </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="font-semibold">👥 Follows</div>
