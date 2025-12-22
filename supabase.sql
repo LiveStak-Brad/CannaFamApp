@@ -2467,7 +2467,7 @@ begin
     where v.user_id = m.user_id
   ) lv on true
   left join lateral (
-    -- 1 point per 100 coins gifted
+    -- 1 point per 100 coins (same as old 1 point per $1)
     select (coalesce(sum(x.coins), 0) / 100)::int as gift_points
     from (
       select pg.amount_cents::bigint as coins
