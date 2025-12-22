@@ -143,7 +143,7 @@ export default async function GifterLevelsPage() {
 
         <Card title="VIP tiers">
           <div className="space-y-3">
-            <div className="text-sm text-[color:var(--muted)]">VIP resets monthly and is based on coins purchased in the month.</div>
+            <div className="text-sm text-[color:var(--muted)]">VIP resets monthly and is based on coins spent in the month.</div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Bronze</span>
               <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Silver</span>

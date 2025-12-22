@@ -8,11 +8,13 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
 
 export type PublicProfile = {
   favorited_username: string;
   photo_url: string | null;
   lifetime_gifted_total_usd?: number | null;
+  vip_tier?: VipTier | null;
   bio: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -115,6 +117,7 @@ export function LeaderboardClient({
         favorited_username: selected.favorited_username,
         photo_url: profile?.photo_url ?? null,
         lifetime_gifted_total_usd: profile?.lifetime_gifted_total_usd ?? null,
+        vip_tier: (profile as any)?.vip_tier ?? null,
         bio: profile?.bio ?? null,
         public_link: profile?.public_link ?? null,
         instagram_link: profile?.instagram_link ?? null,
@@ -230,7 +233,10 @@ export function LeaderboardClient({
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="font-semibold">{m.favorited_username}</span>
+                        <span className="inline-flex items-center gap-2 font-semibold">
+                          <span className="truncate">{m.favorited_username}</span>
+                          <VipBadge tier={(rowProfile as any)?.vip_tier ?? null} />
+                        </span>
                       </div>
                       <div className="font-bold text-green-500">{formatCoins(m.total_cents)}</div>
                     </div>
@@ -281,7 +287,10 @@ export function LeaderboardClient({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{m.favorited_username}</span>
+                      <span className="inline-flex items-center gap-2 font-semibold">
+                        <span className="truncate">{m.favorited_username}</span>
+                        <VipBadge tier={(rowProfile as any)?.vip_tier ?? null} />
+                      </span>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
                       <span>🔥 {m.streak_points ?? 0}</span>

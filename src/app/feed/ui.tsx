@@ -28,6 +28,7 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import type { VipTier } from "@/components/ui/vip-badge";
 
 export type FeedPost = {
   id: string;
@@ -273,6 +274,7 @@ export type LikerProfile = {
   favorited_username: string;
   photo_url: string | null;
   lifetime_gifted_total_usd?: number | null;
+  vip_tier?: VipTier | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -296,6 +298,7 @@ export type MentionCandidate = {
   favorited_username: string;
   photo_url: string | null;
   lifetime_gifted_total_usd?: number | null;
+  vip_tier?: VipTier | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -308,6 +311,7 @@ export type GiftTopGifter = {
   favorited_username: string;
   photo_url: string | null;
   lifetime_gifted_total_usd?: number | null;
+  vip_tier?: VipTier | null;
   total_cents: number;
 };
 
@@ -614,6 +618,7 @@ function WhoLikedModal({
           favorited_username: selected.favorited_username,
           photo_url: selected.photo_url,
           lifetime_gifted_total_usd: lifetimeCoins,
+          vip_tier: selected.vip_tier ?? null,
           bio: selected.bio ?? null,
           public_link: selected.public_link ?? null,
           instagram_link: selected.instagram_link ?? null,
@@ -785,6 +790,7 @@ function CommentsModal({
       favorited_username: p.favorited_username,
       photo_url: p.photo_url,
       lifetime_gifted_total_usd: p.lifetime_gifted_total_usd,
+      vip_tier: (p as any).vip_tier ?? null,
       bio: p.bio ?? null,
       public_link: p.public_link ?? null,
       instagram_link: p.instagram_link ?? null,
@@ -1691,6 +1697,7 @@ export function LikeButton({
   leaderboard: MiniProfilePointsRow[];
   canEarn?: boolean;
   myUserId?: string | null;
+  vipTier?: number;
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);

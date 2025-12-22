@@ -5,12 +5,14 @@ import { useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
 
 export type MiniProfileSubject = {
   user_id?: string | null;
   favorited_username: string;
   photo_url?: string | null;
   lifetime_gifted_total_usd?: number | null;
+  vip_tier?: VipTier | null;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -119,6 +121,7 @@ export function MiniProfileModal({
   const photoUrl = subject.photo_url ?? null;
   const bio = subject.bio ?? null;
   const totalUsd = typeof subject.lifetime_gifted_total_usd === "number" ? subject.lifetime_gifted_total_usd : null;
+  const vipTier = (subject.vip_tier ?? null) as VipTier | null;
 
   const socials = [
     { key: "public", label: "Link", href: subject.public_link ?? null },
@@ -185,7 +188,10 @@ export function MiniProfileModal({
                       onClick={() => onClose()}
                       className="block text-base font-semibold truncate"
                     >
-                      {subject.favorited_username}
+                      <span className="inline-flex items-center gap-2">
+                        <span className="truncate">{subject.favorited_username}</span>
+                        <VipBadge tier={vipTier} />
+                      </span>
                     </Link>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
                       <span>Mini profile</span>

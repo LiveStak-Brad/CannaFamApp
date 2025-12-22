@@ -154,6 +154,7 @@ create or replace view public.cfm_public_members as
     tiktok_link,
     youtube_link,
     lifetime_gifted_total_usd,
+    vip_tier,
     created_at
   from public.cfm_members;
 
@@ -170,7 +171,8 @@ create or replace view public.cfm_public_member_ids as
     x_link,
     tiktok_link,
     youtube_link,
-    lifetime_gifted_total_usd
+    lifetime_gifted_total_usd,
+    vip_tier
   from public.cfm_members
   where user_id is not null;
 

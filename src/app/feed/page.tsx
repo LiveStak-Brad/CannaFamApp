@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 import { AdminPostComposer } from "@/components/ui/admin-post-composer";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
 
 export const runtime = "nodejs";
 
@@ -119,12 +120,17 @@ export default async function FeedPage({
 
   const authorById = new Map<
     string,
-    { favorited_username: string; photo_url: string | null; lifetime_gifted_total_usd?: number | null }
+    {
+      favorited_username: string;
+      photo_url: string | null;
+      lifetime_gifted_total_usd?: number | null;
+      vip_tier?: VipTier | null;
+    }
   >();
   if (authorIds.length) {
     const { data: authors } = await sb
       .from("cfm_public_member_ids")
-      .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+      .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier")
       .in("user_id", authorIds)
       .limit(2000);
 
@@ -135,6 +141,7 @@ export default async function FeedPage({
         photo_url: (a.photo_url ?? null) as string | null,
         lifetime_gifted_total_usd:
           typeof a.lifetime_gifted_total_usd === "number" ? (a.lifetime_gifted_total_usd as number) : null,
+        vip_tier: (typeof (a as any)?.vip_tier === "string" ? String((a as any).vip_tier) : null) as VipTier | null,
       });
     }
   }
@@ -190,13 +197,18 @@ export default async function FeedPage({
       );
       const gifterProfiles = new Map<
         string,
-        { favorited_username: string; photo_url: string | null; lifetime_gifted_total_usd?: number | null }
+        {
+          favorited_username: string;
+          photo_url: string | null;
+          lifetime_gifted_total_usd?: number | null;
+          vip_tier?: VipTier | null;
+        }
       >();
 
       if (gifterIds.length) {
         const { data: gifters } = await sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier")
           .in("user_id", gifterIds)
           .limit(2000);
 
@@ -207,6 +219,7 @@ export default async function FeedPage({
             photo_url: (g.photo_url ?? null) as string | null,
             lifetime_gifted_total_usd:
               typeof g.lifetime_gifted_total_usd === "number" ? (g.lifetime_gifted_total_usd as number) : null,
+            vip_tier: (typeof (g as any)?.vip_tier === "string" ? String((g as any).vip_tier) : null) as VipTier | null,
           });
         }
       }
@@ -241,6 +254,7 @@ export default async function FeedPage({
               photo_url: prof?.photo_url ?? null,
               lifetime_gifted_total_usd:
                 typeof prof?.lifetime_gifted_total_usd === "number" ? prof.lifetime_gifted_total_usd : null,
+              vip_tier: (prof as any)?.vip_tier ?? null,
               total_cents: total,
             };
           });
@@ -255,7 +269,7 @@ export default async function FeedPage({
   const { data: mentionCandidatesRaw } = await sb
     .from("cfm_public_member_ids")
     .select(
-      "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+      "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
     )
     .limit(2000);
   const mentionCandidates = (mentionCandidatesRaw ?? []) as any[];
@@ -290,6 +304,7 @@ export default async function FeedPage({
       x_link?: string | null;
       tiktok_link?: string | null;
       youtube_link?: string | null;
+      vip_tier?: VipTier | null;
     }
   >();
 
@@ -335,9 +350,10 @@ export default async function FeedPage({
       ? await sb
           .from("cfm_public_member_ids")
           .select(
-            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
           )
           .in("user_id", commenterIds)
+          .limit(500)
       : { data: [] };
 
     for (const m of (publicMembers ?? []) as any[]) {
@@ -353,6 +369,7 @@ export default async function FeedPage({
         x_link: (m.x_link ?? null) as string | null,
         tiktok_link: (m.tiktok_link ?? null) as string | null,
         youtube_link: (m.youtube_link ?? null) as string | null,
+        vip_tier: (m.vip_tier ?? null) as VipTier | null,
       });
     }
   } catch {
@@ -404,6 +421,7 @@ export default async function FeedPage({
         x_link?: string | null;
         tiktok_link?: string | null;
         youtube_link?: string | null;
+        vip_tier?: VipTier | null;
       }
     >();
 
@@ -411,9 +429,10 @@ export default async function FeedPage({
       const { data: publicMembers, error: publicErr } = await sb
         .from("cfm_public_member_ids")
         .select(
-          "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+          "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
         )
-        .in("user_id", userIds);
+        .in("user_id", userIds)
+        .limit(500);
 
       if (publicErr) throw new Error(publicErr.message);
 
@@ -430,6 +449,7 @@ export default async function FeedPage({
           x_link: (m.x_link ?? null) as string | null,
           tiktok_link: (m.tiktok_link ?? null) as string | null,
           youtube_link: (m.youtube_link ?? null) as string | null,
+          vip_tier: (m.vip_tier ?? null) as VipTier | null,
         });
       }
     } catch {
@@ -437,7 +457,7 @@ export default async function FeedPage({
         const { data: likerMembers } = await sb
           .from("cfm_members")
           .select(
-            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
           )
           .in("user_id", userIds);
 
@@ -454,6 +474,7 @@ export default async function FeedPage({
             x_link: (m as any).x_link ?? null,
             tiktok_link: (m as any).tiktok_link ?? null,
             youtube_link: (m as any).youtube_link ?? null,
+            vip_tier: (m as any).vip_tier ?? null,
           });
         }
       }
@@ -476,6 +497,7 @@ export default async function FeedPage({
           x_link: (info as any).x_link ?? null,
           tiktok_link: (info as any).tiktok_link ?? null,
           youtube_link: (info as any).youtube_link ?? null,
+          vip_tier: (info as any).vip_tier ?? null,
         },
       ]);
     }
@@ -519,6 +541,7 @@ export default async function FeedPage({
                       const photo = info?.photo_url ?? null;
                       const totalUsd =
                         typeof info?.lifetime_gifted_total_usd === "number" ? info.lifetime_gifted_total_usd : null;
+                      const vipTier = (info as any)?.vip_tier ?? null;
                       if (!uname) return null;
                       return (
                         <Link
@@ -533,7 +556,10 @@ export default async function FeedPage({
                             showDiamondShimmer
                           />
                           <span className="min-w-0 truncate text-base font-bold text-[color:var(--foreground)]">
-                            @{uname}
+                            <span className="inline-flex items-center gap-2">
+                              <span className="min-w-0 truncate">@{uname}</span>
+                              <VipBadge tier={vipTier} />
+                            </span>
                           </span>
                         </Link>
                       );

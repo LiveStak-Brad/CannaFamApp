@@ -26,7 +26,7 @@ export default async function LeaderboardPage() {
     ? await sb
         .from("cfm_public_members")
         .select(
-          "favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+          "favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
         )
         .in("favorited_username", usernames)
     : { data: [] };

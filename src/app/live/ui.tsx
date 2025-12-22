@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/toast";
 import { GiftModal } from "@/app/feed/ui";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
 import { parseLifetimeUsd } from "@/lib/utils";
 
 const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
@@ -86,7 +87,10 @@ export function LiveClient({
 
   const [nameByUserId, setNameByUserId] = useState<Record<string, string>>({});
   const [memberByUserId, setMemberByUserId] = useState<
-    Record<string, { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }>
+    Record<
+      string,
+      { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null; vip_tier?: VipTier | null }
+    >
   >({});
 
   const [hostPending, startHostTransition] = useTransition();
@@ -281,7 +285,7 @@ export function LiveClient({
         sb
           .from("cfm_public_member_ids")
           .select(
-            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
+            "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link",
           )
           .eq("user_id", uid)
           .maybeSingle(),
@@ -301,6 +305,7 @@ export function LiveClient({
             favorited_username: String(profileRow.favorited_username ?? nameByUserId[uid] ?? "Member"),
             photo_url: profileRow.photo_url ?? null,
             lifetime_gifted_total_usd: parseLifetimeUsd((profileRow as any)?.lifetime_gifted_total_usd),
+            vip_tier: (profileRow as any)?.vip_tier ?? null,
             bio: profileRow.bio ?? null,
             public_link: profileRow.public_link ?? null,
             instagram_link: profileRow.instagram_link ?? null,
@@ -1238,17 +1243,18 @@ export function LiveClient({
 
         const { data } = await sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier")
           .in("user_id", ids);
         if (cancelled) return;
 
         const patch: Record<string, string> = {};
-        const memberPatch: Record<string, { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }> = {};
+        const memberPatch: Record<string, { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null; vip_tier?: VipTier | null }> = {};
         for (const row of (data ?? []) as any[]) {
           const uid = String(row?.user_id ?? "").trim();
           const uname = String(row?.favorited_username ?? "").trim();
           const photoUrl = (row?.photo_url ?? null) as string | null;
           const lifetimeCoins = parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd);
+          const vipTier = (row as any)?.vip_tier ?? null;
 
           if (uid && uname) patch[uid] = uname;
           if (uid) {
@@ -1256,6 +1262,7 @@ export function LiveClient({
               photo_url: photoUrl,
               lifetime_gifted_total_usd: lifetimeCoins,
               favorited_username: uname || null,
+              vip_tier: vipTier,
             };
           }
         }
@@ -1293,14 +1300,14 @@ export function LiveClient({
 
         const { data } = await sb
           .from("cfm_public_member_ids")
-          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd")
+          .select("user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier")
           .in("user_id", ids)
           .limit(2000);
         if (cancelled) return;
 
         const memberPatch: Record<
           string,
-          { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null }
+          { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null; vip_tier?: VipTier | null }
         > = {};
         for (const row of (data ?? []) as any[]) {
           const uid = String(row?.user_id ?? "").trim();
@@ -1309,6 +1316,7 @@ export function LiveClient({
             photo_url: (row?.photo_url ?? null) as string | null,
             lifetime_gifted_total_usd: parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd),
             favorited_username: String(row?.favorited_username ?? "").trim() || null,
+            vip_tier: (row as any)?.vip_tier ?? null,
           };
         }
 
@@ -1901,7 +1909,9 @@ export function LiveClient({
                     const allTimeRank = allTimeRankByUserId[String(g.profile_id ?? "").trim()] ?? 0;
                     const m = medal(streamRank);
                     const label = allTimeRank === 1 ? "🥇" : allTimeRank === 2 ? "🥈" : allTimeRank === 3 ? "🥉" : m.label;
+                    const uid = String(g.profile_id ?? "").trim();
                     const name = String(g.display_name ?? "Member");
+                    const vipTier = (uid ? (memberByUserId[uid] as any)?.vip_tier : null) as VipTier | null;
                     return (
                       <button
                         key={String(g.profile_id)}
@@ -1912,7 +1922,12 @@ export function LiveClient({
                         <span className="text-sm">{label}</span>
                         {renderAvatar(String(g.profile_id ?? ""), name, g.avatar_url, 24)}
                         <div className="min-w-0">
-                          <div className="max-w-[100px] truncate text-[11px] font-semibold text-white">{name}</div>
+                          <div className="max-w-[140px] truncate text-[11px] font-semibold text-white">
+                            <span className="inline-flex items-center gap-2">
+                              <span className="truncate">{name}</span>
+                              <VipBadge tier={vipTier} />
+                            </span>
+                          </div>
                           <div className="text-[11px] font-bold text-green-400">
                             {fmtCoins(Math.round(Number(g.total_amount ?? 0) * 100))}
                           </div>
@@ -2136,6 +2151,7 @@ export function LiveClient({
                     const r = Number(g.rank ?? 0) || 0;
                     const name = String(g.display_name ?? "Member");
                     const amount = Number(g.total_amount ?? 0);
+                    const vipTier = (memberByUserId[uid] as any)?.vip_tier ?? null;
                     const medalEmoji = r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : null;
                     const bgClass = r === 1 ? "bg-yellow-500/20 border-yellow-500/40" : r === 2 ? "bg-gray-400/20 border-gray-400/40" : r === 3 ? "bg-orange-500/20 border-orange-500/40" : "bg-white/5 border-white/10";
                     return (
@@ -2157,8 +2173,13 @@ export function LiveClient({
                         </div>
                         {renderAvatar(uid, name, g.avatar_url, 40)}
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-bold text-white">{name}</div>
-                          <div className="text-lg font-bold text-green-400">${amount.toFixed(2)}</div>
+                          <div className="truncate text-sm font-bold text-white">
+                            <span className="inline-flex items-center gap-2">
+                              <span className="truncate">{name}</span>
+                              <VipBadge tier={vipTier} />
+                            </span>
+                          </div>
+                          <div className="text-lg font-bold text-green-400">{fmtCoins(Math.round(amount * 100))}</div>
                         </div>
                       </button>
                     );
