@@ -98,7 +98,7 @@ export function HostLiveClient({
   const [topTab, setTopTab] = useState<"today" | "weekly" | "all_time">("today");
 
   const top3 = topLive.slice(0, 3);
-  const modalRows = topTab === "today" ? topLive : topTab === "weekly" ? topWeekly : topAllTime;
+  const modalRows = topTab === "today" ? topToday : topTab === "weekly" ? topWeekly : topAllTime;
 
   const showMiniProfile = useCallback(
     async (userId: string) => {
