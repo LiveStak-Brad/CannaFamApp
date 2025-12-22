@@ -1,5 +1,13 @@
 export type VipTier = "bronze" | "silver" | "gold" | "diamond";
 
+/** Tier color mapping for text/name coloring */
+export const VIP_TIER_COLORS: Record<VipTier, string> = {
+  bronze: "#c67a3d",
+  silver: "#b8c1d1",
+  gold: "#e0b84c",
+  diamond: "#4cc9f0",
+};
+
 export function VipBadge({
   tier,
   className,

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toast";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
-import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { VipBadge, VIP_TIER_COLORS, type VipTier } from "@/components/ui/vip-badge";
 import { parseLifetimeUsd } from "@/lib/utils";
 import { MiniProfileModal } from "@/components/ui/mini-profile";
 
@@ -883,6 +883,15 @@ export function HostLiveClient({
           .animate-gift-flash {
             animation: gift-flash 5s ease-out forwards;
           }
+          @keyframes vip-entrance {
+            0% { opacity: 0; transform: scale(0.8) translateX(-10px); filter: brightness(1.5); }
+            30% { opacity: 1; transform: scale(1.1) translateX(0); filter: brightness(1.8); }
+            60% { transform: scale(1) translateX(0); filter: brightness(1.3); }
+            100% { transform: scale(1) translateX(0); filter: brightness(1); }
+          }
+          .animate-vip-entrance {
+            animation: vip-entrance 1.2s ease-out forwards;
+          }
         `}</style>
 
         {/* Status messages */}
@@ -918,19 +927,27 @@ export function HostLiveClient({
               const isJoin = kind === "system" && meta?.event === "join";
               const avatar = renderAvatar(senderId, senderName, null, 24);
               
-              // Green for joins (like mobile)
+              // Green for joins (like mobile) - VIP special entrance
               if (isJoin) {
+                const vipTier = (senderId ? (memberByUserId[senderId] as any)?.vip_tier : null) as VipTier | null;
+                const tierColor = vipTier ? VIP_TIER_COLORS[vipTier] : null;
+                const isVip = !!vipTier;
                 return (
                   <button
                     key={row.id}
                     type="button"
-                    className="flex w-full items-center gap-2 text-left text-[15px] text-green-400 font-semibold"
+                    className={`flex w-full items-center gap-2 text-left text-[15px] font-semibold ${isVip ? "animate-vip-entrance" : ""}`}
+                    style={tierColor ? { color: tierColor } : { color: "#4ade80" }}
                     onClick={() => {
                       if (senderId) showMiniProfile(senderId);
                     }}
                   >
                     <div className="shrink-0">{avatar}</div>
-                    <div className="min-w-0 truncate">{msg}</div>
+                    <div className="inline-flex items-center gap-1 min-w-0 truncate">
+                      {isVip ? <span className="mr-0.5">✨</span> : null}
+                      {msg}
+                      <VipBadge tier={vipTier} />
+                    </div>
                   </button>
                 );
               }
