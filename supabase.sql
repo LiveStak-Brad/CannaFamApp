@@ -2667,14 +2667,37 @@ set search_path = public
 as $$
 declare
   v_user_id uuid := auth.uid();
+  v_display_name text;
+  v_was_online boolean;
 begin
   if v_user_id is null then
     return json_build_object('error', 'Not authenticated');
   end if;
 
+  -- Check if user was actually online (left_at is null)
+  select left_at is null into v_was_online
+  from public.cfm_live_viewers
+  where live_id = p_live_id and user_id = v_user_id;
+
+  -- Get display name
+  select favorited_username into v_display_name
+  from public.cfm_public_member_ids
+  where user_id = v_user_id;
+
   update public.cfm_live_viewers
   set left_at = now()
   where live_id = p_live_id and user_id = v_user_id;
+
+  -- Insert leave message to chat if user was online
+  if coalesce(v_was_online, false) then
+    begin
+      insert into public.cfm_live_chat (live_id, sender_user_id, message, type, metadata)
+      values (p_live_id, v_user_id, coalesce(v_display_name, 'Viewer') || ' has left', 'system', '{"event": "leave"}'::jsonb);
+    exception
+      when others then
+        null;
+    end;
+  end if;
 
   return json_build_object('success', true);
 end;
