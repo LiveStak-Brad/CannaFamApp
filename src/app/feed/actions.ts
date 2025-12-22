@@ -567,13 +567,13 @@ export async function logFeedPostShare(postId: string) {
 export async function createPostGiftCheckoutSession(postId: string, amountCents: number) {
   void postId;
   void amountCents;
-  throw new Error("Legacy USD gifting has been removed. Use coin gifting via POST /api/gifts/send.");
+  throw new Error("Legacy gifting has been removed. Use coin gifting via POST /api/gifts/send.");
 }
 
 export async function createSiteGiftCheckoutSession(amountCents: number, returnPath: string) {
   void amountCents;
   void returnPath;
-  throw new Error("Legacy USD gifting has been removed. Use coin gifting via POST /api/gifts/send.");
+  throw new Error("Legacy gifting has been removed. Use coin gifting via POST /api/gifts/send.");
 }
 
 export async function updateFeedPost(formData: FormData) {

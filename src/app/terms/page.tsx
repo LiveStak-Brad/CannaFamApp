@@ -120,7 +120,7 @@ export default function TermsPage() {
             <p>
               The Service may offer virtual gifts or payment features. All purchases are final and 
               non-refundable unless required by law. Virtual items have no real-world value and cannot 
-              be exchanged for cash.
+              be exchanged for funds.
             </p>
             <p>
               We use third-party payment processors and are not responsible for their actions or policies.
@@ -131,8 +131,8 @@ export default function TermsPage() {
         <Card title="8. Points and Rewards">
           <div className="space-y-3 text-sm text-[color:var(--muted)]">
             <p>
-              Points earned through the Service are for engagement purposes only. Points have no monetary 
-              value and cannot be redeemed for cash. We reserve the right to modify, suspend, or terminate 
+              Points earned through the Service are for engagement purposes only. Points have no real-world 
+              value and cannot be redeemed for funds. We reserve the right to modify, suspend, or terminate 
               the points system at any time.
             </p>
           </div>

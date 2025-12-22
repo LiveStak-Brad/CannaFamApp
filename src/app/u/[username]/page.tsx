@@ -69,10 +69,10 @@ function fmtTime(iso: string | null) {
   }
 }
 
-function formatUSDFromCents(cents: number) {
-  const n = Number(cents ?? 0);
-  if (!Number.isFinite(n) || n <= 0) return "$0";
-  return `$${(n / 100).toFixed(2)}`;
+function formatCoins(coins: number) {
+  const n = Math.floor(Number(coins ?? 0));
+  if (!Number.isFinite(n) || n <= 0) return "0 coins";
+  return `${new Intl.NumberFormat("en-US").format(n)} coins`;
 }
 
 export default async function UserProfilePage({
@@ -260,7 +260,7 @@ export default async function UserProfilePage({
     awards = (awardRows ?? []) as unknown as AwardRow[];
   }
 
-  let supportEarnedCents = 0;
+  let supportEarnedCoins = 0;
   if (linkedUserId) {
     try {
       const { data: postRows } = await sb
@@ -269,30 +269,21 @@ export default async function UserProfilePage({
         .eq("author_user_id", linkedUserId)
         .limit(5000);
 
-      const postIds = Array.from(
-        new Set(
-          (postRows ?? [])
-            .map((p: any) => String(p?.id ?? "").trim())
-            .filter(Boolean),
-        ),
-      );
+      const postIds = (postRows ?? []).map((p: any) => p.id).filter(Boolean);
+      const { data: giftRows } = await sb
+        .from("cfm_post_gifts")
+        .select("amount_cents")
+        .in("post_id", postIds)
+        .eq("status", "paid")
+        .limit(2000);
 
-      if (postIds.length) {
-        const { data: giftRows } = await sb
-          .from("cfm_post_gifts")
-          .select("post_id,amount_cents,status")
-          .in("post_id", postIds)
-          .eq("status", "paid")
-          .limit(5000);
-
-        for (const g of (giftRows ?? []) as any[]) {
-          const cents = Number(g?.amount_cents ?? 0);
-          if (!Number.isFinite(cents) || cents <= 0) continue;
-          supportEarnedCents += cents;
-        }
+      for (const g of (giftRows ?? []) as any[]) {
+        const cents = Number(g?.amount_cents ?? 0);
+        if (!Number.isFinite(cents) || cents <= 0) continue;
+        supportEarnedCoins += cents;
       }
     } catch {
-      supportEarnedCents = 0;
+      supportEarnedCoins = 0;
     }
   }
 
@@ -403,7 +394,7 @@ export default async function UserProfilePage({
                     <span>🔎 {pointsRow.link_visit_points ?? 0}</span>
                   ) : null}
                   {typeof pointsRow.gift_dollar_points !== "undefined" ? (
-                    <span>💰 {pointsRow.gift_dollar_points ?? 0}</span>
+                    <span>💰 {Number(pointsRow.gift_dollar_points ?? 0).toLocaleString()} coins</span>
                   ) : null}
                   {typeof pointsRow.follow_points !== "undefined" ? (
                     <span>👥 {pointsRow.follow_points ?? 0}</span>
@@ -415,7 +406,7 @@ export default async function UserProfilePage({
             {linkedUserId ? (
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
                 <div className="text-xs text-[color:var(--muted)]">Support earned</div>
-                <div className="mt-1 text-2xl font-semibold">{formatUSDFromCents(supportEarnedCents)}</div>
+                <div className="mt-1 text-2xl font-semibold">{formatCoins(supportEarnedCoins)}</div>
                 <div className="mt-1 text-xs text-[color:var(--muted)]">
                   All gifts go to CannaStreams to support the platform.
                 </div>

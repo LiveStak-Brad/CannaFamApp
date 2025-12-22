@@ -66,9 +66,9 @@ export default async function FeedPage({
   const giftParam = typeof qs.gift === "string" ? qs.gift : null;
   const giftNotice =
     giftParam === "success"
-      ? "✅ Gift checkout completed. If payment succeeds, it will show up shortly."
+      ? "✅ Gift completed. It will show up shortly."
       : giftParam === "cancel"
-        ? "Gift checkout canceled."
+        ? "Gift canceled."
         : null;
 
   const { data: awards } = await sb

@@ -151,7 +151,7 @@ export default function PrivacyPage() {
             <p>We use the following third-party services:</p>
             <ul className="list-disc list-inside space-y-1 pl-2">
               <li>Supabase (authentication and database)</li>
-              <li>Stripe (payment processing)</li>
+              <li>Payment processor (payment processing)</li>
               <li>Agora (live streaming)</li>
             </ul>
           </div>

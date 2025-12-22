@@ -8,10 +8,10 @@ import { GIFTER_TIERS, getGifterLevel } from "@/lib/gifterLevel";
 
 export const runtime = "nodejs";
 
-function fmtUsd(n: number) {
-  const v = Number(n ?? 0);
-  const whole = Math.round(v);
-  return `$${String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+function fmtCoins(n: number) {
+  const v = Math.floor(Number(n ?? 0));
+  if (!Number.isFinite(v) || v <= 0) return "0 coins";
+  return `${new Intl.NumberFormat("en-US").format(v)} coins`;
 }
 
 export default async function GifterLevelsPage() {
@@ -20,13 +20,14 @@ export default async function GifterLevelsPage() {
 
   const { data: member } = await sb
     .from("cfm_members")
-    .select("favorited_username,photo_url,lifetime_gifted_total_usd")
+    .select("favorited_username,photo_url,lifetime_gifted_total_coins")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const username = String((member as any)?.favorited_username ?? user.user_metadata?.favorited_username ?? "Member").trim() || "Member";
   const photoUrl = ((member as any)?.photo_url ?? null) as string | null;
-  const totalUsd = typeof (member as any)?.lifetime_gifted_total_usd === "number" ? ((member as any).lifetime_gifted_total_usd as number) : 0;
+  const totalCoins = Math.floor(Number((member as any)?.lifetime_gifted_total_coins ?? 0));
+  const totalUsd = totalCoins / 100;
 
   const level = getGifterLevel(totalUsd);
 
@@ -58,7 +59,7 @@ export default async function GifterLevelsPage() {
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate">{username}</div>
                 <div className="mt-1 text-xs text-[color:var(--muted)]">Lifetime gifted</div>
-                <div className="text-lg font-semibold">{fmtUsd(totalUsd)}</div>
+                <div className="text-lg font-semibold">{fmtCoins(totalCoins)}</div>
               </div>
             </div>
 
@@ -72,8 +73,8 @@ export default async function GifterLevelsPage() {
                 <div className="mt-1 text-sm font-semibold">{level.displayLevel}</div>
               </div>
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
-                <div className="text-xs text-[color:var(--muted)]">$ to next level</div>
-                <div className="mt-1 text-sm font-semibold">{fmtUsd(level.nextLevelUsd)}</div>
+                <div className="text-xs text-[color:var(--muted)]">Coins to next level</div>
+                <div className="mt-1 text-sm font-semibold">{fmtCoins(Math.round(level.nextLevelUsd * 100))}</div>
               </div>
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
                 <div className="text-xs text-[color:var(--muted)]">Progress</div>
@@ -108,6 +109,8 @@ export default async function GifterLevelsPage() {
                   const isDiamond = t.key === "diamond";
                   const start = t.entryUsd;
                   const end = isDiamond ? null : next?.entryUsd ?? null;
+                  const startCoins = Math.round(start * 100);
+                  const endCoins = end === null ? null : Math.round(end * 100);
                   return (
                     <div key={t.key} className="grid grid-cols-12 items-center px-4 py-3 text-sm">
                       <div className="col-span-6 flex items-center gap-2 min-w-0">
@@ -120,7 +123,7 @@ export default async function GifterLevelsPage() {
                         {isDiamond ? "1+" : "1–50"}
                       </div>
                       <div className="col-span-4 text-[color:var(--muted)]">
-                        {isDiamond ? `${fmtUsd(start)}+` : `${fmtUsd(start)} – ${fmtUsd(end ?? 0)}`}
+                        {isDiamond ? `${fmtCoins(startCoins)}+` : `${fmtCoins(startCoins)} – ${fmtCoins(endCoins ?? 0)}`}
                       </div>
                     </div>
                   );
@@ -131,8 +134,38 @@ export default async function GifterLevelsPage() {
             <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-sm">
               <div className="font-semibold">Diamond (Elite)</div>
               <div className="mt-1 text-[color:var(--muted)]">
-                Diamond starts at {fmtUsd(1_000_000)} lifetime gifted. It has infinite levels with no cap.
+                Diamond starts at {fmtCoins(100_000_000)} lifetime gifted. It has infinite levels with no cap.
                 Each Diamond level costs more than the previous.
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="VIP tiers">
+          <div className="space-y-3">
+            <div className="text-sm text-[color:var(--muted)]">VIP resets monthly and is based on coins purchased in the month.</div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Bronze</span>
+              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Silver</span>
+              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Gold</span>
+              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Diamond</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
+                <div className="text-xs text-[color:var(--muted)]">VIP Bronze</div>
+                <div className="mt-1 font-semibold">25,000 coins / month</div>
+              </div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
+                <div className="text-xs text-[color:var(--muted)]">VIP Silver</div>
+                <div className="mt-1 font-semibold">50,000 coins / month</div>
+              </div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
+                <div className="text-xs text-[color:var(--muted)]">VIP Gold</div>
+                <div className="mt-1 font-semibold">100,000 coins / month</div>
+              </div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
+                <div className="text-xs text-[color:var(--muted)]">VIP Diamond</div>
+                <div className="mt-1 font-semibold">200,000 coins / month</div>
               </div>
             </div>
           </div>

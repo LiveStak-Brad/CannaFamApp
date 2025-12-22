@@ -27,6 +27,7 @@ type LiveState = {
 
 type LiveChatRow = {
   id: string;
+  created_at: string | null;
   live_id: string | null;
   sender_user_id: string | null;
   message: string | null;
@@ -35,7 +36,6 @@ type LiveChatRow = {
   is_deleted: boolean;
   deleted_by: string | null;
   deleted_at: string | null;
-  created_at: string;
 };
 
 type TopGifterRow = {
@@ -485,10 +485,10 @@ export function LiveClient({
     return { label: `#${r}`, cls: "border-white/10 bg-white/5" };
   };
 
-  const fmtAmount = (n: number | null) => {
-    const v = Number(n ?? 0);
-    if (!Number.isFinite(v) || v <= 0) return "$0";
-    return `$${v.toFixed(v < 10 ? 2 : 0)}`;
+  const fmtCoins = (coins: number | null) => {
+    const v = Math.floor(Number(coins ?? 0));
+    if (!Number.isFinite(v) || v <= 0) return "0 coins";
+    return `${new Intl.NumberFormat("en-US").format(v)} coins`;
   };
 
   async function openProfile(userId: string) {
@@ -516,7 +516,7 @@ export function LiveClient({
   const renderAvatar = (userId: string, name: string, url: string | null, size = 28) => {
     const uid = String(userId ?? "").trim();
     const cached = uid ? memberByUserId[uid] ?? null : null;
-    const totalUsd = parseLifetimeUsd((cached as any)?.lifetime_gifted_total_usd);
+    const lifetimeCoins = parseLifetimeUsd((cached as any)?.lifetime_gifted_total_usd);
 
     const resolvedUrl = url ?? cached?.photo_url ?? (DEFAULT_PROFILE_PHOTO_URL ? DEFAULT_PROFILE_PHOTO_URL : null);
     return (
@@ -524,7 +524,7 @@ export function LiveClient({
         size={size}
         imageUrl={resolvedUrl}
         name={name}
-        totalUsd={totalUsd}
+        totalUsd={lifetimeCoins}
         showDiamondShimmer
       />
     );
@@ -1248,13 +1248,13 @@ export function LiveClient({
           const uid = String(row?.user_id ?? "").trim();
           const uname = String(row?.favorited_username ?? "").trim();
           const photoUrl = (row?.photo_url ?? null) as string | null;
-          const lifetimeUsd = parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd);
+          const lifetimeCoins = parseLifetimeUsd((row as any)?.lifetime_gifted_total_usd);
 
           if (uid && uname) patch[uid] = uname;
           if (uid) {
             memberPatch[uid] = {
               photo_url: photoUrl,
-              lifetime_gifted_total_usd: lifetimeUsd,
+              lifetime_gifted_total_usd: lifetimeCoins,
               favorited_username: uname || null,
             };
           }
@@ -1913,7 +1913,9 @@ export function LiveClient({
                         {renderAvatar(String(g.profile_id ?? ""), name, g.avatar_url, 24)}
                         <div className="min-w-0">
                           <div className="max-w-[100px] truncate text-[11px] font-semibold text-white">{name}</div>
-                          <div className="text-[11px] font-bold text-green-400">{fmtAmount(g.total_amount ?? 0)}</div>
+                          <div className="text-[11px] font-bold text-green-400">
+                            {fmtCoins(Math.round(Number(g.total_amount ?? 0) * 100))}
+                          </div>
                         </div>
                       </button>
                     );
@@ -1953,7 +1955,7 @@ export function LiveClient({
 
                         const avatar = renderAvatar(senderId, senderName, null, 24);
                         
-                        // Green for joins, red for gifts/tips, default for others
+                        // Green for joins, highlight for gifts, default for others
                         if (isJoin) {
                           return (
                             <div key={r.id} className="flex items-center gap-2 text-[15px] text-green-400 font-semibold">
@@ -1971,7 +1973,7 @@ export function LiveClient({
                         
                         if (isGift) {
                           return (
-                            <div key={r.id} className="flex items-center gap-2 text-[15px] text-red-400 font-semibold">
+                            <div key={r.id} className="flex items-center gap-2 text-[15px] text-[color:var(--accent)] font-semibold">
                               <div className="shrink-0">{avatar}</div>
                               <button
                                 type="button"
@@ -2213,13 +2215,20 @@ export function LiveClient({
                             onClick={() => showMiniProfile(String(v.id))}
                           >
                             <div className="shrink-0">
-                              <GifterRingAvatar
-                                size={32}
-                                imageUrl={memberByUserId[String(v.id)]?.photo_url ?? null}
-                                name={v.name}
-                                totalUsd={parseLifetimeUsd((memberByUserId[String(v.id)] as any)?.lifetime_gifted_total_usd)}
-                                showDiamondShimmer
-                              />
+                              {(() => {
+                                const lifetimeCoins = parseLifetimeUsd(
+                                  (memberByUserId[String(v.id)] as any)?.lifetime_gifted_total_usd,
+                                );
+                                return (
+                                  <GifterRingAvatar
+                                    size={32}
+                                    imageUrl={memberByUserId[String(v.id)]?.photo_url ?? null}
+                                    name={v.name}
+                                    totalUsd={lifetimeCoins}
+                                    showDiamondShimmer
+                                  />
+                                );
+                              })()}
                             </div>
                             <div className="min-w-0 truncate text-sm text-white">{v.name}</div>
                           </button>
@@ -2330,7 +2339,7 @@ export function LiveClient({
         onStartCheckout={(amountCents) => {
           void amountCents;
           startGiftTransition(async () => {
-            toast("Gifts are sent using coins. Please purchase coins in the app to continue.", "info");
+            toast("Gifts are sent using coins. Buy coins in your Wallet to continue.", "info");
           });
         }}
       />

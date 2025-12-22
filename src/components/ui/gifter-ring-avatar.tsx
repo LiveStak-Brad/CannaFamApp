@@ -29,8 +29,8 @@ function InnerGifterRingAvatar({
   className,
 }: GifterRingAvatarProps) {
   const level = useMemo(() => {
-    const t = typeof totalUsd === "number" ? totalUsd : null;
-    if (t !== null) return getGifterLevel(t);
+    const lifetimeCoins = typeof totalUsd === "number" ? totalUsd : null;
+    if (lifetimeCoins !== null) return getGifterLevel(lifetimeCoins);
     return null;
   }, [totalUsd]);
 

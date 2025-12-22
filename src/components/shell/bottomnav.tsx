@@ -91,7 +91,7 @@ export function BottomNav({
 
         {typeof anonymousGiftTotalCents === "number" && anonymousGiftTotalCents > 0 ? (
           <div className="mt-2 text-center text-[11px] text-[color:var(--muted)]">
-            Anonymous gifted: ${(anonymousGiftTotalCents / 100).toFixed(2)}
+            Anonymous gifted: {Math.floor(Number(anonymousGiftTotalCents ?? 0)).toLocaleString()} coins
           </div>
         ) : null}
       </div>

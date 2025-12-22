@@ -189,25 +189,27 @@ export function MyDailyPostComposer({
               <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-2">
                 <div className="text-xs text-[color:var(--muted)] px-2 py-1">Tag a member</div>
                 <div className="max-h-48 overflow-auto">
-                  {mentionMatches.map((m) => (
-                    <button
-                      key={m.user_id}
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
-                      onClick={() => insertMention(m.favorited_username)}
-                    >
-                      <GifterRingAvatar
-                        size={24}
-                        imageUrl={m.photo_url}
-                        name={m.favorited_username}
-                        totalUsd={
-                          typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null
-                        }
-                        showDiamondShimmer
-                      />
-                      <div className="font-semibold">@{m.favorited_username}</div>
-                    </button>
-                  ))}
+                  {mentionMatches.map((m) => {
+                    const lifetimeCoins =
+                      typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null;
+                    return (
+                      <button
+                        key={m.user_id}
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
+                        onClick={() => insertMention(m.favorited_username)}
+                      >
+                        <GifterRingAvatar
+                          size={24}
+                          imageUrl={m.photo_url}
+                          name={m.favorited_username}
+                          totalUsd={lifetimeCoins}
+                          showDiamondShimmer
+                        />
+                        <div className="font-semibold">@{m.favorited_username}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -309,10 +311,10 @@ export type GiftTopGifter = {
   total_cents: number;
 };
 
-function formatUSD(cents: number) {
-  const n = Number(cents ?? 0);
-  if (!Number.isFinite(n) || n <= 0) return "$0";
-  return `$${(n / 100).toFixed(2)}`;
+function formatCoins(coins: number) {
+  const n = Math.floor(Number(coins ?? 0));
+  if (!Number.isFinite(n) || n <= 0) return "0 coins";
+  return `${new Intl.NumberFormat("en-US").format(n)} coins`;
 }
 
 export function GiftModal({
@@ -342,7 +344,7 @@ export function GiftModal({
 
   if (!open) return null;
 
-  const parsedCustom = Math.round(Number(custom) * 100);
+  const parsedCustom = Math.floor(Number(custom));
   const customValid =
     allowCustom &&
     Number.isFinite(parsedCustom) &&
@@ -381,7 +383,7 @@ export function GiftModal({
                   disabled={pending}
                   onClick={() => onStartCheckout(c)}
                 >
-                  {formatUSD(c)}
+                  {formatCoins(c)}
                 </Button>
               ))}
             </div>
@@ -389,10 +391,10 @@ export function GiftModal({
             {allowCustom ? (
               <div className="space-y-2">
                 <Input
-                  label="Custom amount (USD)"
+                  label="Custom coins"
                   value={custom}
                   onChange={(e) => setCustom(e.target.value)}
-                  placeholder={(minCents / 100).toFixed(2)}
+                  placeholder={String(minCents)}
                 />
                 <Button
                   type="button"
@@ -402,7 +404,7 @@ export function GiftModal({
                   Send Gift
                 </Button>
                 <div className="text-xs text-[color:var(--muted)]">
-                  Min {formatUSD(minCents)} • Max {formatUSD(maxCents)}
+                  Min {formatCoins(minCents)} • Max {formatCoins(maxCents)}
                 </div>
               </div>
             ) : null}
@@ -473,7 +475,7 @@ export function GiftButton({
           void amountCents;
           setMsg(null);
           startTransition(async () => {
-            setMsg("Gifts are sent using coins. Please purchase coins in the app to continue.");
+            setMsg("Gifts are sent using coins. Buy coins in your Wallet to continue.");
           });
         }}
       />
@@ -535,7 +537,7 @@ export function SiteGiftButton({
           void amountCents;
           setMsg(null);
           startTransition(async () => {
-            setMsg("Gifts are sent using coins. Please purchase coins in the app to continue.");
+            setMsg("Gifts are sent using coins. Buy coins in your Wallet to continue.");
           });
         }}
       />
@@ -552,22 +554,25 @@ export function GiftSummary({
 }) {
   const total = Number(totalCents ?? 0);
   const top = Array.isArray(topGifters) ? topGifters.slice(0, 3) : [];
-
   return (
     <div className="flex items-center justify-between gap-3">
-      <div className="text-xs text-[color:var(--muted)]">🎁 {formatUSD(total)} gifted</div>
+      <div className="text-xs text-[color:var(--muted)]"> {formatCoins(total)} gifted</div>
       {top.length ? (
         <div className="flex items-center gap-1">
-          {top.map((g) => (
-            <GifterRingAvatar
-              key={g.favorited_username}
-              size={28}
-              imageUrl={g.photo_url}
-              name={g.favorited_username}
-              totalUsd={typeof g.lifetime_gifted_total_usd === "number" ? g.lifetime_gifted_total_usd : null}
-              showDiamondShimmer
-            />
-          ))}
+          {top.map((g) => {
+            const lifetimeCoins =
+              typeof g.lifetime_gifted_total_usd === "number" ? g.lifetime_gifted_total_usd : null;
+            return (
+              <GifterRingAvatar
+                key={g.favorited_username}
+                size={28}
+                imageUrl={g.photo_url}
+                name={g.favorited_username}
+                totalUsd={lifetimeCoins}
+                showDiamondShimmer
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -600,19 +605,23 @@ function WhoLikedModal({
   );
 
   const selectedSubject: MiniProfileSubject | null = selected
-    ? {
-        user_id: selected.user_id,
-        favorited_username: selected.favorited_username,
-        photo_url: selected.photo_url,
-        lifetime_gifted_total_usd:
-          typeof selected.lifetime_gifted_total_usd === "number" ? selected.lifetime_gifted_total_usd : null,
-        bio: selected.bio ?? null,
-        public_link: selected.public_link ?? null,
-        instagram_link: selected.instagram_link ?? null,
-        x_link: selected.x_link ?? null,
-        tiktok_link: selected.tiktok_link ?? null,
-        youtube_link: selected.youtube_link ?? null,
-      }
+    ? (() => {
+        const lifetimeCoins =
+          typeof selected.lifetime_gifted_total_usd === "number" ? selected.lifetime_gifted_total_usd : null;
+
+        return {
+          user_id: selected.user_id,
+          favorited_username: selected.favorited_username,
+          photo_url: selected.photo_url,
+          lifetime_gifted_total_usd: lifetimeCoins,
+          bio: selected.bio ?? null,
+          public_link: selected.public_link ?? null,
+          instagram_link: selected.instagram_link ?? null,
+          x_link: selected.x_link ?? null,
+          tiktok_link: selected.tiktok_link ?? null,
+          youtube_link: selected.youtube_link ?? null,
+        };
+      })()
     : null;
 
   return (
@@ -629,25 +638,27 @@ function WhoLikedModal({
             <div className="text-xs text-[color:var(--muted)]">{count} like(s)</div>
             {likers.length ? (
               <div className="space-y-2">
-                {likers.map((p) => (
-                  <button
-                    key={p.user_id}
-                    type="button"
-                    className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
-                    onClick={() => setSelectedUserId(p.user_id)}
-                  >
-                    <GifterRingAvatar
-                      size={32}
-                      imageUrl={p.photo_url}
-                      name={p.favorited_username}
-                      totalUsd={
-                        typeof p.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null
-                      }
-                      showDiamondShimmer
-                    />
-                    <div className="text-sm font-semibold">{p.favorited_username}</div>
-                  </button>
-                ))}
+                {likers.map((p) => {
+                  const lifetimeCoins =
+                    typeof p.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null;
+                  return (
+                    <button
+                      key={p.user_id}
+                      type="button"
+                      className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                      onClick={() => setSelectedUserId(p.user_id)}
+                    >
+                      <GifterRingAvatar
+                        size={32}
+                        imageUrl={p.photo_url}
+                        name={p.favorited_username}
+                        totalUsd={lifetimeCoins}
+                        showDiamondShimmer
+                      />
+                      <div className="text-sm font-semibold">{p.favorited_username}</div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-sm text-[color:var(--muted)]">Not available.</div>
@@ -773,8 +784,7 @@ function CommentsModal({
       user_id: selectedUserId,
       favorited_username: p.favorited_username,
       photo_url: p.photo_url,
-      lifetime_gifted_total_usd:
-        typeof p.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null,
+      lifetime_gifted_total_usd: p.lifetime_gifted_total_usd,
       bio: p.bio ?? null,
       public_link: p.public_link ?? null,
       instagram_link: p.instagram_link ?? null,
@@ -997,25 +1007,27 @@ function CommentsModal({
                   <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--card)] p-2">
                     <div className="text-xs text-[color:var(--muted)] px-2 py-1">Tag a member</div>
                     <div className="max-h-48 overflow-auto">
-                      {mentionMatches.map((m) => (
-                        <button
-                          key={m.user_id}
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
-                          onClick={() => insertMention(m.favorited_username)}
-                        >
-                          <GifterRingAvatar
-                            size={24}
-                            imageUrl={m.photo_url}
-                            name={m.favorited_username}
-                            totalUsd={
-                              typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null
-                            }
-                            showDiamondShimmer
-                          />
-                          <div className="font-semibold">@{m.favorited_username}</div>
-                        </button>
-                      ))}
+                      {mentionMatches.map((m) => {
+                        const lifetimeCoins =
+                          typeof m.lifetime_gifted_total_usd === "number" ? m.lifetime_gifted_total_usd : null;
+                        return (
+                          <button
+                            key={m.user_id}
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-[rgba(255,255,255,0.04)]"
+                            onClick={() => insertMention(m.favorited_username)}
+                          >
+                            <GifterRingAvatar
+                              size={24}
+                              imageUrl={m.photo_url}
+                              name={m.favorited_username}
+                              totalUsd={lifetimeCoins}
+                              showDiamondShimmer
+                            />
+                            <div className="font-semibold">@{m.favorited_username}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1080,6 +1092,7 @@ function CommentsModal({
                         const name = p?.favorited_username || "Member";
                         const photo = p?.photo_url ?? null;
                         const bio = p?.bio ?? null;
+                        const lifetimeCoins = typeof p?.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null;
 
                         const upCount = upvoteCountByComment.get(c.id) ?? 0;
                         const mine = upvotedByMe.has(c.id);
@@ -1104,9 +1117,7 @@ function CommentsModal({
                                   size={32}
                                   imageUrl={photo}
                                   name={name}
-                                  totalUsd={
-                                    typeof p?.lifetime_gifted_total_usd === "number" ? p.lifetime_gifted_total_usd : null
-                                  }
+                                  totalUsd={lifetimeCoins}
                                   showDiamondShimmer
                                 />
                                 <div className="min-w-0">

@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   void req;
   return NextResponse.json(
     {
-      error: "Legacy USD gifting has been removed. Use coin gifting via POST /api/gifts/send.",
+      error: "Legacy gifting has been removed. Use coin gifting via POST /api/gifts/send.",
     },
     { status: 410 },
   );

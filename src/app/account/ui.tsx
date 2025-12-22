@@ -77,7 +77,7 @@ export function AccountPasswordForm() {
       </Button>
 
       <div className="text-xs text-[color:var(--muted)]">
-        Tip: accounts created with magic links can set a password here after logging in once.
+        Note: accounts created with magic links can set a password here after logging in once.
       </div>
     </form>
   );

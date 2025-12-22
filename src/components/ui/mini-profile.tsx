@@ -46,6 +46,12 @@ export type MiniProfileAwardRow = {
   created_at: string | null;
 };
 
+function formatCoins(coins: number) {
+  const n = Math.floor(Number(coins ?? 0));
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return new Intl.NumberFormat("en-US").format(n);
+}
+
 export function MiniProfileModal({
   open,
   subject,
@@ -231,7 +237,7 @@ export function MiniProfileModal({
                     <span>🔎 {lb.link_visit_points ?? 0}</span>
                   ) : null}
                   {typeof lb.gift_dollar_points !== "undefined" ? (
-                    <span>💰 {lb.gift_dollar_points ?? 0}</span>
+                    <span>💰 {formatCoins(lb.gift_dollar_points ?? 0)} coins</span>
                   ) : null}
                   {typeof lb.follow_points !== "undefined" ? (
                     <span>👥 {lb.follow_points ?? 0}</span>

@@ -136,7 +136,7 @@ export default function SafetyPage() {
               <li>Be cautious about sharing personal information</li>
               <li>Use a strong, unique password</li>
               <li>Enable two-factor authentication if available</li>
-              <li>Be skeptical of requests for money or personal information</li>
+              <li>Be skeptical of requests for payment or value, or personal information</li>
               <li>Trust your instincts - if something feels wrong, report it</li>
             </ul>
           </div>

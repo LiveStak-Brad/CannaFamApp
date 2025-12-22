@@ -56,10 +56,10 @@ export type GiftLeaderboardRow = {
   rank?: number;
 };
 
-function formatUSD(cents: number) {
-  const n = Number(cents ?? 0);
-  if (!Number.isFinite(n) || n <= 0) return "$0";
-  return `$${(n / 100).toFixed(2)}`;
+function formatCoins(coins: number) {
+  const n = Math.floor(Number(coins ?? 0));
+  if (!Number.isFinite(n) || n <= 0) return "0 coins";
+  return `${new Intl.NumberFormat("en-US").format(n)} coins`;
 }
 
 export function LeaderboardClient({
@@ -232,7 +232,7 @@ export function LeaderboardClient({
                       <div className="min-w-0 flex-1">
                         <span className="font-semibold">{m.favorited_username}</span>
                       </div>
-                      <div className="font-bold text-green-500">{formatUSD(m.total_cents)}</div>
+                      <div className="font-bold text-green-500">{formatCoins(m.total_cents)}</div>
                     </div>
                   </button>
                 );
@@ -300,7 +300,7 @@ export function LeaderboardClient({
                         <span>🔎 {m.link_visit_points ?? 0}</span>
                       ) : null}
                       {typeof m.gift_dollar_points !== "undefined" ? (
-                        <span>💰 {m.gift_dollar_points ?? 0}</span>
+                        <span>💰 {formatCoins(m.gift_dollar_points ?? 0)}</span>
                       ) : null}
                       {typeof m.follow_points !== "undefined" ? (
                         <span>👥 {m.follow_points ?? 0}</span>
