@@ -211,11 +211,9 @@ export function AdminActions({
         <button type="button" className={tabClass("awards")} onClick={() => setActiveTab("awards")}>
           🏆 Awards
         </button>
-        {isOwner && (
-          <button type="button" className={tabClass("roles")} onClick={() => setActiveTab("roles")}>
-            👑 Roles
-          </button>
-        )}
+        <button type="button" className={tabClass("roles")} onClick={() => setActiveTab("roles")}>
+          👑 Roles
+        </button>
         <button type="button" className={tabClass("members")} onClick={() => setActiveTab("members")}>
           👥 Members
         </button>
@@ -305,8 +303,8 @@ export function AdminActions({
       </Card>
       )}
 
-      {activeTab === "roles" && isOwner && (
-        <Card title="Admin & Moderator Roles">
+      {activeTab === "roles" && (
+        <Card title={isOwner ? "Admin & Moderator Roles" : "Moderator Roles"}>
           <div className="space-y-3">
             <div className="space-y-2">
               <div className="text-xs font-semibold text-[color:var(--muted)]">Member</div>
@@ -325,26 +323,28 @@ export function AdminActions({
             </div>
 
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                disabled={pending || !adminUserId}
-                onClick={() => {
-                  setMsg(null);
-                  startTransition(async () => {
-                    try {
-                      const res = await addAdmin(adminUserId, "admin");
-                      setMsg({ tone: "success", text: res.message });
-                    } catch (e) {
-                      setMsg({
-                        tone: "error",
-                        text: e instanceof Error ? e.message : "Promote failed",
-                      });
-                    }
-                  });
-                }}
-              >
-                Make Admin
-              </Button>
+              {isOwner && (
+                <Button
+                  type="button"
+                  disabled={pending || !adminUserId}
+                  onClick={() => {
+                    setMsg(null);
+                    startTransition(async () => {
+                      try {
+                        const res = await addAdmin(adminUserId, "admin");
+                        setMsg({ tone: "success", text: res.message });
+                      } catch (e) {
+                        setMsg({
+                          tone: "error",
+                          text: e instanceof Error ? e.message : "Promote failed",
+                        });
+                      }
+                    });
+                  }}
+                >
+                  Make Admin
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="secondary"
@@ -386,7 +386,8 @@ export function AdminActions({
                           <span className="text-sm font-semibold truncate">{name}</span>
                           <span className="text-xs text-[color:var(--muted)] capitalize">{role}</span>
                         </div>
-                        {role === "owner" ? null : (
+                        {/* Owner can remove anyone except owner, Admin can only remove moderators */}
+                        {role === "owner" ? null : (role === "admin" && !isOwner) ? null : (
                           <Button
                             type="button"
                             variant="secondary"

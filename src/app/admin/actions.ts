@@ -157,7 +157,12 @@ export async function linkMemberByEmail(memberId: string, email: string) {
 }
 
 export async function addAdmin(userId: string, role: "admin" | "moderator" = "admin") {
-  await requireOwner();
+  // Owner can assign any role, Admin can only assign moderator
+  if (role === "admin") {
+    await requireOwner();
+  } else {
+    await requireAdmin();
+  }
 
   const uid = String(userId ?? "").trim();
   if (!uid) throw new Error("userId is required.");
@@ -181,21 +186,30 @@ export async function addAdmin(userId: string, role: "admin" | "moderator" = "ad
 }
 
 export async function removeAdmin(userId: string) {
-  await requireOwner();
+  // Check caller's role first
+  await requireAdmin();
 
   const uid = String(userId ?? "").trim();
   if (!uid) throw new Error("userId is required.");
 
   const sb = await supabaseServer();
 
+  // Get the target user's role
   const { data: existing, error: existingErr } = await sb
     .from("cfm_admins")
     .select("role")
     .eq("user_id", uid)
     .maybeSingle();
   if (existingErr) throw new Error(existingErr.message);
-  if (String((existing as any)?.role ?? "") === "owner") {
+  
+  const targetRole = String((existing as any)?.role ?? "");
+  if (targetRole === "owner") {
     throw new Error("Cannot remove the owner.");
+  }
+  
+  // Admins can only remove moderators, not other admins
+  if (targetRole === "admin") {
+    await requireOwner();
   }
 
   const { error } = await sb.from("cfm_admins").delete().eq("user_id", uid);
@@ -207,7 +221,7 @@ export async function removeAdmin(userId: string) {
   revalidatePath("/feed");
   revalidatePath("/leaderboard");
   revalidatePath("/members");
-  return { ok: true as const, message: "Admin removed." };
+  return { ok: true as const, message: "Role removed." };
 }
 
 async function findAuthUserIdByEmail(sb: ReturnType<typeof supabaseAdmin>, email: string) {
