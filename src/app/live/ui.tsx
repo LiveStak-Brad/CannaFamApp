@@ -1649,7 +1649,7 @@ export function LiveClient({
     });
   }
 
-  async function send(type: "chat" | "emote", message: string) {
+  async function send(type: "chat" | "emote" | "tip", message: string) {
     const msg = String(message ?? "").trim();
     if (!msg) return;
 
@@ -2390,12 +2390,37 @@ export function LiveClient({
         allowCustom={giftSettings.allowCustom}
         minCents={giftSettings.minCents}
         maxCents={giftSettings.maxCents}
-        notice={!isLoggedIn ? "You can gift anonymously. Log in to appear on the gifter leaderboard." : null}
+        notice={!isLoggedIn ? "Log in to gift coins during live." : null}
         onClose={() => setGiftModalOpen(false)}
-        onStartCheckout={(amountCents) => {
-          void amountCents;
+        onStartCheckout={(coins) => {
+          if (!isLoggedIn) {
+            toast("Log in to gift coins.", "error");
+            return;
+          }
           startGiftTransition(async () => {
-            toast("Gifts are sent using coins. Buy coins in your Wallet to continue.", "info");
+            try {
+              const idempotencyKey = `live_gift_${myUserId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+              const res = await fetch("/api/gifts/send", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  stream_id: live.id,
+                  gift_type: "coins",
+                  coins,
+                  idempotency_key: idempotencyKey,
+                }),
+              });
+              const json = (await res.json().catch(() => null)) as any;
+              if (!res.ok) {
+                throw new Error(String(json?.error ?? "Gift failed"));
+              }
+              toast(`Sent ${coins.toLocaleString()} coins!`, "success");
+              setGiftModalOpen(false);
+              // Broadcast gift to chat via realtime
+              send("tip", `gifted ${coins.toLocaleString()} coins`);
+            } catch (e) {
+              toast(e instanceof Error ? e.message : "Gift failed", "error");
+            }
           });
         }}
       />
