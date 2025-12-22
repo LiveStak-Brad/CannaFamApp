@@ -4,178 +4,123 @@ import { Container } from "@/components/shell/container";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getAuthedUserOrNull } from "@/lib/auth";
-import { supabaseServer } from "@/lib/supabase/server";
+
+const VIP_TIERS = [
+  { name: "Bronze", bg: "rgba(198,122,61,0.25)", border: "rgba(198,122,61,0.7)" },
+  { name: "Silver", bg: "rgba(184,193,209,0.22)", border: "rgba(184,193,209,0.7)" },
+  { name: "Gold", bg: "rgba(224,184,76,0.25)", border: "rgba(224,184,76,0.75)" },
+  { name: "Diamond", bg: "rgba(45,212,191,0.22)", border: "rgba(76,201,240,0.7)" },
+];
+
+// Exact gifter ring tiers from @cannafam/shared GIFTER_TIERS
+const GIFTER_RINGS = [
+  { color: "#98A2B3", name: "Starter", letter: "S" },
+  { color: "#C67A3D", name: "Supporter", letter: "B" },
+  { color: "#B8C1D1", name: "Contributor", letter: "S" },
+  { color: "#E0B84C", name: "Elite", letter: "G" },
+  { color: "#2BB673", name: "Patron", letter: "E" },
+  { color: "#2D6EEA", name: "Power", letter: "P" },
+  { color: "#E0445A", name: "VIP", letter: "V" },
+  { color: "#9B5DE5", name: "Legend", letter: "L" },
+  { color: "#0B1220", name: "Mythic", letter: "M" },
+  { color: "#4CC9F0", name: "Diamond", letter: "D" },
+];
 
 export const runtime = "nodejs";
 
 export default async function Home() {
   const user = await getAuthedUserOrNull();
-  const sb = await supabaseServer();
-
-  const { data: member } = user
-    ? await sb.from("cfm_members").select("id").eq("user_id", user.id).maybeSingle()
-    : { data: null };
 
   return (
     <Container>
-      <div className="space-y-5">
-        <div className="mx-auto w-[200px]">
+      <div className="space-y-2">
+        {/* 1️⃣ Hero Section */}
+        <div className="flex flex-col items-center gap-0.5 pt-1">
           <Image
             src="/applogo.png"
             alt="CannaFam"
-            width={200}
-            height={200}
+            width={56}
+            height={56}
             className="object-contain"
             priority
           />
-        </div>
-
-        {/* Welcome Header */}
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome to CannaFam</h1>
-          <p className="text-sm text-[color:var(--muted)]">
-            The official supporters community for CannaStreams
+          <h1 className="text-base font-semibold tracking-tight">Welcome to CannaFam</h1>
+          <p className="text-[11px] font-medium text-[color:var(--foreground)] text-center leading-snug">
+            A community-driven app where supporters back CannaStreams, earn recognition, and influence weekly outcomes — beyond algorithms.
           </p>
         </div>
 
-        {/* Primary Bio */}
-        <Card>
-          <div className="space-y-3 text-[15px] font-medium text-[color:var(--foreground)] leading-relaxed">
-            <p>
-              CannaFam is the official community built around CannaStreams — a creator-led live streaming brand focused on authenticity, consistency, and long-term connection.
-            </p>
-            <p>
-              This app was created by an independent streamer, music artist, and father who built his audience from the ground up — without agencies, networks, or shortcuts. Everything here is powered by real people supporting real work, in real time.
-            </p>
-            <p>
-              CannaFam exists so supporters always have a direct place to connect, participate, and be recognized — beyond algorithms or third-party platforms.
-            </p>
-          </div>
-        </Card>
-
-        {/* About the Creator */}
-        <Card title="About the Creator">
-          <div className="space-y-3 text-[15px] font-medium text-[color:var(--foreground)]">
-            <div className="flex justify-center">
-              <div className="relative w-[140px] h-[140px] overflow-hidden rounded-full">
-                <Image
-                  src="/marketing.png"
-                  alt="Creator"
-                  fill
-                  sizes="140px"
-                  className="object-cover"
-                />
-              </div>
-            </div>
-            <p className="leading-relaxed">
-              CannaStreams is more than a channel — it's a long-term creative project. Behind it is:
-            </p>
-            <ul className="space-y-2">
-              <li>• A full-time live streamer across multiple platforms</li>
-              <li>• An independent music artist and performer</li>
-              <li>• An app creator building community-owned tools</li>
-              <li>• A father balancing creativity, business, and family</li>
-            </ul>
-            <p className="leading-relaxed">
-              CannaFam brings all of that together in one place — where support actually matters and participation is rewarded.
-            </p>
-          </div>
-        </Card>
-
-        {/* Why CannaFam Exists */}
-        <Card title="Why CannaFam Exists">
-          <div className="space-y-3 text-[15px] font-medium text-[color:var(--foreground)]">
-            <p className="leading-relaxed">
-              Social platforms change. Algorithms shift. Monetization rules evolve.
-            </p>
-            <p className="leading-relaxed">
-              CannaFam was built to give the community a stable home — where support goes directly toward:
-            </p>
-            <ul className="space-y-2">
-              <li>• Live streaming production</li>
-              <li>• Music releases and creative projects</li>
-              <li>• App development and new features</li>
-              <li>• Community rewards, VIP status, and weekly recognition</li>
-            </ul>
-            <p className="leading-relaxed">
-              This is a supporters-first platform designed for sustainability, not short-term hype.
-            </p>
-          </div>
-        </Card>
-
-        {/* How It Works */}
+        {/* 2️⃣ How It Works - 4-icon strip */}
         <Card title="How It Works">
-          <div className="space-y-3 text-[15px] font-medium text-[color:var(--foreground)]">
-            <ul className="space-y-2">
-              <li>• Earn coins through in-app purchases or community rewards</li>
-              <li>• Send coin gifts to support live streams and posts</li>
-              <li>• Earn monthly VIP status based on your support</li>
-              <li>• Compete on leaderboards and win weekly awards</li>
-              <li>• Participate in daily activities to earn points</li>
-            </ul>
-            <p className="leading-relaxed">
-              Everything is transparent, trackable, and designed to reward positive engagement.
-            </p>
+          <div className="grid grid-cols-4 gap-1">
+            <div className="flex flex-col items-center gap-0">
+              <span className="text-base">🪙</span>
+              <span className="text-[10px] font-bold text-[color:var(--foreground)]">Coins</span>
+              <span className="text-[8px] text-[color:var(--muted)] text-center leading-tight">Send gifts</span>
+            </div>
+            <div className="flex flex-col items-center gap-0">
+              <span className="text-base">🎁</span>
+              <span className="text-[10px] font-bold text-[color:var(--foreground)]">Support</span>
+              <span className="text-[8px] text-[color:var(--muted)] text-center leading-tight">Back the stream</span>
+            </div>
+            <div className="flex flex-col items-center gap-0">
+              <span className="text-base">⭐</span>
+              <span className="text-[10px] font-bold text-[color:var(--foreground)]">Points</span>
+              <span className="text-[8px] text-[color:var(--muted)] text-center leading-tight">Daily Activities</span>
+            </div>
+            <div className="flex flex-col items-center gap-0">
+              <span className="text-base">👑</span>
+              <span className="text-[10px] font-bold text-[color:var(--foreground)]">VIP</span>
+              <span className="text-[8px] text-[color:var(--muted)] text-center leading-tight">Monthly status</span>
+            </div>
           </div>
         </Card>
 
-        {/* What You Can Do */}
-        <Card title="What You Can Do">
-          <ul className="space-y-2 text-[15px] font-medium text-[color:var(--foreground)]">
-            <li>• Join and support live streams</li>
-            <li>• Track your progress and VIP status</li>
-            <li>• Participate in daily activities</li>
-            <li>• Earn recognition through leaderboards and awards</li>
-            <li>• Be part of a creator-owned community</li>
-          </ul>
+        {/* 3️⃣ VIP Status (Monthly) - Centered pills */}
+        <Card title="VIP Status (Monthly)">
+          <div className="flex flex-wrap justify-center gap-4">
+            {VIP_TIERS.map((tier) => (
+              <div key={tier.name} className="flex flex-col items-center">
+                <span
+                  className="px-2.5 py-1 rounded-full text-[10px] font-bold text-white"
+                  style={{ backgroundColor: tier.bg, border: `1px solid ${tier.border}` }}
+                >
+                  VIP
+                </span>
+                <span className="text-[10px] font-semibold text-[color:var(--foreground)] mt-1">{tier.name}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-[color:var(--muted)] italic text-center">Resets monthly based on coins purchased</p>
         </Card>
 
-        {/* Primary CTAs */}
-        <div className="grid grid-cols-1 gap-3">
-          {!user ? (
-            <>
-              <Button as="link" href="/signup" variant="primary">
-                Create Account
-              </Button>
-              <Button as="link" href="/login" variant="secondary">
-                Log In
-              </Button>
-            </>
-          ) : null}
-          <Button as="link" href="/members" variant="secondary">
-            View Member Roster
-          </Button>
-          <Button as="link" href="/leaderboard" variant="secondary">
-            View Leaderboards
-          </Button>
-        </div>
+        {/* 4️⃣ Gifter Levels (Lifetime) - Centered rings */}
+        <Card title="Gifter Levels (Lifetime)">
+          <div className="grid grid-cols-5 gap-x-2 gap-y-2 w-full">
+            {GIFTER_RINGS.map((g, idx) => (
+              <div key={idx} className="flex flex-col items-center">
+                <div
+                  className="w-6 h-6 rounded-full border-2 bg-[color:var(--background)]"
+                  style={{ borderColor: g.color }}
+                />
+                <span className="text-[9px] font-semibold text-[color:var(--foreground)] mt-1 text-center">{g.name}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-[color:var(--muted)] italic text-center">Based on lifetime coins gifted. Never resets.</p>
+        </Card>
 
-        {/* Footer Links */}
-        <div className="text-xs text-[color:var(--muted)] text-center">
-          <Link href="/members" className="underline underline-offset-4">
-            Members
-          </Link>
-          <span className="px-2">|</span>
-          <Link href="/leaderboard" className="underline underline-offset-4">
-            Leaderboards
-          </Link>
-          <span className="px-2">|</span>
-          <Link href="/daily-activities" className="underline underline-offset-4">
-            Daily Activities
-          </Link>
-        </div>
-
-        {/* Instagram Footer */}
-        <div className="text-center">
-          <a
-            href="https://instagram.com/cannafamapp"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-[color:var(--muted)] underline underline-offset-4"
-          >
-            📸 Instagram: @cannafamapp
-          </a>
-        </div>
+        {/* 5️⃣ Primary Actions - Auth only */}
+        {!user ? (
+          <div className="grid grid-cols-1 gap-2">
+            <Button as="link" href="/signup" variant="primary">
+              Create Account
+            </Button>
+            <Button as="link" href="/login" variant="secondary">
+              Log In
+            </Button>
+          </div>
+        ) : null}
       </div>
     </Container>
   );
