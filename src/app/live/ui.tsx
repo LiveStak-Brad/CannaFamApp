@@ -2008,10 +2008,11 @@ export function LiveClient({
                             <div className="min-w-0">
                               <button
                                 type="button"
-                                className="text-white/70 font-semibold hover:underline"
+                                className="inline-flex items-center gap-1 text-white/70 font-semibold hover:underline"
                                 onClick={() => senderId && showMiniProfile(senderId)}
                               >
-                                {badge ? <span className="mr-1">{badge}</span> : null}{senderName}:
+                                {badge ? <span className="mr-1">{badge}</span> : null}{senderName}
+                                <VipBadge tier={(senderId ? (memberByUserId[senderId] as any)?.vip_tier : null) ?? null} />:
                               </button>{" "}
                               {msg}
                             </div>

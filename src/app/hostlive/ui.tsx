@@ -964,7 +964,10 @@ export function HostLiveClient({
                 >
                   <div className="shrink-0">{avatar}</div>
                   <div className="min-w-0">
-                    <span className="text-white/70 font-semibold">{senderName}:</span>{" "}
+                    <span className="inline-flex items-center gap-1 text-white/70 font-semibold">
+                      {senderName}
+                      <VipBadge tier={(senderId ? (memberByUserId[senderId] as any)?.vip_tier : null) ?? null} />:
+                    </span>{" "}
                     {msg}
                   </div>
                 </button>

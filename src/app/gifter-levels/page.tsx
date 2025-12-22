@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { VipBadge } from "@/components/ui/vip-badge";
 import { GIFTER_TIERS, getGifterLevel } from "@/lib/gifterLevel";
 
 export const runtime = "nodejs";
@@ -145,26 +146,26 @@ export default async function GifterLevelsPage() {
           <div className="space-y-3">
             <div className="text-sm text-[color:var(--muted)]">VIP resets monthly and is based on coins spent in the month.</div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Bronze</span>
-              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Silver</span>
-              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Gold</span>
-              <span className="rounded-full border border-[color:var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs font-semibold">VIP Diamond</span>
+              <VipBadge tier="bronze" />
+              <VipBadge tier="silver" />
+              <VipBadge tier="gold" />
+              <VipBadge tier="diamond" />
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
-                <div className="text-xs text-[color:var(--muted)]">VIP Bronze</div>
+                <div className="flex items-center gap-2"><VipBadge tier="bronze" /></div>
                 <div className="mt-1 font-semibold">25,000 coins / month</div>
               </div>
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
-                <div className="text-xs text-[color:var(--muted)]">VIP Silver</div>
+                <div className="flex items-center gap-2"><VipBadge tier="silver" /></div>
                 <div className="mt-1 font-semibold">50,000 coins / month</div>
               </div>
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
-                <div className="text-xs text-[color:var(--muted)]">VIP Gold</div>
+                <div className="flex items-center gap-2"><VipBadge tier="gold" /></div>
                 <div className="mt-1 font-semibold">100,000 coins / month</div>
               </div>
               <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
-                <div className="text-xs text-[color:var(--muted)]">VIP Diamond</div>
+                <div className="flex items-center gap-2"><VipBadge tier="diamond" /></div>
                 <div className="mt-1 font-semibold">200,000 coins / month</div>
               </div>
             </div>

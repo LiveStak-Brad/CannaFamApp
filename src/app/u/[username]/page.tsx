@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { AdminPostComposer } from "@/components/ui/admin-post-composer";
 import { DailyPostComposer, type DailyPostDraft, type MentionCandidate } from "@/components/ui/daily-post-composer";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
 import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
@@ -17,6 +18,7 @@ type PublicProfile = {
   favorited_username: string;
   photo_url: string | null;
   lifetime_gifted_total_usd?: number | null;
+  vip_tier?: VipTier | null;
   bio: string | null;
   public_link: string | null;
   instagram_link: string | null;
@@ -110,7 +112,7 @@ export default async function UserProfilePage({
   }
 
   const profileFields =
-    "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link";
+    "user_id,favorited_username,photo_url,lifetime_gifted_total_usd,vip_tier,bio,public_link,instagram_link,x_link,tiktok_link,youtube_link";
 
   let profile: PublicProfile | null = null;
   let lookupErrMsg = "";
@@ -315,7 +317,10 @@ export default async function UserProfilePage({
     <Container>
       <div className="space-y-4">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">👤 {profile.favorited_username}</h1>
+          <h1 className="text-xl font-semibold inline-flex items-center gap-2">
+            <span>👤 {profile.favorited_username}</span>
+            <VipBadge tier={(profile as any)?.vip_tier ?? null} />
+          </h1>
           <p className="text-sm text-[color:var(--muted)]">Member profile</p>
         </div>
 

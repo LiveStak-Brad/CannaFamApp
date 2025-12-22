@@ -28,7 +28,7 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
-import type { VipTier } from "@/components/ui/vip-badge";
+import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
 
 export type FeedPost = {
   id: string;
@@ -1129,6 +1129,7 @@ function CommentsModal({
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <div className="text-sm font-semibold truncate">{name}</div>
+                                    <VipBadge tier={(p as any)?.vip_tier ?? null} />
                                   </div>
                                   {bio ? (
                                     <div className="mt-0.5 text-xs text-[color:var(--muted)] truncate">{bio}</div>
