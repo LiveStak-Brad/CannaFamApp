@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addFeedComment,
-  createPostGiftCheckoutSession,
-  createSiteGiftCheckoutSession,
   deleteFeedComment,
   deleteMyDailyPost,
   deleteFeedPost,
@@ -472,15 +470,10 @@ export function GiftButton({
         onClose={() => setOpen(false)}
         onStartCheckout={(amountCents) => {
           if (!canGift) return;
+          void amountCents;
           setMsg(null);
           startTransition(async () => {
-            try {
-              const res = await createPostGiftCheckoutSession(postId, amountCents);
-              if (!res?.url) throw new Error("Checkout failed.");
-              window.location.href = res.url;
-            } catch (e) {
-              setMsg(e instanceof Error ? e.message : "Checkout failed");
-            }
+            setMsg("Gifts are sent using coins. Please purchase coins in the app to continue.");
           });
         }}
       />
@@ -539,15 +532,10 @@ export function SiteGiftButton({
         onClose={() => setOpen(false)}
         onStartCheckout={(amountCents) => {
           if (!canGift) return;
+          void amountCents;
           setMsg(null);
           startTransition(async () => {
-            try {
-              const res = await createSiteGiftCheckoutSession(amountCents, returnPath);
-              if (!res?.url) throw new Error("Checkout failed.");
-              window.location.href = res.url;
-            } catch (e) {
-              setMsg(e instanceof Error ? e.message : "Checkout failed");
-            }
+            setMsg("Gifts are sent using coins. Please purchase coins in the app to continue.");
           });
         }}
       />

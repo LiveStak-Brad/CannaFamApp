@@ -6,7 +6,6 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { GiftModal } from "@/app/feed/ui";
-import { createSiteGiftCheckoutSession } from "@/app/feed/actions";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { parseLifetimeUsd } from "@/lib/utils";
@@ -2329,14 +2328,9 @@ export function LiveClient({
         notice={!isLoggedIn ? "You can gift anonymously. Log in to appear on the gifter leaderboard." : null}
         onClose={() => setGiftModalOpen(false)}
         onStartCheckout={(amountCents) => {
+          void amountCents;
           startGiftTransition(async () => {
-            try {
-              const res = await createSiteGiftCheckoutSession(amountCents, "/live");
-              if (!res?.url) throw new Error("Checkout failed.");
-              window.location.href = res.url;
-            } catch (e) {
-              toast(e instanceof Error ? e.message : "Checkout failed", "error");
-            }
+            toast("Gifts are sent using coins. Please purchase coins in the app to continue.", "info");
           });
         }}
       />
