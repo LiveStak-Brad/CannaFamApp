@@ -1,6 +1,7 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { requireOwner } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { runVipRollup } from "./actions";
@@ -27,9 +28,17 @@ type TxRow = {
   created_at: string;
 };
 
-export default async function MonetizationTestPage() {
+export default async function MonetizationTestPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requireOwner();
   const sb = await supabaseServer();
+
+  const sp = ((await searchParams) ?? {}) as Record<string, string | string[] | undefined>;
+  const vipStatus = String(sp.vip ?? "").trim();
+  const vipMsg = String(sp.msg ?? "").trim();
 
   const { data: wallet } = await sb
     .from("coin_wallets")
@@ -86,6 +95,10 @@ export default async function MonetizationTestPage() {
   return (
     <Container>
       <div className="space-y-4">
+        {vipStatus === "ok" ? <Notice tone="success">VIP rollup completed.</Notice> : null}
+        {vipStatus === "error" ? (
+          <Notice tone="error">VIP rollup failed. {vipMsg ? `(${vipMsg})` : null}</Notice>
+        ) : null}
         <div className="space-y-1">
           <h1 className="text-xl font-semibold">Monetization Test</h1>
           <div className="text-sm text-[color:var(--muted)]">Owner-only verification panel.</div>
