@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 
@@ -39,6 +39,10 @@ export function MonetizationTestClient({ webPackages, defaultStreamId }: Props) 
   const firstSku = webPackages[0]?.sku ?? "";
   const [sku, setSku] = useState(firstSku);
 
+  useEffect(() => {
+    if (!sku && firstSku) setSku(firstSku);
+  }, [firstSku, sku]);
+
   const [giftCoins, setGiftCoins] = useState("100");
   const [giftType, setGiftType] = useState("test");
   const [streamId, setStreamId] = useState(defaultStreamId ?? "");
@@ -55,8 +59,10 @@ export function MonetizationTestClient({ webPackages, defaultStreamId }: Props) 
           <select
             value={sku}
             onChange={(e) => setSku(e.target.value)}
+            disabled={pending || webPackages.length === 0}
             className="w-full rounded-xl bg-[color:var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
           >
+            {webPackages.length === 0 ? <option value="">No web coin packages configured</option> : null}
             {webPackages.map((p) => (
               <option key={p.sku} value={p.sku}>
                 {p.sku} • {formatUsd(p.price_usd_cents)} • {p.coins.toLocaleString()} coins
@@ -71,7 +77,7 @@ export function MonetizationTestClient({ webPackages, defaultStreamId }: Props) 
         </div>
         <Button
           type="button"
-          disabled={pending || !sku}
+          disabled={pending || !sku || webPackages.length === 0}
           onClick={() => {
             setMsg(null);
             startTransition(async () => {
