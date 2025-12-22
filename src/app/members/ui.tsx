@@ -9,6 +9,7 @@ import {
   type MiniProfileSubject,
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 
 type PublicMember = {
   user_id: string;
@@ -50,11 +51,13 @@ export function MembersClient({
   awards,
   leaderboard,
   myUserId,
+  roleByUserId,
 }: {
   members: PublicMember[];
   awards: AwardRow[];
   leaderboard: LeaderboardRow[];
   myUserId?: string | null;
+  roleByUserId?: Record<string, RoleType>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -102,7 +105,10 @@ export function MembersClient({
                     showDiamondShimmer
                   />
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold">{m.favorited_username}</div>
+                    <div className="text-sm font-semibold flex items-center gap-1">
+                      {m.favorited_username}
+                      <RoleBadge role={roleByUserId?.[m.user_id] ?? null} />
+                    </div>
                     {m.bio ? (
                       <div className="mt-1 text-sm text-[color:var(--muted)]">{m.bio}</div>
                     ) : null}

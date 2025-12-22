@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { MembersClient } from "./ui";
+import type { RoleType } from "@/components/ui/role-badge";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,18 @@ export default async function MembersPage() {
     .select("id,user_id,award_type,week_start,week_end,notes,created_at")
     .order("created_at", { ascending: false })
     .limit(500);
+
+  const { data: admins } = await sb
+    .from("cfm_admins")
+    .select("user_id,role");
+  const roleByUserId: Record<string, RoleType> = {};
+  for (const a of (admins ?? []) as any[]) {
+    const uid = String(a?.user_id ?? "").trim();
+    const role = String(a?.role ?? "").trim();
+    if (uid && (role === "owner" || role === "admin" || role === "moderator")) {
+      roleByUserId[uid] = role as RoleType;
+    }
+  }
 
   let leaderboard: any[] = [];
   try {
@@ -53,6 +66,7 @@ export default async function MembersPage() {
           awards={(awards ?? []) as any}
           leaderboard={(leaderboard ?? []) as any}
           myUserId={user.id}
+          roleByUserId={roleByUserId}
         />
       </div>
     </Container>

@@ -9,6 +9,7 @@ import { GiftModal } from "@/app/feed/ui";
 import { MiniProfileModal, type MiniProfileSubject, type MiniProfilePointsRow, type MiniProfileAwardRow } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, VIP_TIER_COLORS, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 import { parseLifetimeUsd } from "@/lib/utils";
 
 // No default photo - GifterRingAvatar shows initials when imageUrl is null
@@ -92,6 +93,7 @@ export function LiveClient({
       { photo_url: string | null; lifetime_gifted_total_usd: number | null; favorited_username: string | null; vip_tier?: VipTier | null }
     >
   >({});
+  const [roleByUserId, setRoleByUserId] = useState<Record<string, RoleType>>({});
 
   const [hostPending, startHostTransition] = useTransition();
   const [isHost, setIsHost] = useState(false);
@@ -435,6 +437,7 @@ export function LiveClient({
     setRows([]);
     setNameByUserId({});
     setMemberByUserId({});
+    setRoleByUserId({});
     setViewers([]);
     setViewerListOpen(false);
     setTopLive([]);
@@ -453,6 +456,27 @@ export function LiveClient({
     }
     setGiftFlash(null);
   }, [liveSessionKey]);
+
+  // Fetch admin/moderator roles once on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await sb.from("cfm_admins").select("user_id,role");
+        if (cancelled) return;
+        const roles: Record<string, RoleType> = {};
+        for (const a of (data ?? []) as any[]) {
+          const uid = String(a?.user_id ?? "").trim();
+          const role = String(a?.role ?? "").trim();
+          if (uid && (role === "owner" || role === "admin" || role === "moderator")) {
+            roles[uid] = role as RoleType;
+          }
+        }
+        setRoleByUserId(roles);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [sb]);
 
   const loadTopGifters = useCallback(async () => {
     try {
@@ -2013,6 +2037,7 @@ export function LiveClient({
                                 onClick={() => senderId && showMiniProfile(senderId)}
                               >
                                 {badge ? <span className="mr-1">{badge}</span> : null}
+                                <RoleBadge role={roleByUserId[senderId] ?? null} />
                                 {isVip ? <span className="mr-0.5">✨</span> : null}
                                 {msg}
                                 <VipBadge tier={vipTier} />
@@ -2027,10 +2052,12 @@ export function LiveClient({
                               <div className="shrink-0">{avatar}</div>
                               <button
                                 type="button"
-                                className="min-w-0 truncate hover:underline"
+                                className="inline-flex items-center gap-1 min-w-0 truncate hover:underline"
                                 onClick={() => senderId && showMiniProfile(senderId)}
                               >
-                                {badge ? <span className="mr-1">{badge}</span> : null}{msg}
+                                {badge ? <span className="mr-1">{badge}</span> : null}
+                                <RoleBadge role={roleByUserId[senderId] ?? null} />
+                                {msg}
                               </button>
                             </div>
                           );
@@ -2046,7 +2073,9 @@ export function LiveClient({
                                 className="inline-flex items-center gap-1 text-white/70 font-semibold hover:underline"
                                 onClick={() => senderId && showMiniProfile(senderId)}
                               >
-                                {badge ? <span className="mr-1">{badge}</span> : null}{senderName}
+                                {badge ? <span className="mr-1">{badge}</span> : null}
+                                <RoleBadge role={roleByUserId[senderId] ?? null} />
+                                {senderName}
                                 <VipBadge tier={(senderId ? (memberByUserId[senderId] as any)?.vip_tier : null) ?? null} />:
                               </button>{" "}
                               {msg}

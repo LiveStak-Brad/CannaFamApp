@@ -11,6 +11,7 @@ import {
   type LeaderboardRow,
   type PublicProfile,
 } from "./ui";
+import type { RoleType } from "@/components/ui/role-badge";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,16 @@ export default async function LeaderboardPage() {
 
   const typedProfiles = (profiles ?? []) as PublicProfile[];
   const typedAwards = (awards ?? []) as AwardRow[];
+
+  const { data: admins } = await sb.from("cfm_admins").select("user_id,role");
+  const roleByUserId: Record<string, RoleType> = {};
+  for (const a of (admins ?? []) as any[]) {
+    const uid = String(a?.user_id ?? "").trim();
+    const role = String(a?.role ?? "").trim();
+    if (uid && (role === "owner" || role === "admin" || role === "moderator")) {
+      roleByUserId[uid] = role as RoleType;
+    }
+  }
 
   // Use cfm_top_gifters RPC for consistent gift leaderboard data
   let giftRowsToday: GiftLeaderboardRow[] = [];
@@ -101,6 +112,7 @@ export default async function LeaderboardPage() {
             profiles={typedProfiles}
             awards={typedAwards}
             myUserId={user.id}
+            roleByUserId={roleByUserId}
           />
         </Card>
       </div>

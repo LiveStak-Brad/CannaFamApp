@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 
 export type PublicProfile = {
   favorited_username: string;
@@ -73,6 +74,7 @@ export function LeaderboardClient({
   profiles,
   awards,
   myUserId,
+  roleByUserId,
 }: {
   rows: LeaderboardRow[];
   giftRowsToday: GiftLeaderboardRow[];
@@ -82,6 +84,7 @@ export function LeaderboardClient({
   profiles: PublicProfile[];
   awards: AwardRow[];
   myUserId?: string | null;
+  roleByUserId?: Record<string, RoleType>;
 }) {
   const [mode, setMode] = useState<"points" | "gifts">("points");
   const [giftPeriod, setGiftPeriod] = useState<"today" | "weekly" | "all_time">("all_time");
@@ -233,8 +236,9 @@ export function LeaderboardClient({
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="inline-flex items-center gap-2 font-semibold">
+                        <span className="inline-flex items-center gap-1 font-semibold">
                           <span className="truncate">{m.favorited_username}</span>
+                          <RoleBadge role={roleByUserId?.[m.user_id] ?? null} />
                           <VipBadge tier={(rowProfile as any)?.vip_tier ?? null} />
                         </span>
                       </div>
@@ -286,9 +290,10 @@ export function LeaderboardClient({
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-2 font-semibold">
+                    <div className="flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1 font-semibold">
                         <span className="truncate">{m.favorited_username}</span>
+                        <RoleBadge role={roleByUserId?.[m.user_id] ?? null} />
                         <VipBadge tier={(rowProfile as any)?.vip_tier ?? null} />
                       </span>
                     </div>
