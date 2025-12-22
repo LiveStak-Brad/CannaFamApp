@@ -129,6 +129,15 @@ export async function POST(req: NextRequest) {
       success_url: successUrl,
       cancel_url: cancelUrl,
       client_reference_id: user.id,
+      payment_intent_data: {
+        metadata: {
+          type: "coin_purchase",
+          user_id: user.id,
+          sku,
+          coins: String(coins),
+          idempotency_key: idempotencyKey,
+        },
+      },
       line_items: [
         {
           quantity: 1,
