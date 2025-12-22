@@ -2401,11 +2401,12 @@ export function LiveClient({
           startGiftTransition(async () => {
             try {
               const idempotencyKey = `live_gift_${myUserId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+              const liveId = String(chatLiveId ?? live.id ?? "").trim();
               const res = await fetch("/api/gifts/send", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
-                  stream_id: live.id,
+                  stream_id: liveId,
                   gift_type: "coins",
                   coins,
                   idempotency_key: idempotencyKey,
