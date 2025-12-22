@@ -156,7 +156,7 @@ export async function linkMemberByEmail(memberId: string, email: string) {
   return { ok: true as const, message: "Member linked successfully." };
 }
 
-export async function addAdmin(userId: string) {
+export async function addAdmin(userId: string, role: "admin" | "moderator" = "admin") {
   await requireOwner();
 
   const uid = String(userId ?? "").trim();
@@ -165,7 +165,7 @@ export async function addAdmin(userId: string) {
   const sb = await supabaseServer();
   const { error } = await sb.from("cfm_admins").upsert({
     user_id: uid,
-    role: "admin",
+    role: role,
   });
 
   if (error) throw new Error(error.message);
@@ -176,7 +176,8 @@ export async function addAdmin(userId: string) {
   revalidatePath("/feed");
   revalidatePath("/leaderboard");
   revalidatePath("/members");
-  return { ok: true as const, message: "Admin granted." };
+  const msg = role === "moderator" ? "Moderator role granted." : "Admin role granted.";
+  return { ok: true as const, message: msg };
 }
 
 export async function removeAdmin(userId: string) {

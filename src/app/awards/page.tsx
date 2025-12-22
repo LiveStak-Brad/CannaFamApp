@@ -82,16 +82,11 @@ export default async function AwardsPage() {
 
   return (
     <Container>
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">🏅 Awards</h1>
-          <p className="text-sm text-[color:var(--muted)]">
-            Weekly winners and shoutouts.
-          </p>
-        </div>
+      <div className="space-y-2">
+        <h1 className="text-base font-semibold">🏅 Weekly Awards</h1>
 
-        <Card title="Weekly Awards">
-          <div className="space-y-2">
+        <Card>
+          <div className="space-y-1.5">
             {CATEGORIES.map((cat) => {
               const win = latestByType.get(cat) ?? null;
               const profile = win ? publicByUserId.get(win.user_id) ?? null : null;
@@ -99,11 +94,11 @@ export default async function AwardsPage() {
               return (
                 <div
                   key={cat}
-                  className="flex items-center gap-4 rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
+                  className="flex items-center gap-2.5 rounded-lg border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-3 py-2"
                 >
                   <div className="shrink-0">
                     <GifterRingAvatar
-                      size={52}
+                      size={36}
                       imageUrl={profile?.photo_url ?? null}
                       name={profile?.favorited_username ?? (win ? "Winner" : "You")}
                       totalUsd={
@@ -113,20 +108,10 @@ export default async function AwardsPage() {
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-base font-bold leading-tight">{cat}</div>
-                    {profile ? (
-                      <div className="mt-1 truncate text-sm text-[color:var(--muted)]">
-                        {profile.favorited_username}
-                      </div>
-                    ) : win ? (
-                      <div className="mt-1 text-sm text-[color:var(--muted)]">
-                        Winner selected.
-                      </div>
-                    ) : (
-                      <div className="mt-1 text-sm text-[color:var(--muted)]">
-                        Your photo here — start competing now.
-                      </div>
-                    )}
+                    <div className="text-sm font-bold leading-tight">{cat}</div>
+                    <div className="truncate text-xs text-[color:var(--muted)]">
+                      {profile ? profile.favorited_username : win ? "Winner selected" : "Compete to win!"}
+                    </div>
                   </div>
                 </div>
               );

@@ -61,64 +61,28 @@ export default async function WalletPage() {
 
   return (
     <Container>
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Wallet</h1>
-          <div className="text-sm text-[color:var(--muted)]">Your coin balance and recent activity.</div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-semibold">🪙 Wallet</h1>
+          <div className="text-lg font-bold">{Number(w?.balance ?? 0).toLocaleString()} coins</div>
         </div>
 
-        <Card title="Balance">
-          <div className="space-y-2 text-sm">
-            <div>
-              <span className="font-semibold">Coins:</span> {Number(w?.balance ?? 0).toLocaleString()}
-            </div>
-            <div>
-              <span className="font-semibold">Lifetime purchased:</span> {Number(w?.lifetime_purchased ?? 0).toLocaleString()}
-            </div>
-            <div>
-              <span className="font-semibold">Lifetime spent:</span> {Number(w?.lifetime_spent ?? 0).toLocaleString()}
-            </div>
-          </div>
+        <Card title="Buy Coins">
+          <WalletBankClient webPackages={packs} />
         </Card>
 
-        <Card title="Bank">
-          <div className="space-y-2">
-            <div className="text-sm text-[color:var(--muted)]">Purchase coins.</div>
-            <WalletBankClient webPackages={packs} />
-          </div>
-        </Card>
-
-        <Card title="Recent activity">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[color:var(--muted)]">
-                  <th className="py-2 pr-3">created</th>
-                  <th className="py-2 pr-3">type</th>
-                  <th className="py-2 pr-3">dir</th>
-                  <th className="py-2 pr-3">amount</th>
-                  <th className="py-2 pr-3">source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tx.map((r) => (
-                  <tr key={r.id} className="border-t border-[color:var(--border)]">
-                    <td className="py-2 pr-3 whitespace-nowrap">{String(r.created_at).slice(0, 19)}</td>
-                    <td className="py-2 pr-3">{r.type}</td>
-                    <td className="py-2 pr-3">{r.direction}</td>
-                    <td className="py-2 pr-3">{Number(r.amount).toLocaleString()}</td>
-                    <td className="py-2 pr-3">{r.source}</td>
-                  </tr>
-                ))}
-                {!tx.length ? (
-                  <tr>
-                    <td className="py-2 text-[color:var(--muted)]" colSpan={5}>
-                      No transactions.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+        <Card title="Recent Activity">
+          <div className="space-y-1 text-xs">
+            {tx.slice(0, 5).map((r) => (
+              <div key={r.id} className="flex justify-between py-1 border-b border-[color:var(--border)]">
+                <span className="text-[color:var(--muted)]">{r.direction === "in" ? "+" : "-"}{Number(r.amount).toLocaleString()}</span>
+                <span className="capitalize">{r.type.replace(/_/g, " ")}</span>
+                <span className="text-[color:var(--muted)]">{String(r.created_at).slice(5, 10)}</span>
+              </div>
+            ))}
+            {!tx.length ? (
+              <div className="text-[color:var(--muted)] py-1">No transactions yet</div>
+            ) : null}
           </div>
         </Card>
       </div>

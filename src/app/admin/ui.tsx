@@ -160,19 +160,90 @@ export function AdminActions({
     <div className="space-y-4">
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
 
-      {isOwner ? (
-        <Card title="Admin roles">
-          <div className="space-y-3">
-            <div className="text-sm text-[color:var(--muted)]">
-              Promote or remove admins. Only the owner can change roles.
+      <Card title="Assign award">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-xs font-semibold text-[color:var(--muted)] mb-1">Winner</div>
+              <select
+                value={awardMemberId}
+                onChange={(e) => setAwardMemberId(e.target.value)}
+                className="w-full rounded-lg bg-[color:var(--card)] px-3 py-2 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
+              >
+                {linkedMembersSorted.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.favorited_username}
+                  </option>
+                ))}
+              </select>
             </div>
+            <div>
+              <div className="text-xs font-semibold text-[color:var(--muted)] mb-1">Category</div>
+              <select
+                value={awardType}
+                onChange={(e) => setAwardType(e.target.value)}
+                className="w-full rounded-lg bg-[color:var(--card)] px-3 py-2 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
+              >
+                {awardTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              label="Week start"
+              value={weekStart}
+              onChange={(e) => setWeekStart(e.target.value)}
+              placeholder="YYYY-MM-DD"
+            />
+            <Input
+              label="Week end"
+              value={weekEnd}
+              onChange={(e) => setWeekEnd(e.target.value)}
+              placeholder="YYYY-MM-DD"
+            />
+          </div>
+          <Button
+            type="button"
+            disabled={pending || !awardUserId || !awardType || !weekStart || !weekEnd}
+            onClick={() => {
+              setMsg(null);
+              startTransition(async () => {
+                try {
+                  const fd = new FormData();
+                  fd.set("user_id", awardUserId);
+                  fd.set("award_type", awardType);
+                  fd.set("week_start", weekStart);
+                  fd.set("week_end", weekEnd);
+                  fd.set("notes", awardNotes);
+                  const res = await assignAward(fd);
+                  setMsg({ tone: "success", text: res.message });
+                } catch (err) {
+                  setMsg({
+                    tone: "error",
+                    text: err instanceof Error ? err.message : "Assign failed",
+                  });
+                }
+              });
+            }}
+          >
+            {pending ? "Saving..." : "Assign Award"}
+          </Button>
+        </div>
+      </Card>
 
+      {isOwner ? (
+        <Card title="Admin & Moderator Roles">
+          <div className="space-y-3">
             <div className="space-y-2">
               <div className="text-xs font-semibold text-[color:var(--muted)]">Member</div>
               <select
                 value={adminMemberId}
                 onChange={(e) => setAdminMemberId(e.target.value)}
-                className="w-full rounded-xl bg-[color:var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
+                className="w-full rounded-lg bg-[color:var(--card)] px-3 py-2 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
               >
                 {membersSorted.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -181,11 +252,6 @@ export function AdminActions({
                   </option>
                 ))}
               </select>
-              {!adminUserId ? (
-                <div className="text-xs text-[color:var(--muted)]">
-                  This member is not linked yet (no user_id). Link them before promoting.
-                </div>
-              ) : null}
             </div>
 
             <div className="flex items-center gap-2">
@@ -196,7 +262,7 @@ export function AdminActions({
                   setMsg(null);
                   startTransition(async () => {
                     try {
-                      const res = await addAdmin(adminUserId);
+                      const res = await addAdmin(adminUserId, "admin");
                       setMsg({ tone: "success", text: res.message });
                     } catch (e) {
                       setMsg({
@@ -209,33 +275,54 @@ export function AdminActions({
               >
                 Make Admin
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending || !adminUserId}
+                onClick={() => {
+                  setMsg(null);
+                  startTransition(async () => {
+                    try {
+                      const res = await addAdmin(adminUserId, "moderator");
+                      setMsg({ tone: "success", text: res.message });
+                    } catch (e) {
+                      setMsg({
+                        tone: "error",
+                        text: e instanceof Error ? e.message : "Promote failed",
+                      });
+                    }
+                  });
+                }}
+              >
+                Make Moderator
+              </Button>
             </div>
 
             <div className="pt-2">
-              <div className="text-xs font-semibold text-[color:var(--muted)]">Current admins</div>
-              <div className="mt-2 space-y-2">
+              <div className="text-xs font-semibold text-[color:var(--muted)]">Current roles</div>
+              <div className="mt-2 space-y-1.5">
                 {admins.length ? (
                   admins.map((a) => {
                     const name = adminNameByUserId.get(a.user_id) ?? a.user_id;
                     const role = String(a.role ?? "");
+                    const badge = role === "owner" ? "👑" : role === "admin" ? "🛡️" : role === "moderator" ? "🚨" : "";
                     return (
                       <div
                         key={a.user_id}
-                        className="flex items-center justify-between rounded-xl border border-[color:var(--border)] px-4 py-3"
+                        className="flex items-center justify-between rounded-lg border border-[color:var(--border)] px-3 py-2"
                       >
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold truncate">{name}</div>
-                          <div className="mt-1 text-xs text-[color:var(--muted)]">{role}</div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span>{badge}</span>
+                          <span className="text-sm font-semibold truncate">{name}</span>
+                          <span className="text-xs text-[color:var(--muted)] capitalize">{role}</span>
                         </div>
-                        {role === "owner" ? (
-                          <div className="text-xs text-[color:var(--muted)]">Owner</div>
-                        ) : (
+                        {role === "owner" ? null : (
                           <Button
                             type="button"
                             variant="secondary"
                             disabled={pending}
                             onClick={() => {
-                              const ok = window.confirm("Remove admin access for this user?");
+                              const ok = window.confirm("Remove role for this user?");
                               if (!ok) return;
                               setMsg(null);
                               startTransition(async () => {
@@ -258,7 +345,7 @@ export function AdminActions({
                     );
                   })
                 ) : (
-                  <div className="text-sm text-[color:var(--muted)]">No admins found.</div>
+                  <div className="text-sm text-[color:var(--muted)]">No roles assigned.</div>
                 )}
               </div>
             </div>
@@ -311,75 +398,6 @@ export function AdminActions({
           >
             Grant +5
           </Button>
-        </div>
-      </Card>
-
-      <Card title={`Applications (${pendingApps.length} pending)`}>
-        <div className="space-y-3">
-          {pendingApps.length ? (
-            pendingApps.map((a) => (
-              <div
-                key={a.id}
-                className="rounded-xl border border-[color:var(--border)] p-4"
-              >
-                <div className="text-sm font-semibold">{a.favorited_username}</div>
-                <div className="mt-1 text-xs text-[color:var(--muted)]">
-                  {a.email ?? "No email"}
-                  {a.wants_banner ? " • wants banner" : ""}
-                </div>
-                {a.bio ? (
-                  <div className="mt-2 text-sm text-[color:var(--muted)] whitespace-pre-wrap">
-                    {a.bio}
-                  </div>
-                ) : null}
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => {
-                      setMsg(null);
-                      startTransition(async () => {
-                        try {
-                          await approveApplication(a.id);
-                          setMsg({ tone: "success", text: `Approved: ${a.favorited_username}` });
-                        } catch (e) {
-                          setMsg({
-                            tone: "error",
-                            text: e instanceof Error ? e.message : "Approve failed",
-                          });
-                        }
-                      });
-                    }}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={pending}
-                    onClick={() => {
-                      setMsg(null);
-                      startTransition(async () => {
-                        try {
-                          await rejectApplication(a.id);
-                          setMsg({ tone: "success", text: `Rejected: ${a.favorited_username}` });
-                        } catch (e) {
-                          setMsg({
-                            tone: "error",
-                            text: e instanceof Error ? e.message : "Reject failed",
-                          });
-                        }
-                      });
-                    }}
-                  >
-                    Reject
-                  </Button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-sm text-[color:var(--muted)]">No pending applications.</div>
-          )}
         </div>
       </Card>
 
@@ -452,95 +470,6 @@ export function AdminActions({
         </div>
       </Card>
 
-      <Card title="Assign award">
-        <div className="space-y-4">
-          <div className="text-sm text-[color:var(--muted)]">
-            Pick a linked member and a category. Week defaults to the current Monday–Sunday.
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-semibold text-[color:var(--muted)]">Winner</div>
-            <select
-              value={awardMemberId}
-              onChange={(e) => setAwardMemberId(e.target.value)}
-              className="w-full rounded-xl bg-[color:var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
-            >
-              {linkedMembersSorted.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.favorited_username}
-                </option>
-              ))}
-            </select>
-            {!awardUserId ? (
-              <div className="text-xs text-[color:var(--muted)]">No linked members found.</div>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-semibold text-[color:var(--muted)]">Category</div>
-            <select
-              value={awardType}
-              onChange={(e) => setAwardType(e.target.value)}
-              className="w-full rounded-xl bg-[color:var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
-            >
-              {awardTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Week start"
-              value={weekStart}
-              onChange={(e) => setWeekStart(e.target.value)}
-              placeholder="YYYY-MM-DD"
-            />
-            <Input
-              label="Week end"
-              value={weekEnd}
-              onChange={(e) => setWeekEnd(e.target.value)}
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-
-          <Textarea
-            label="Notes (optional)"
-            value={awardNotes}
-            onChange={(e) => setAwardNotes(e.target.value)}
-            placeholder="Optional notes"
-          />
-
-          <Button
-            type="button"
-            disabled={pending || !awardUserId || !awardType || !weekStart || !weekEnd}
-            onClick={() => {
-              setMsg(null);
-              startTransition(async () => {
-                try {
-                  const fd = new FormData();
-                  fd.set("user_id", awardUserId);
-                  fd.set("award_type", awardType);
-                  fd.set("week_start", weekStart);
-                  fd.set("week_end", weekEnd);
-                  fd.set("notes", awardNotes);
-                  const res = await assignAward(fd);
-                  setMsg({ tone: "success", text: res.message });
-                } catch (err) {
-                  setMsg({
-                    tone: "error",
-                    text: err instanceof Error ? err.message : "Assign failed",
-                  });
-                }
-              });
-            }}
-          >
-            {pending ? "Saving..." : "Assign award"}
-          </Button>
-        </div>
-      </Card>
     </div>
   );
 }

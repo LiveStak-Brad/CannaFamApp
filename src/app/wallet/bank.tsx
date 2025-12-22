@@ -93,13 +93,14 @@ export function WalletBankClient({ webPackages }: { webPackages: CoinPackage[] }
       {packs.length === 0 ? (
         <div className="text-sm text-[color:var(--muted)]">No coin packages configured.</div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           {packs.map((p) => {
             const isBest = p.sku === bestValueSku;
             const isWhale = p.sku === whaleSku;
             const priceUsd = Number(p.price_usd_cents ?? 0) / 100;
             const coins = Number(p.coins ?? 0);
-            const coinsPerDollar = priceUsd > 0 ? Math.round(coins / priceUsd) : 0;
+            const baseCoins = priceUsd * 90; // web rate is 90 coins/$1
+            const bonusPct = baseCoins > 0 ? Math.round(((coins - baseCoins) / baseCoins) * 100) : 0;
             const accent = isBest
               ? "border-[rgba(25,192,96,0.55)]"
               : isWhale
@@ -111,31 +112,28 @@ export function WalletBankClient({ webPackages }: { webPackages: CoinPackage[] }
                 ? "bg-[rgba(209,31,42,0.06)]"
                 : "bg-[rgba(255,255,255,0.02)]";
 
+            // Convert sku to plain English
+            const packName = p.sku.replace(/_/g, " ").replace(/web /i, "").replace(/coins?/i, "").trim();
+
             return (
-              <div key={p.sku} className={`rounded-2xl border ${accent} ${bg} p-4`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold text-[color:var(--muted)]">{p.sku}</div>
-                    <div className="mt-1 text-2xl font-semibold">{fmtCoins(coins)} coins</div>
-                    <div className="mt-1 text-sm text-[color:var(--muted)]">
-                      {formatUsd(p.price_usd_cents)} • {Number(coinsPerDollar).toLocaleString()} coins / $1
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {isBest ? (
-                      <span className="rounded-full bg-[rgba(25,192,96,0.18)] px-2 py-1 text-[10px] font-semibold text-green-200">
-                        Best value
-                      </span>
-                    ) : isWhale ? (
-                      <span className="rounded-full bg-[rgba(209,31,42,0.16)] px-2 py-1 text-[10px] font-semibold text-red-100">
-                        Whale pack
-                      </span>
-                    ) : null}
-                    <Button type="button" disabled={pending} onClick={() => startCheckout(p.sku)}>
-                      Buy for {formatUsd(p.price_usd_cents)}
-                    </Button>
-                  </div>
+              <div key={p.sku} className={`rounded-xl border ${accent} ${bg} p-2.5 flex flex-col`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-bold">{fmtCoins(coins)}</span>
+                  {isBest ? (
+                    <span className="rounded-full bg-[rgba(25,192,96,0.18)] px-1.5 py-0.5 text-[8px] font-semibold text-green-200">
+                      Best
+                    </span>
+                  ) : isWhale ? (
+                    <span className="rounded-full bg-[rgba(209,31,42,0.16)] px-1.5 py-0.5 text-[8px] font-semibold text-red-100">
+                      Whale
+                    </span>
+                  ) : bonusPct > 0 ? (
+                    <span className="text-[9px] text-[color:var(--muted)]">+{bonusPct}%</span>
+                  ) : null}
                 </div>
+                <Button type="button" disabled={pending} onClick={() => startCheckout(p.sku)} className="mt-2 text-xs py-1.5">
+                  {formatUsd(p.price_usd_cents)}
+                </Button>
               </div>
             );
           })}
