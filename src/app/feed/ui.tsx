@@ -501,7 +501,13 @@ export function GiftButton({
               });
               const json = (await res.json().catch(() => null)) as any;
               if (!res.ok) {
-                throw new Error(String(json?.error ?? "Gift failed"));
+                const errMsg = String(json?.error ?? "Gift failed");
+                if (errMsg.toLowerCase().includes("insufficient")) {
+                  const go = window.confirm("You don't have enough coins. Would you like to buy more?");
+                  if (go) router.push("/wallet");
+                  return;
+                }
+                throw new Error(errMsg);
               }
               setMsg(`Sent ${coins.toLocaleString()} coins!`);
               setOpen(false);

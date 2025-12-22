@@ -2414,7 +2414,13 @@ export function LiveClient({
               });
               const json = (await res.json().catch(() => null)) as any;
               if (!res.ok) {
-                throw new Error(String(json?.error ?? "Gift failed"));
+                const errMsg = String(json?.error ?? "Gift failed");
+                if (errMsg.toLowerCase().includes("insufficient")) {
+                  const go = window.confirm("You don't have enough coins. Would you like to buy more?");
+                  if (go) window.location.href = "/wallet";
+                  return;
+                }
+                throw new Error(errMsg);
               }
               toast(`Sent ${coins.toLocaleString()} coins!`, "success");
               setGiftModalOpen(false);
