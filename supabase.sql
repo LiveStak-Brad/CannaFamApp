@@ -2467,14 +2467,15 @@ begin
     where v.user_id = m.user_id
   ) lv on true
   left join lateral (
-    select coalesce(sum(x.coins), 0)::int as gift_points
+    -- 1 point per $1 (legacy cents/100) or 1 point per 100 coins
+    select (coalesce(sum(x.raw_value), 0) / 100)::int as gift_points
     from (
-      select pg.amount_cents::bigint as coins
+      select pg.amount_cents::bigint as raw_value
       from public.cfm_post_gifts pg
       where pg.gifter_user_id = m.user_id
         and pg.status = 'paid'
       union all
-      select ct.amount::bigint as coins
+      select ct.amount::bigint as raw_value
       from public.coin_transactions ct
       where ct.user_id = m.user_id
         and ct.type = 'gift_spend'
