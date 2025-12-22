@@ -19,7 +19,7 @@ import {
 
 type Application = {
   id: string;
-  favorited_username: string;
+  favorited_username?: string | null;
   email: string | null;
   photo_url: string | null;
   bio: string | null;
@@ -56,6 +56,40 @@ type AdminMemberRow = {
   favorited_username: string;
 };
 
+type AuditLogRow = {
+  id: string;
+  action_type: string;
+  content_type: string;
+  content_id: string | null;
+  target_user_id: string | null;
+  target_username: string;
+  note: string | null;
+  actor_id: string;
+  actor_username: string;
+  created_at: string;
+};
+
+type ReportRow = {
+  id: string;
+  reporter_user_id: string | null;
+  reporter_username: string;
+  report_type: string;
+  target_type: string;
+  target_id: string | null;
+  target_user_id: string | null;
+  target_username: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  admin_notes: string | null;
+  created_at: string;
+  content_preview: string | null;
+};
+
+type AdminTab = "awards" | "roles" | "members" | "moderation" | "audit";
+
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -80,6 +114,8 @@ export function AdminActions({
   admins,
   adminMembers,
   isOwner,
+  auditLog,
+  reports,
 }: {
   apps: Application[];
   members: Member[];
@@ -87,7 +123,10 @@ export function AdminActions({
   admins: AdminRow[];
   adminMembers: AdminMemberRow[];
   isOwner: boolean;
+  auditLog: AuditLogRow[];
+  reports: ReportRow[];
 }) {
+  const [activeTab, setActiveTab] = useState<AdminTab>("awards");
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(
     null,
@@ -156,10 +195,40 @@ export function AdminActions({
   const [weekEnd, setWeekEnd] = useState<string>(weekDefaults.end);
   const [awardNotes, setAwardNotes] = useState<string>("");
 
+  const pendingReports = reports.filter((r) => r.status === "pending").length;
+
+  const tabClass = (t: AdminTab) =>
+    `px-3 py-2 text-xs font-semibold rounded-xl border transition ${activeTab === t
+      ? "border-purple-500 bg-purple-600 text-white"
+      : "border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] text-[color:var(--muted)] hover:bg-[rgba(255,255,255,0.05)]"
+    }`;
+
   return (
     <div className="space-y-4">
       {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
 
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={tabClass("awards")} onClick={() => setActiveTab("awards")}>
+          🏆 Awards
+        </button>
+        {isOwner && (
+          <button type="button" className={tabClass("roles")} onClick={() => setActiveTab("roles")}>
+            👑 Roles
+          </button>
+        )}
+        <button type="button" className={tabClass("members")} onClick={() => setActiveTab("members")}>
+          👥 Members
+        </button>
+        <button type="button" className={tabClass("moderation")} onClick={() => setActiveTab("moderation")}>
+          🚨 Moderation
+          {pendingReports > 0 && <span className="ml-1 inline-flex h-2 w-2 rounded-full bg-purple-400" />}
+        </button>
+        <button type="button" className={tabClass("audit")} onClick={() => setActiveTab("audit")}>
+          📋 Audit Log
+        </button>
+      </div>
+
+      {activeTab === "awards" && (
       <Card title="Assign award">
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
@@ -234,8 +303,9 @@ export function AdminActions({
           </Button>
         </div>
       </Card>
+      )}
 
-      {isOwner ? (
+      {activeTab === "roles" && isOwner && (
         <Card title="Admin & Moderator Roles">
           <div className="space-y-3">
             <div className="space-y-2">
@@ -351,8 +421,9 @@ export function AdminActions({
             </div>
           </div>
         </Card>
-      ) : null}
+      )}
 
+      {activeTab === "awards" && (
       <Card title="Daily gift bonus (🎁 +5)">
         <div className="space-y-3">
           <div className="text-sm text-[color:var(--muted)]">
@@ -400,24 +471,48 @@ export function AdminActions({
           </Button>
         </div>
       </Card>
+      )}
 
-      <Card title="Members">
-        <div className="space-y-2">
-          {members.length ? (
-            members.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center justify-between rounded-xl border border-[color:var(--border)] p-4"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">{m.favorited_username}</div>
-                  <div className="mt-1 text-xs text-[color:var(--muted)]">
-                    points: {m.points ?? 0}
-                    {m.user_id ? " • linked" : " • unlinked"}
+      {activeTab === "members" && (
+        <Card title="Members">
+          <div className="space-y-2">
+            {members.length ? (
+              members.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between rounded-xl border border-[color:var(--border)] p-4"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{m.favorited_username}</div>
+                    <div className="mt-1 text-xs text-[color:var(--muted)]">
+                      points: {m.points ?? 0}
+                      {m.user_id ? " • linked" : " • unlinked"}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!m.user_id ? (
+                  <div className="flex items-center gap-2">
+                    {!m.user_id ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() => {
+                          setMsg(null);
+                          startTransition(async () => {
+                            try {
+                              const res = await sendMemberInvite(m.id);
+                              setMsg({ tone: "success", text: res.message });
+                            } catch (e) {
+                              setMsg({
+                                tone: "error",
+                                text: e instanceof Error ? e.message : "Invite failed",
+                              });
+                            }
+                          });
+                        }}
+                      >
+                        Send invite
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="secondary"
@@ -426,49 +521,107 @@ export function AdminActions({
                         setMsg(null);
                         startTransition(async () => {
                           try {
-                            const res = await sendMemberInvite(m.id);
-                            setMsg({ tone: "success", text: res.message });
+                            await removeMember(m.id);
+                            setMsg({ tone: "success", text: `Removed: ${m.favorited_username}` });
                           } catch (e) {
                             setMsg({
                               tone: "error",
-                              text: e instanceof Error ? e.message : "Invite failed",
+                              text: e instanceof Error ? e.message : "Remove failed",
                             });
                           }
                         });
                       }}
                     >
-                      Send invite
+                      Remove
                     </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={pending}
-                    onClick={() => {
-                      setMsg(null);
-                      startTransition(async () => {
-                        try {
-                          await removeMember(m.id);
-                          setMsg({ tone: "success", text: `Removed: ${m.favorited_username}` });
-                        } catch (e) {
-                          setMsg({
-                            tone: "error",
-                            text: e instanceof Error ? e.message : "Remove failed",
-                          });
-                        }
-                      });
-                    }}
-                  >
-                    Remove
-                  </Button>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="text-sm text-[color:var(--muted)]">No members yet.</div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {activeTab === "moderation" && (
+        <Card title="Flagged Content">
+          <div className="space-y-3">
+            {reports.length === 0 ? (
+              <div className="py-4 text-center text-sm text-[color:var(--muted)]">
+                🎉 No reports to review!
               </div>
-            ))
-          ) : (
-            <div className="text-sm text-[color:var(--muted)]">No members yet.</div>
-          )}
-        </div>
-      </Card>
+            ) : (
+              reports.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] p-3"
+                >
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className={`rounded-full px-2 py-0.5 font-semibold ${
+                      r.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
+                      r.status === "actioned" ? "bg-green-500/20 text-green-400" :
+                      "bg-gray-500/20 text-gray-400"
+                    }`}>
+                      {r.status}
+                    </span>
+                    <span className="text-[color:var(--muted)]">
+                      {r.target_type === "post" ? "📝" : "💬"} {r.report_type}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-sm">
+                    Reported by <span className="font-semibold">{r.reporter_username}</span>
+                  </div>
+                  {r.content_preview && (
+                    <div className="mt-1 rounded bg-[rgba(0,0,0,0.2)] p-2 text-xs text-[color:var(--muted)]">
+                      "{r.content_preview}"
+                    </div>
+                  )}
+                  <div className="mt-1 text-xs text-[color:var(--muted)]">
+                    {new Date(r.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              ))
+            )}
+            <div className="text-xs text-[color:var(--muted)]">
+              For full moderation controls, visit the <a href="/moderator" className="underline">Moderator Dashboard</a>.
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === "audit" && (
+        <Card title="Audit Log">
+          <div className="space-y-2">
+            {auditLog.length === 0 ? (
+              <div className="py-4 text-center text-sm text-[color:var(--muted)]">
+                No moderation actions yet.
+              </div>
+            ) : (
+              auditLog.map((a) => (
+                <div
+                  key={a.id}
+                  className="rounded-lg border border-[color:var(--border)] px-3 py-2 text-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{a.actor_username}</span>
+                    <span className="text-[color:var(--muted)]">{a.action_type.replace(/_/g, " ")}</span>
+                    {a.target_username && a.target_username !== "Unknown" && (
+                      <span className="text-[color:var(--muted)]">→ {a.target_username}</span>
+                    )}
+                  </div>
+                  {a.note && (
+                    <div className="mt-1 text-[color:var(--muted)]">{a.note}</div>
+                  )}
+                  <div className="mt-1 text-[color:var(--muted)]">
+                    {new Date(a.created_at).toLocaleString()}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      )}
 
     </div>
   );

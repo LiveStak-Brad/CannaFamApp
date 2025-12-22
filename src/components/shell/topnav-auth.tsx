@@ -35,7 +35,32 @@ export async function TopNavAuth() {
     .select("role")
     .eq("user_id", user.id)
     .maybeSingle();
-  const isAdmin = !!adminRow?.role;
+  const role = adminRow?.role ?? null;
+  const isOwner = role === "owner";
+  const isAdmin = role === "owner" || role === "admin";
+  const isMod = role === "owner" || role === "admin" || role === "moderator";
+
+  // Fetch pending counts for notification dots (admin/mod only)
+  let pendingReports = 0;
+  let pendingApplications = 0;
+  if (isMod) {
+    try {
+      const { count: reportCount } = await sb
+        .from("cfm_reports")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      pendingReports = reportCount ?? 0;
+    } catch {}
+  }
+  if (isAdmin) {
+    try {
+      const { count: appCount } = await sb
+        .from("cfm_applications")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      pendingApplications = appCount ?? 0;
+    } catch {}
+  }
 
   const { data: memberRow } = await sb
     .from("cfm_members")
@@ -82,15 +107,25 @@ export async function TopNavAuth() {
         >
           <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
             {isAdmin ? (
-              <Link href="/admin" className={mobileMenuItemClass}>
-                Admin
+              <Link href="/admin" className={mobileMenuItemClass + " flex items-center gap-2"}>
+                🛡️ Admin
+                {(pendingReports > 0 || pendingApplications > 0) && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-purple-500" />
+                )}
+              </Link>
+            ) : isMod ? (
+              <Link href="/moderator" className={mobileMenuItemClass + " flex items-center gap-2"}>
+                🚨 Moderator
+                {pendingReports > 0 && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-purple-500" />
+                )}
               </Link>
             ) : null}
             <Link href="/members" className={mobileMenuItemClass}>
-              Members
+              👥 Members
             </Link>
             <Link href="/wallet" className={mobileMenuItemClass}>
-              Wallet
+              💰 Wallet
             </Link>
             <Link href="/daily-activities" className={mobileMenuItemClass}>
               🎯 Daily Activities
@@ -107,16 +142,16 @@ export async function TopNavAuth() {
             <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
-              Terms of Service
+              📜 Terms of Service
             </Link>
             <Link href="/privacy" className={mobileMenuItemClass}>
-              Privacy Policy
+              🔒 Privacy Policy
             </Link>
             <Link href="/community-guidelines" className={mobileMenuItemClass}>
-              Community Guidelines
+              📋 Community Guidelines
             </Link>
             <Link href="/support" className={mobileMenuItemClass}>
-              Support
+              💬 Support
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/account" className={mobileMenuItemClass}>
@@ -125,7 +160,7 @@ export async function TopNavAuth() {
             <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
               <button type="submit" className={mobileMenuItemClass + " text-left"}>
-                Logout
+                🚪 Logout
               </button>
             </form>
           </div>
@@ -173,15 +208,25 @@ export async function TopNavAuth() {
         >
           <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
             {isAdmin ? (
-              <Link href="/admin" className={mobileMenuItemClass}>
-                Admin
+              <Link href="/admin" className={mobileMenuItemClass + " flex items-center gap-2"}>
+                🛡️ Admin
+                {(pendingReports > 0 || pendingApplications > 0) && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-purple-500" />
+                )}
+              </Link>
+            ) : isMod ? (
+              <Link href="/moderator" className={mobileMenuItemClass + " flex items-center gap-2"}>
+                🚨 Moderator
+                {pendingReports > 0 && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-purple-500" />
+                )}
               </Link>
             ) : null}
             <Link href="/members" className={mobileMenuItemClass}>
-              Members
+              👥 Members
             </Link>
             <Link href="/wallet" className={mobileMenuItemClass}>
-              Wallet
+              💰 Wallet
             </Link>
             <Link href="/daily-activities" className={mobileMenuItemClass}>
               🎯 Daily Activities
@@ -198,16 +243,16 @@ export async function TopNavAuth() {
             <ThemeToggleMenuItem className={mobileMenuItemClass + " flex items-center gap-2"} />
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/terms" className={mobileMenuItemClass}>
-              Terms of Service
+              📜 Terms of Service
             </Link>
             <Link href="/privacy" className={mobileMenuItemClass}>
-              Privacy Policy
+              🔒 Privacy Policy
             </Link>
             <Link href="/community-guidelines" className={mobileMenuItemClass}>
-              Community Guidelines
+              📋 Community Guidelines
             </Link>
             <Link href="/support" className={mobileMenuItemClass}>
-              Support
+              💬 Support
             </Link>
             <div className="my-1 border-t border-[color:var(--border)]" />
             <Link href="/account" className={mobileMenuItemClass}>
@@ -216,7 +261,7 @@ export async function TopNavAuth() {
             <div className="my-1 border-t border-[color:var(--border)]" />
             <form action={logout}>
               <button type="submit" className={mobileMenuItemClass + " text-left"}>
-                Logout
+                🚪 Logout
               </button>
             </form>
           </div>

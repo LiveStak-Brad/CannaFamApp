@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { ReportButton } from "@/components/ui/report-button";
 
 export type FeedPost = {
   id: string;
@@ -1203,7 +1204,7 @@ function CommentsModal({
                                 </button>
 
                                 {!isReply ? (
-                                  <div className="mt-2 flex justify-end">
+                                  <div className="mt-2 flex justify-end gap-2">
                                     <button
                                       type="button"
                                       className="text-xs text-[color:var(--muted)] underline underline-offset-4"
@@ -1215,8 +1216,13 @@ function CommentsModal({
                                     >
                                       Reply
                                     </button>
+                                    <ReportButton targetType="comment" targetId={c.id} targetUserId={c.user_id} />
                                   </div>
-                                ) : null}
+                                ) : (
+                                  <div className="mt-2 flex justify-end">
+                                    <ReportButton targetType="comment" targetId={c.id} targetUserId={c.user_id} />
+                                  </div>
+                                )}
 
                                 {isOwner ? (
                                   <div className="mt-2 flex justify-end gap-2">
@@ -1528,6 +1534,23 @@ function FeedEditModal({
         </Card>
       </div>
     </div>
+  );
+}
+
+export function FeedPostReportButton({
+  postId,
+  authorUserId,
+}: {
+  postId: string;
+  authorUserId?: string | null;
+}) {
+  return (
+    <ReportButton
+      targetType="post"
+      targetId={postId}
+      targetUserId={authorUserId ?? undefined}
+      className="ml-2"
+    />
   );
 }
 

@@ -4,6 +4,38 @@ import { getAuthedUserOrNull, requireAdmin } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { AdminActions } from "./ui";
 
+type AuditLogRow = {
+  id: string;
+  action_type: string;
+  content_type: string;
+  content_id: string | null;
+  target_user_id: string | null;
+  target_username: string;
+  note: string | null;
+  actor_id: string;
+  actor_username: string;
+  created_at: string;
+};
+
+type ReportRow = {
+  id: string;
+  reporter_user_id: string | null;
+  reporter_username: string;
+  report_type: string;
+  target_type: string;
+  target_id: string | null;
+  target_user_id: string | null;
+  target_username: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  admin_notes: string | null;
+  created_at: string;
+  content_preview: string | null;
+};
+
 export const runtime = "nodejs";
 
 export default async function AdminPage() {
@@ -16,9 +48,9 @@ export default async function AdminPage() {
     : { data: null };
   const isOwner = String((myAdminRow as any)?.role ?? "") === "owner";
 
-  const { data: apps, error: appsErr } = await sb
+  const { data: apps } = await sb
     .from("cfm_applications")
-    .select("id,favorited_username,email,photo_url,bio,wants_banner,status,created_at")
+    .select("id,email,photo_url,bio,wants_banner,status,created_at")
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -48,21 +80,29 @@ export default async function AdminPage() {
         .in("user_id", adminUserIds)
     : { data: [] };
 
+  // Fetch audit log
+  let auditLog: AuditLogRow[] = [];
+  try {
+    const { data } = await sb.rpc("cfm_get_audit_log", { p_limit: 100 });
+    auditLog = (data ?? []) as AuditLogRow[];
+  } catch {}
+
+  // Fetch reports for moderation tab
+  let reports: ReportRow[] = [];
+  try {
+    const { data } = await sb.rpc("cfm_list_reports", { p_status: null, p_limit: 100, p_offset: 0 });
+    reports = (data ?? []) as ReportRow[];
+  } catch {}
+
   return (
     <Container>
       <div className="space-y-4">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold">🛠️ Admin</h1>
           <p className="text-sm text-[color:var(--muted)]">
-            Application review, member management, feed posts, and awards.
+            New member review, member management, feed posts, and awards.
           </p>
         </div>
-
-        {appsErr ? (
-          <Card title="Applications error">
-            <div className="text-sm text-red-200">{appsErr.message}</div>
-          </Card>
-        ) : null}
         {membersErr ? (
           <Card title="Members error">
             <div className="text-sm text-red-200">{membersErr.message}</div>
@@ -87,6 +127,8 @@ export default async function AdminPage() {
           admins={(admins ?? []) as any}
           adminMembers={(adminMembers ?? []) as any}
           isOwner={isOwner}
+          auditLog={auditLog}
+          reports={reports}
         />
       </div>
     </Container>
