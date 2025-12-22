@@ -11,7 +11,7 @@ import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, VIP_TIER_COLORS, type VipTier } from "@/components/ui/vip-badge";
 import { parseLifetimeUsd } from "@/lib/utils";
 
-const DEFAULT_PROFILE_PHOTO_URL = "/no-profile-pic.png";
+// No default photo - GifterRingAvatar shows initials when imageUrl is null
 
 const DEFAULT_EMOTES = ["🔥", "😂", "❤️", "👀", "😭"];
 
@@ -523,7 +523,7 @@ export function LiveClient({
     const cached = uid ? memberByUserId[uid] ?? null : null;
     const lifetimeCoins = parseLifetimeUsd((cached as any)?.lifetime_gifted_total_usd);
 
-    const resolvedUrl = url ?? cached?.photo_url ?? (DEFAULT_PROFILE_PHOTO_URL ? DEFAULT_PROFILE_PHOTO_URL : null);
+    const resolvedUrl = url ?? cached?.photo_url ?? null;
     return (
       <GifterRingAvatar
         size={size}
