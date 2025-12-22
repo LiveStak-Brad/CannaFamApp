@@ -16,12 +16,27 @@ function normalizeSiteUrl(siteUrl: string) {
   return base || "";
 }
 
-function isWebOriginAllowed(req: NextRequest, baseUrl: string) {
+function getRequestBaseUrl(req: NextRequest) {
+  const proto = String(req.headers.get("x-forwarded-proto") ?? "https").trim() || "https";
+  const host = String(req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").trim();
+  if (!host) return "";
+  return `${proto}://${host}`;
+}
+
+function getAllowedBases(req: NextRequest, siteBaseUrl: string) {
+  const bases = new Set<string>();
+  const requestBase = getRequestBaseUrl(req);
+  if (siteBaseUrl) bases.add(siteBaseUrl);
+  if (requestBase) bases.add(requestBase);
+  return Array.from(bases);
+}
+
+function isWebOriginAllowed(req: NextRequest, allowedBases: string[]) {
   const origin = String(req.headers.get("origin") ?? "").trim();
   const referer = String(req.headers.get("referer") ?? "").trim();
-  return (
-    (origin && origin === baseUrl) ||
-    (referer && (referer === baseUrl || referer.startsWith(`${baseUrl}/`)))
+
+  return allowedBases.some((baseUrl) =>
+    (origin && origin === baseUrl) || (referer && (referer === baseUrl || referer.startsWith(`${baseUrl}/`)))
   );
 }
 
@@ -97,14 +112,15 @@ export async function POST(req: NextRequest) {
     }
 
     const base = normalizeSiteUrl(env.siteUrl);
-    if (!base) return safeJson({ error: "Missing NEXT_PUBLIC_SITE_URL" }, 500);
+    const allowedBases = getAllowedBases(req, base);
+    if (!allowedBases.length) return safeJson({ error: "Missing site origin" }, 500);
 
-    if (!isWebOriginAllowed(req, base)) {
+    if (!isWebOriginAllowed(req, allowedBases)) {
       return safeJson({ error: "Forbidden" }, 403);
     }
 
-    const successUrl = `${base}/account?coins=success&sku=${encodeURIComponent(sku)}`;
-    const cancelUrl = `${base}/account?coins=cancel&sku=${encodeURIComponent(sku)}`;
+    const successUrl = `${allowedBases[0]}/account?coins=success&sku=${encodeURIComponent(sku)}`;
+    const cancelUrl = `${allowedBases[0]}/account?coins=cancel&sku=${encodeURIComponent(sku)}`;
 
     const idempotencyKey = `web:coins:${randomUUID()}`;
 
