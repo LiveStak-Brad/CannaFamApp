@@ -46,6 +46,7 @@ export function MonetizationTestClient({ webPackages, defaultStreamId }: Props) 
   const [giftCoins, setGiftCoins] = useState("100");
   const [giftType, setGiftType] = useState("test");
   const [streamId, setStreamId] = useState(defaultStreamId ?? "");
+  const [paymentIntentId, setPaymentIntentId] = useState("");
 
   const selected = useMemo(() => webPackages.find((p) => p.sku === sku) ?? null, [sku, webPackages]);
 
@@ -100,6 +101,47 @@ export function MonetizationTestClient({ webPackages, defaultStreamId }: Props) 
         >
           Start web coin checkout
         </Button>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-xs font-semibold text-[color:var(--muted)]">Finalize by PaymentIntent (pi_...)</div>
+        <input
+          className="w-full rounded-xl bg-[color:var(--card)] px-4 py-3 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)]"
+          value={paymentIntentId}
+          onChange={(e) => setPaymentIntentId(e.target.value)}
+          placeholder="pi_..."
+        />
+        <Button
+          type="button"
+          disabled={pending || !paymentIntentId.trim()}
+          onClick={() => {
+            setMsg(null);
+            startTransition(async () => {
+              try {
+                const pi = paymentIntentId.trim();
+                if (!pi.startsWith("pi_")) throw new Error("PaymentIntent must start with pi_");
+
+                const res = await fetch("/api/coins/web/finalize", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ payment_intent_id: pi }),
+                });
+                const json = (await res.json().catch(() => null)) as any;
+                if (!res.ok || !json?.ok) throw new Error(String(json?.error ?? "Finalize failed"));
+
+                setMsg({ tone: "success", text: json?.duplicate ? "Already finalized (duplicate). Refreshing…" : "Finalized. Refreshing…" });
+                window.location.reload();
+              } catch (e) {
+                setMsg({ tone: "error", text: e instanceof Error ? e.message : "Finalize failed" });
+              }
+            });
+          }}
+        >
+          Finalize payment
+        </Button>
+        <div className="text-xs text-[color:var(--muted)]">
+          Requires metadata on the PaymentIntent (type/user_id/coins).
+        </div>
       </div>
 
       <div className="space-y-2">
