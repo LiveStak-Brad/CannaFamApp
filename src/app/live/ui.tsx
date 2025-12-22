@@ -1649,7 +1649,7 @@ export function LiveClient({
     });
   }
 
-  async function send(type: "chat" | "emote" | "tip", message: string) {
+  async function send(type: "chat" | "emote" | "tip", message: string, metadata?: Record<string, any>) {
     const msg = String(message ?? "").trim();
     if (!msg) return;
 
@@ -1665,6 +1665,7 @@ export function LiveClient({
         sender_user_id: myUserId,
         message: msg,
         type,
+        metadata: metadata ?? null,
       } as any);
 
       if (error) {
@@ -2416,8 +2417,8 @@ export function LiveClient({
               }
               toast(`Sent ${coins.toLocaleString()} coins!`, "success");
               setGiftModalOpen(false);
-              // Broadcast gift to chat via realtime
-              send("tip", `gifted ${coins.toLocaleString()} coins`);
+              // Broadcast gift to chat via realtime with metadata for leaderboard
+              send("tip", `gifted ${coins.toLocaleString()} coins`, { coins, amount_cents: coins, event: "gift" });
             } catch (e) {
               toast(e instanceof Error ? e.message : "Gift failed", "error");
             }
