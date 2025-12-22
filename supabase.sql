@@ -1360,6 +1360,15 @@ declare
   v_amount int := coalesce(p_amount_usd_cents, 0);
   v_key text := btrim(coalesce(p_idempotency_key, ''));
   v_existing_tx uuid;
+  v_month_start date := date_trunc('month', (now() at time zone 'utc'))::date;
+  v_start timestamptz := (date_trunc('month', (now() at time zone 'utc'))::date::timestamp at time zone 'utc');
+  v_end timestamptz := ((date_trunc('month', (now() at time zone 'utc'))::date + interval '1 month')::timestamp at time zone 'utc');
+  v_bronze bigint := 25000;
+  v_silver bigint := 50000;
+  v_gold bigint := 100000;
+  v_diamond bigint := 200000;
+  v_monthly_purchased bigint := 0;
+  v_tier text := null;
 begin
   if v_provider not in ('stripe','apple','google') then
     raise exception 'invalid provider';
@@ -1410,6 +1419,49 @@ begin
   insert into public.coin_transactions (user_id, type, direction, amount, source, related_id, idempotency_key)
   values (v_user_id, 'purchase', 'credit', v_coins, v_provider, null, v_key)
   returning id into v_existing_tx;
+
+  select
+    ms.vip_bronze_coins,
+    ms.vip_silver_coins,
+    ms.vip_gold_coins,
+    ms.vip_diamond_coins
+  into v_bronze, v_silver, v_gold, v_diamond
+  from public.cfm_monetization_settings ms
+  order by ms.created_at desc
+  limit 1;
+
+  v_bronze := coalesce(v_bronze, 25000);
+  v_silver := coalesce(v_silver, 50000);
+  v_gold := coalesce(v_gold, 100000);
+  v_diamond := coalesce(v_diamond, 200000);
+
+  select coalesce(sum(ct.amount), 0)::bigint
+  into v_monthly_purchased
+  from public.coin_transactions ct
+  where ct.user_id = v_user_id
+    and ct.type = 'purchase'
+    and ct.direction = 'credit'
+    and ct.created_at >= v_start
+    and ct.created_at < v_end;
+
+  v_tier := case
+    when v_monthly_purchased >= v_diamond then 'diamond'
+    when v_monthly_purchased >= v_gold then 'gold'
+    when v_monthly_purchased >= v_silver then 'silver'
+    when v_monthly_purchased >= v_bronze then 'bronze'
+    else null
+  end;
+
+  insert into public.vip_monthly_status (user_id, month_start, tier, monthly_spent_coins, computed_at)
+  values (v_user_id, v_month_start, v_tier, v_monthly_purchased, now())
+  on conflict (user_id, month_start) do update set
+    tier = excluded.tier,
+    monthly_spent_coins = excluded.monthly_spent_coins,
+    computed_at = excluded.computed_at;
+
+  update public.cfm_members
+  set vip_tier = v_tier
+  where user_id = v_user_id;
 
   return json_build_object('ok', true, 'transaction_id', v_existing_tx);
 end;
@@ -1553,49 +1605,36 @@ begin
   order by ms.created_at desc
   limit 1;
 
-  with spend as (
+  v_bronze := coalesce(v_bronze, 25000);
+  v_silver := coalesce(v_silver, 50000);
+  v_gold := coalesce(v_gold, 100000);
+  v_diamond := coalesce(v_diamond, 200000);
+
+  with purchases as (
     select
-      e.user_id,
-      sum(e.coins)::bigint as monthly_spent_coins
-    from (
-      select
-        pg.gifter_user_id as user_id,
-        pg.amount_cents::bigint as coins,
-        coalesce(pg.paid_at, pg.created_at) as ts
-      from public.cfm_post_gifts pg
-      where pg.status = 'paid'
-        and pg.gifter_user_id is not null
-        and coalesce(pg.paid_at, pg.created_at) >= v_start
-        and coalesce(pg.paid_at, pg.created_at) < v_end
-
-      union all
-
-      select
-        ct.user_id,
-        ct.amount::bigint as coins,
-        ct.created_at as ts
-      from public.coin_transactions ct
-      where ct.type = 'gift_spend'
-        and ct.direction = 'debit'
-        and ct.created_at >= v_start
-        and ct.created_at < v_end
-    ) e
-    group by e.user_id
+      ct.user_id,
+      coalesce(sum(ct.amount), 0)::bigint as monthly_purchased_coins
+    from public.coin_transactions ct
+    where ct.type = 'purchase'
+      and ct.direction = 'credit'
+      and ct.created_at >= v_start
+      and ct.created_at < v_end
+    group by ct.user_id
   ), tiers as (
     select
-      s.user_id,
-      s.monthly_spent_coins,
+      p.user_id,
+      p.monthly_purchased_coins,
       case
-        when s.monthly_spent_coins >= v_diamond then 'diamond'
-        when s.monthly_spent_coins >= v_gold then 'gold'
-        when s.monthly_spent_coins >= v_silver then 'silver'
-        when s.monthly_spent_coins >= v_bronze then 'bronze'
+        when p.monthly_purchased_coins >= v_diamond then 'diamond'
+        when p.monthly_purchased_coins >= v_gold then 'gold'
+        when p.monthly_purchased_coins >= v_silver then 'silver'
+        when p.monthly_purchased_coins >= v_bronze then 'bronze'
         else null
       end as tier
-    from spend s
+    from purchases p
   )
   insert into public.vip_monthly_status (user_id, month_start, tier, monthly_spent_coins, computed_at)
-  select t.user_id, v_month_start, t.tier, t.monthly_spent_coins, now()
+  select t.user_id, v_month_start, t.tier, t.monthly_purchased_coins, now()
   from tiers t
   on conflict (user_id, month_start) do update set
     tier = excluded.tier,

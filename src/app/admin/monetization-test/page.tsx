@@ -123,7 +123,7 @@ export default async function MonetizationTestPage({
             </div>
             <div>
               <span className="font-semibold">VIP month ({monthStartISO}):</span>{" "}
-              {vipRow ? `${String((vipRow as any).tier ?? "(none)")} • ${Number((vipRow as any).monthly_spent_coins ?? 0).toLocaleString()} spent` : "(no row)"}
+              {vipRow ? `${String((vipRow as any).tier ?? "(none)")} • ${Number((vipRow as any).monthly_spent_coins ?? 0).toLocaleString()} purchased` : "(no row)"}
             </div>
           </div>
         </Card>
