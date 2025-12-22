@@ -60,22 +60,6 @@ export async function TopNavAuth() {
   return (
     <>
       <div className="hidden max-w-full flex-wrap items-center justify-end gap-1 sm:flex sm:gap-2">
-        {isAdmin ? (
-          <Button
-            as="link"
-            href="/admin"
-            variant="secondary"
-            className={navBtnClass}
-          >
-            Admin
-          </Button>
-        ) : null}
-        <Button as="link" href="/members" variant="secondary" className={navBtnClass}>
-          Members
-        </Button>
-        <Button as="link" href="/wallet" variant="secondary" className={navBtnClass}>
-          Wallet
-        </Button>
         <Button as="link" href="/leaderboard" variant="secondary" className={navBtnClass}>
           🏆
         </Button>
@@ -89,7 +73,7 @@ export async function TopNavAuth() {
                 "inline-flex items-center justify-center gap-2 rounded-xl px-2 py-1.5 text-xs sm:px-4 sm:py-3 sm:text-sm font-semibold transition active:translate-y-[1px] bg-[color:var(--card)] text-[color:var(--foreground)] border border-[color:var(--border)] hover:border-[color:var(--accent)] list-none cursor-pointer select-none [&::-webkit-details-marker]:hidden"
               }
             >
-              <span>Account</span>
+              <span>Menu</span>
               <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
                 <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
               </svg>
@@ -97,6 +81,17 @@ export async function TopNavAuth() {
           }
         >
           <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[color:var(--border)] bg-[color:var(--card-solid)] p-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] z-50">
+            {isAdmin ? (
+              <Link href="/admin" className={mobileMenuItemClass}>
+                Admin
+              </Link>
+            ) : null}
+            <Link href="/members" className={mobileMenuItemClass}>
+              Members
+            </Link>
+            <Link href="/wallet" className={mobileMenuItemClass}>
+              Wallet
+            </Link>
             {username ? (
               <Link href={`/u/${username}`} className={mobileMenuItemClass}>
                 👤 View Profile
