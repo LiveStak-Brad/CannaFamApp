@@ -835,6 +835,9 @@ create index if not exists cfm_feed_comments_parent_id_idx
 create index if not exists cfm_feed_comments_created_at_idx
   on public.cfm_feed_comments (created_at desc);
 
+alter table public.cfm_feed_comments
+  add column if not exists is_gift boolean default false;
+
 -- Feed comment upvotes
 create table if not exists public.cfm_feed_comment_upvotes (
   id uuid primary key default gen_random_uuid(),

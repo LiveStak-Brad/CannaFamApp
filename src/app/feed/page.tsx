@@ -605,10 +605,11 @@ export default async function FeedPage({
                         allowCustom={allowCustom}
                         minCents={minCents}
                         maxCents={maxCents}
+                        myUserId={user?.id ?? null}
                         notice={
                           enablePostGifts && !leaderboardEligible
                             ? !user
-                              ? "You can gift anonymously. Log in + create your profile to appear on the gifter leaderboard."
+                              ? "Log in to gift coins."
                               : "You can gift, but it will be counted as anonymous until you create your profile."
                             : null
                         }

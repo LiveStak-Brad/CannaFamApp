@@ -433,6 +433,8 @@ export function GiftButton({
   minCents,
   maxCents,
   notice,
+  myUserId,
+  onGiftSent,
 }: {
   postId: string;
   canGift: boolean;
@@ -441,10 +443,13 @@ export function GiftButton({
   minCents: number;
   maxCents: number;
   notice?: string | null;
+  myUserId?: string | null;
+  onGiftSent?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
 
   return (
     <div className="space-y-1">
@@ -474,12 +479,37 @@ export function GiftButton({
         maxCents={maxCents}
         notice={notice ?? null}
         onClose={() => setOpen(false)}
-        onStartCheckout={(amountCents) => {
+        onStartCheckout={(coins) => {
           if (!canGift) return;
-          void amountCents;
+          if (!myUserId) {
+            setMsg("Log in to gift coins.");
+            return;
+          }
           setMsg(null);
           startTransition(async () => {
-            setMsg("Gifts are sent using coins. Buy coins in your Wallet to continue.");
+            try {
+              const idempotencyKey = `post_gift_${myUserId}_${postId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+              const res = await fetch("/api/gifts/send", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  post_id: postId,
+                  gift_type: "coins",
+                  coins,
+                  idempotency_key: idempotencyKey,
+                }),
+              });
+              const json = (await res.json().catch(() => null)) as any;
+              if (!res.ok) {
+                throw new Error(String(json?.error ?? "Gift failed"));
+              }
+              setMsg(`Sent ${coins.toLocaleString()} coins!`);
+              setOpen(false);
+              onGiftSent?.();
+              router.refresh();
+            } catch (e) {
+              setMsg(e instanceof Error ? e.message : "Gift failed");
+            }
           });
         }}
       />
