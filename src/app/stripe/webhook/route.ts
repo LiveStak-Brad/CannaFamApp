@@ -21,6 +21,15 @@ async function finalizeCoinPurchaseOrError(params: {
 }) {
   const { admin, providerOrderId, userId, coins, amountUsdCents, idempotencyKey, eventId } = params;
 
+  console.info("[cfm][stripe-webhook] finalize attempt", {
+    event_id: eventId,
+    provider_order_id: providerOrderId,
+    user_id: userId,
+    coins,
+    amount_usd_cents: amountUsdCents,
+    idempotency_key_present: Boolean(idempotencyKey),
+  });
+
   const { data, error } = await admin.rpc("cfm_finalize_coin_purchase", {
     p_provider: "stripe",
     p_provider_order_id: providerOrderId,
@@ -33,9 +42,20 @@ async function finalizeCoinPurchaseOrError(params: {
   if (error) {
     const msg = String(error.message ?? "").toLowerCase();
     const isDup = msg.includes("duplicate") || msg.includes("already") || msg.includes("unique");
+    console.error("[cfm][stripe-webhook] finalize error", {
+      event_id: eventId,
+      provider_order_id: providerOrderId,
+      error: error.message,
+      duplicate_hint: isDup,
+    });
     if (isDup) return { ok: true, duplicate: true };
     return { ok: false, error: error.message };
   }
+
+  console.info("[cfm][stripe-webhook] finalize ok", {
+    event_id: eventId,
+    provider_order_id: providerOrderId,
+  });
 
   return { ok: true, result: data ?? null };
 }
@@ -50,8 +70,16 @@ export async function POST(req: Request) {
   try {
     event = stripe().webhooks.constructEvent(body, sig, env.stripeWebhookSecret);
   } catch (e) {
+    console.error("[cfm][stripe-webhook] signature error", {
+      error: e instanceof Error ? e.message : "Invalid signature",
+    });
     return safeJson({ ok: false, error: e instanceof Error ? e.message : "Invalid signature" }, 400);
   }
+
+  console.info("[cfm][stripe-webhook] received", {
+    type: event.type,
+    event_id: event.id,
+  });
 
   const admin = (() => {
     try {
@@ -62,12 +90,20 @@ export async function POST(req: Request) {
   })();
 
   if (!admin) {
+    console.error("[cfm][stripe-webhook] missing service role key", { event_id: event.id });
     return safeJson({ ok: false, error: "Missing SUPABASE_SERVICE_ROLE_KEY" }, 500);
   }
 
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
+
+      console.info("[cfm][stripe-webhook] checkout.session.completed", {
+        event_id: event.id,
+        session_id: String(session.id ?? ""),
+        payment_intent: String((session.payment_intent as any) ?? ""),
+        type: String(session.metadata?.type ?? ""),
+      });
 
       const type = String(session.metadata?.type ?? "").trim();
       if (type !== "coin_purchase") {
@@ -107,6 +143,12 @@ export async function POST(req: Request) {
     if (event.type === "payment_intent.succeeded") {
       const pi = event.data.object as Stripe.PaymentIntent;
 
+      console.info("[cfm][stripe-webhook] payment_intent.succeeded", {
+        event_id: event.id,
+        payment_intent_id: String(pi.id ?? ""),
+        type: String(pi.metadata?.type ?? ""),
+      });
+
       const type = String(pi.metadata?.type ?? "").trim();
       if (type !== "coin_purchase") {
         return safeJson({ ok: true, ignored: true });
@@ -140,11 +182,20 @@ export async function POST(req: Request) {
         idempotencyKey,
         eventId: event.id,
       });
+      console.info("[cfm][stripe-webhook] finalize result", {
+        event_id: event.id,
+        provider_order_id: providerOrderId,
+        result: res.ok ? "success" : "failure",
+        error: res.error,
+      });
       return safeJson(res, res.ok ? 200 : 500);
     }
 
     return safeJson({ ok: true, ignored: true, type: event.type });
   } catch (e) {
+    console.error("[cfm][stripe-webhook] handler error", {
+      error: e instanceof Error ? e.message : "Webhook handler failed",
+    });
     return safeJson({ ok: false, error: e instanceof Error ? e.message : "Webhook handler failed" }, 500);
   }
- }
+}

@@ -99,12 +99,13 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (packErr) return safeJson({ error: packErr.message }, 500);
-    if (!pack) return safeJson({ error: "Package not found" }, 404);
+    if (!packErr && !pack) return safeJson({ error: "Package not found" }, 404);
 
     const priceUsdCents = Number((pack as any).price_usd_cents ?? 0);
     const coins = Number((pack as any).coins ?? 0);
 
     if (!Number.isFinite(priceUsdCents) || priceUsdCents <= 0) {
+      console.error("[cfm][coins][web-checkout] error", { message: "Invalid package price" });
       return safeJson({ error: "Invalid package price" }, 500);
     }
     if (!Number.isFinite(coins) || coins <= 0) {
@@ -118,6 +119,14 @@ export async function POST(req: NextRequest) {
     if (!isWebOriginAllowed(req, allowedBases)) {
       return safeJson({ error: "Forbidden" }, 403);
     }
+
+    console.info("[cfm][coins][web-checkout] start", {
+      user_id: user.id,
+      sku,
+      coins,
+      price_usd_cents: priceUsdCents,
+      allowed_bases: allowedBases.length,
+    });
 
     const successUrl = `${allowedBases[0]}/account?coins=success&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${allowedBases[0]}/account?coins=cancel&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
@@ -159,9 +168,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    console.info("[cfm][coins][web-checkout] created", {
+      user_id: user.id,
+      sku,
+      session_id: session.id,
+    });
+
     return safeJson({ url: session.url, session_id: session.id, idempotency_key: idempotencyKey });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    console.error("[cfm][coins][web-checkout] error", { message });
     return safeJson({ error: message }, 500);
   }
 }
