@@ -69,9 +69,7 @@ export function HomeLinkVisits({ initialVisited, discordJoined, canEarn }: HomeL
       ) : null}
       <div className="grid grid-cols-1 gap-2">
         <a
-          href="https://fav.gg/@cannastreams"
-          target="_blank"
-          rel="noreferrer"
+          href="/hostlive"
           className="flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] bg-[rgba(209,31,42,0.15)] px-4 py-3 text-sm font-semibold transition hover:bg-[rgba(209,31,42,0.25)]"
         >
           🔴 Watch Live

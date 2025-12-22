@@ -92,6 +92,9 @@ export async function TopNavAuth() {
             <Link href="/wallet" className={mobileMenuItemClass}>
               Wallet
             </Link>
+            <Link href="/daily-activities" className={mobileMenuItemClass}>
+              🎯 Daily Activities
+            </Link>
             {username ? (
               <Link href={`/u/${username}`} className={mobileMenuItemClass}>
                 👤 View Profile
@@ -179,6 +182,9 @@ export async function TopNavAuth() {
             </Link>
             <Link href="/wallet" className={mobileMenuItemClass}>
               Wallet
+            </Link>
+            <Link href="/daily-activities" className={mobileMenuItemClass}>
+              🎯 Daily Activities
             </Link>
             {username ? (
               <Link href={`/u/${username}`} className={mobileMenuItemClass}>
