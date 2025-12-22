@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: "🏠" },
   { href: "/feed", label: "Feed", icon: "🔥" },
   { href: "/live", label: "Live", icon: "▶️" },
+  { href: "/wallet", label: "Wallet", icon: "💰" },
   { href: "/awards", label: "Awards", icon: "🎖️" },
   { href: "/members", label: "Members", icon: "👥" },
 ];
