@@ -119,8 +119,8 @@ export async function POST(req: NextRequest) {
       return safeJson({ error: "Forbidden" }, 403);
     }
 
-    const successUrl = `${allowedBases[0]}/account?coins=success&sku=${encodeURIComponent(sku)}`;
-    const cancelUrl = `${allowedBases[0]}/account?coins=cancel&sku=${encodeURIComponent(sku)}`;
+    const successUrl = `${allowedBases[0]}/account?coins=success&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${allowedBases[0]}/account?coins=cancel&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
 
     const idempotencyKey = `web:coins:${randomUUID()}`;
 
