@@ -1684,18 +1684,35 @@ export function LiveClient({
     }
 
     startTransition(async () => {
-      const { error } = await sb.from("cfm_live_chat").insert({
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      const authedUserId = String(user?.id ?? "").trim();
+      if (!authedUserId) {
+        toast("Log in to comment & react.", "error");
+        return;
+      }
+
+      const payload = {
         live_id: liveId,
-        sender_user_id: myUserId,
+        sender_user_id: authedUserId,
         message: msg,
         type,
         metadata: metadata ?? null,
-      } as any);
+      } as any;
+
+      const { data: inserted, error } = await sb.from("cfm_live_chat").insert(payload).select("*").maybeSingle();
 
       if (error) {
-        if (myUserId) {
+        const m = String((error as any)?.message ?? "");
+        if (m.toLowerCase().includes("row-level security") || m.toLowerCase().includes("not authorized")) {
+          toast("Only approved members can chat during live.", "error");
+          return;
+        }
+
+        if (authedUserId) {
           try {
-            const { data: isBanned } = await sb.rpc("cfm_is_banned", { p_user_id: myUserId } as any);
+            const { data: isBanned } = await sb.rpc("cfm_is_banned", { p_user_id: authedUserId } as any);
             if (isBanned) {
               setBanned(true);
               setBanReason("You have been banned");
@@ -1706,8 +1723,15 @@ export function LiveClient({
           } catch {
           }
         }
-        toast(error.message, "error");
+        toast(m || error.message, "error");
         return;
+      }
+
+      if (inserted && inserted.id) {
+        setRows((prev) => {
+          if (prev.some((r) => r.id === inserted.id)) return prev;
+          return [...prev, inserted as any].slice(-220);
+        });
       }
 
       if (type === "chat") setText("");
