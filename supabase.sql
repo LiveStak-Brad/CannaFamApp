@@ -753,6 +753,7 @@ as $$
     from public.cfm_post_gifts g
     where g.status = 'paid'
       and g.gifter_user_id is not null
+      and coalesce(g.provider, '') != 'coins'
 
     union all
 
@@ -2770,6 +2771,7 @@ as $$
     where g.status = 'paid'
       and g.gifter_user_id is not null
       and (g.post_id is null or g.post_id::text = 'Live')
+      and coalesce(g.provider, '') != 'coins'
 
     union all
 
@@ -2809,7 +2811,7 @@ as $$
     where e.user_id is not null
       and e.amount_cents is not null
       and e.amount_cents > 0
-      and (ls.started_at is null or (e.ts at time zone 'America/Chicago') >= (ls.started_at at time zone 'America/Chicago'))
+      and (ls.started_at is null or (e.ts at time zone 'America/New_York') >= (ls.started_at at time zone 'America/New_York'))
   ),
   totals as (
     select
@@ -2822,7 +2824,7 @@ as $$
     t.user_id as profile_id,
     coalesce(pm.favorited_username, 'Member') as display_name,
     pm.photo_url as avatar_url,
-    (t.total_cents / 100.0)::numeric as total_amount,
+    (t.total_cents)::numeric as total_amount,
     rank() over (order by t.total_cents desc, coalesce(pm.favorited_username, 'Member') asc)::int as rank
   from totals t
   left join public.cfm_public_member_ids pm

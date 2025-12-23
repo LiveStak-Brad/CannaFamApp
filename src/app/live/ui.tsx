@@ -109,10 +109,10 @@ export function LiveClient({
   // Gift modal state
   const [giftModalOpen, setGiftModalOpen] = useState(false);
   const [giftPending, startGiftTransition] = useTransition();
-  const [giftPresets, setGiftPresets] = useState<number[]>([100, 300, 500, 1000, 2000]);
+  const [giftPresets, setGiftPresets] = useState<number[]>([10, 30, 50, 100, 200]);
   const [giftSettings, setGiftSettings] = useState<{ allowCustom: boolean; minCents: number; maxCents: number; enabled: boolean }>({
     allowCustom: true,
-    minCents: 100,
+    minCents: 10,
     maxCents: 20000,
     enabled: true,
   });
@@ -911,7 +911,7 @@ export function LiveClient({
               });
               
               // Trigger gift flash animation for gift messages
-              const isGift = row.type === "tip" || (row.type === "system" && row.metadata?.event === "gift");
+              const isGift = row.type === "tip" || row.metadata?.event === "gift";
               if (isGift) {
                 const msg = String(row.message ?? "");
                 if (giftFlashTimeoutRef.current) {
@@ -2014,7 +2014,7 @@ export function LiveClient({
                         const senderName = String(nameByUserId[senderId] ?? "Member");
                         const badge = getBadge(senderId);
                         const isJoin = t === "system" && meta?.event === "join";
-                        const isGift = t === "tip" || (t === "system" && meta?.event === "gift");
+                        const isGift = t === "tip" || meta?.event === "gift";
 
                         const avatar = renderAvatar(senderId, senderName, null, 24);
                         
@@ -2244,7 +2244,7 @@ export function LiveClient({
                               <VipBadge tier={vipTier} />
                             </span>
                           </div>
-                          <div className="text-lg font-bold text-green-400">{fmtCoins(Math.round(amount * 100))}</div>
+                          <div className="text-lg font-bold text-green-400">{fmtCoins(Math.round(amount))}</div>
                         </div>
                       </button>
                     );
@@ -2453,8 +2453,6 @@ export function LiveClient({
               }
               toast(`Sent ${coins.toLocaleString()} coins!`, "success");
               setGiftModalOpen(false);
-              // Broadcast gift to chat via realtime with metadata for leaderboard
-              send("tip", `gifted ${coins.toLocaleString()} coins`, { coins, amount_cents: coins, event: "gift" });
             } catch (e) {
               toast(e instanceof Error ? e.message : "Gift failed", "error");
             }

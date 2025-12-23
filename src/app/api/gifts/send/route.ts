@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
+import { assertPublicEnv, env } from "@/lib/env";
 
 export const runtime = "nodejs";
 
@@ -15,7 +17,18 @@ function mustEnv(name: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const sb = await supabaseServer();
+    assertPublicEnv();
+
+    const authHeader = String(req.headers.get("authorization") ?? "").trim();
+    const bearerToken = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+
+    const sb = bearerToken
+      ? createClient(env.supabaseUrl, env.supabaseAnonKey, {
+          global: { headers: { Authorization: `Bearer ${bearerToken}` } },
+          auth: { persistSession: false },
+        })
+      : await supabaseServer();
+
     const {
       data: { user },
     } = await sb.auth.getUser();
@@ -56,6 +69,29 @@ export async function POST(req: NextRequest) {
     });
 
     if (giftErr) return safeJson({ error: giftErr.message }, 400);
+
+    // If this is a live gift, emit a chat row so viewers see it instantly.
+    // Use type='chat' + metadata.event='gift' so it passes RLS (tip inserts are restricted).
+    if (streamId) {
+      try {
+        const { data: publicRow } = await sb
+          .from("cfm_public_member_ids")
+          .select("favorited_username")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const gifterName = String((publicRow as any)?.favorited_username ?? "Someone").trim() || "Someone";
+
+        await sb.from("cfm_live_chat").insert({
+          live_id: streamId,
+          sender_user_id: user.id,
+          message: `🎁 ${gifterName} gifted ${coins.toLocaleString()} coins!`,
+          type: "chat",
+          metadata: { event: "gift", coins, amount_cents: coins },
+        } as any);
+      } catch (e) {
+        console.error("Failed to emit live gift chat:", e);
+      }
+    }
 
     // If this is a post gift, add a comment to the post
     if (postId) {

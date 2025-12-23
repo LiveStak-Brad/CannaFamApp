@@ -879,7 +879,7 @@ export function HostLiveClient({
                       <VipBadge tier={vipTier} />
                     </span>
                   </span>
-                  <span className="text-[10px] font-bold text-green-400">{fmtCoins(Math.round(amount * 100))}</span>
+                  <span className="text-[10px] font-bold text-green-400">{fmtCoins(Math.round(amount))}</span>
                 </div>
               </div>
             );
@@ -1276,7 +1276,7 @@ export function HostLiveClient({
                             <VipBadge tier={vipTier} />
                           </span>
                         </div>
-                        <div className="text-lg font-bold text-green-400">{fmtCoins(Math.round(amount * 100))}</div>
+                        <div className="text-lg font-bold text-green-400">{fmtCoins(Math.round(amount))}</div>
                       </div>
                     </div>
                   );
