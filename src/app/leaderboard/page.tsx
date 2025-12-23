@@ -67,7 +67,7 @@ export default async function LeaderboardPage() {
       (data ?? []).map((r: any) => ({
         user_id: String(r.profile_id ?? ""),
         favorited_username: String(r.display_name ?? "Member"),
-        total_cents: Math.round(Number(r.total_amount ?? 0) * 100),
+        total_cents: Math.round(Number(r.total_amount ?? 0)),
         photo_url: r.avatar_url ?? null,
         rank: Number(r.rank ?? 0),
       }));

@@ -1977,7 +1977,7 @@ export function LiveClient({
                             </span>
                           </div>
                           <div className="text-[11px] font-bold text-green-400">
-                            {fmtCoins(Math.round(Number(g.total_amount ?? 0) * 100))}
+                            {fmtCoins(Math.round(Number(g.total_amount ?? 0)))}
                           </div>
                         </div>
                       </button>

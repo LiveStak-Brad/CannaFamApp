@@ -810,6 +810,7 @@ as $$
   from totals t
   left join public.cfm_public_member_ids pm
     on pm.user_id = t.user_id
+  where t.user_id != '4deba91a-9a75-4e50-b348-13eda39d7cfb'::uuid
   order by rank asc;
 $$;
 
@@ -2483,6 +2484,7 @@ begin
     where f.followed_user_id = m.user_id
   ) fi on true
   where m.user_id is not null
+    and m.user_id != '4deba91a-9a75-4e50-b348-13eda39d7cfb'::uuid
   order by total_points desc, m.created_at asc
   limit greatest(1, limit_n);
 end;
