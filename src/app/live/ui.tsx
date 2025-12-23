@@ -906,6 +906,8 @@ export function LiveClient({
             (payload: any) => {
               const row = payload.new as any;
               setRows((prev) => {
+                const rid = String((row as any)?.id ?? "").trim();
+                if (rid && prev.some((r) => String((r as any)?.id ?? "").trim() === rid)) return prev;
                 const next = [...prev, row];
                 return next.slice(-200);
               });
