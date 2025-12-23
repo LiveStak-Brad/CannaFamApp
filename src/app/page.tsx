@@ -36,14 +36,16 @@ export default async function Home() {
       <div className="space-y-2">
         {/* 1️⃣ Hero Section */}
         <div className="flex flex-col items-center gap-0.5 pt-1">
-          <Image
-            src="/applogo.png"
-            alt="CannaFam"
-            width={56}
-            height={56}
-            className="object-contain"
-            priority
-          />
+          <div className="relative h-14 w-14 overflow-hidden rounded-xl">
+            <Image
+              src="/applogo.png"
+              alt="CannaFam"
+              fill
+              sizes="56px"
+              className="object-cover scale-[1.08]"
+              priority
+            />
+          </div>
           <h1 className="text-base font-semibold tracking-tight">Welcome to CannaFam</h1>
           <p className="text-[11px] font-medium text-[color:var(--foreground)] text-center leading-snug">
             A community-driven app where supporters back CannaStreams, earn recognition, and influence weekly outcomes — beyond algorithms.
