@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/mini-profile";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 import { ReportButton } from "@/components/ui/report-button";
 
 export type FeedPost = {
@@ -765,6 +766,7 @@ function CommentsModal({
   mentionCandidates,
   comments,
   commenterProfiles,
+  roleByUserId,
   upvoteCountByComment,
   upvotedByMe,
   awards,
@@ -792,6 +794,7 @@ function CommentsModal({
       youtube_link?: string | null;
     }
   >;
+  roleByUserId?: Record<string, RoleType>;
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;
   awards: MiniProfileAwardRow[];
@@ -1166,6 +1169,7 @@ function CommentsModal({
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <div className="text-sm font-semibold truncate">{name}</div>
+                                    <RoleBadge role={roleByUserId?.[c.user_id] ?? null} />
                                     <VipBadge tier={(p as any)?.vip_tier ?? null} />
                                   </div>
                                   {bio ? (
@@ -1382,6 +1386,7 @@ export function CommentsButton({
   mentionCandidates,
   comments,
   commenterProfiles,
+  roleByUserId,
   upvoteCountByComment,
   upvotedByMe,
   awards,
@@ -1397,6 +1402,7 @@ export function CommentsButton({
     string,
     { favorited_username: string; photo_url: string | null; lifetime_gifted_total_usd?: number | null; bio?: string | null }
   >;
+  roleByUserId?: Record<string, RoleType>;
   upvoteCountByComment: Map<string, number>;
   upvotedByMe: Set<string>;
   awards: MiniProfileAwardRow[];
@@ -1423,6 +1429,7 @@ export function CommentsButton({
         mentionCandidates={mentionCandidates}
         comments={comments}
         commenterProfiles={commenterProfiles}
+        roleByUserId={roleByUserId}
         upvoteCountByComment={upvoteCountByComment}
         upvotedByMe={upvotedByMe}
         awards={awards}

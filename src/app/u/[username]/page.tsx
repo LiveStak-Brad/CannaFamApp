@@ -5,6 +5,7 @@ import { AdminPostComposer } from "@/components/ui/admin-post-composer";
 import { DailyPostComposer, type DailyPostDraft, type MentionCandidate } from "@/components/ui/daily-post-composer";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 import { requireApprovedMember } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdminOrNull } from "@/lib/supabase/admin";
@@ -168,6 +169,17 @@ export default async function UserProfilePage({
 
   const linkedUserId = String(profile.user_id ?? "").trim() || null;
 
+  // Fetch role for this profile
+  let profileRole: RoleType = null;
+  if (linkedUserId) {
+    const { data: roleRow } = await sb
+      .from("cfm_admins")
+      .select("role")
+      .eq("user_id", linkedUserId)
+      .maybeSingle();
+    profileRole = (roleRow?.role as RoleType) ?? null;
+  }
+
   const isOwnProfile = !!linkedUserId && String(authedUser.id) === String(linkedUserId);
 
   const followerCount = linkedUserId
@@ -319,6 +331,7 @@ export default async function UserProfilePage({
         <div className="space-y-1">
           <h1 className="text-xl font-semibold inline-flex items-center gap-2">
             <span>👤 {profile.favorited_username}</span>
+            <RoleBadge role={profileRole} />
             <VipBadge tier={(profile as any)?.vip_tier ?? null} />
           </h1>
           <p className="text-sm text-[color:var(--muted)]">Member profile</p>

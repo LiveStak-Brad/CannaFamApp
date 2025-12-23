@@ -24,6 +24,7 @@ import Link from "next/link";
 import { AdminPostComposer } from "@/components/ui/admin-post-composer";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 
 export const runtime = "nodejs";
 
@@ -153,6 +154,20 @@ export default async function FeedPage({
           typeof a.lifetime_gifted_total_usd === "number" ? (a.lifetime_gifted_total_usd as number) : null,
         vip_tier: (typeof (a as any)?.vip_tier === "string" ? String((a as any).vip_tier) : null) as VipTier | null,
       });
+    }
+  }
+
+  // Fetch roles for all authors
+  const roleByUserId: Record<string, RoleType> = {};
+  if (authorIds.length) {
+    const { data: adminRows } = await sb
+      .from("cfm_admins")
+      .select("user_id,role")
+      .in("user_id", authorIds);
+    for (const r of (adminRows ?? []) as any[]) {
+      if (r?.user_id && r?.role) {
+        roleByUserId[String(r.user_id)] = r.role as RoleType;
+      }
     }
   }
 
@@ -382,6 +397,19 @@ export default async function FeedPage({
         vip_tier: (m.vip_tier ?? null) as VipTier | null,
       });
     }
+
+    // Fetch roles for commenters
+    if (commenterIds.length) {
+      const { data: commenterAdminRows } = await sb
+        .from("cfm_admins")
+        .select("user_id,role")
+        .in("user_id", commenterIds);
+      for (const r of (commenterAdminRows ?? []) as any[]) {
+        if (r?.user_id && r?.role) {
+          roleByUserId[String(r.user_id)] = r.role as RoleType;
+        }
+      }
+    }
   } catch {
     comments = [];
     upvotes = [];
@@ -573,6 +601,7 @@ export default async function FeedPage({
                           <span className="min-w-0 truncate text-base font-bold text-[color:var(--foreground)]">
                             <span className="inline-flex items-center gap-2">
                               <span className="min-w-0 truncate">@{uname}</span>
+                              <RoleBadge role={roleByUserId[uid] ?? null} />
                               <VipBadge tier={vipTier} />
                             </span>
                           </span>
@@ -607,6 +636,7 @@ export default async function FeedPage({
                         mentionCandidates={mentionCandidates}
                         comments={commentsByPost.get(p.id) ?? []}
                         commenterProfiles={commenterProfiles}
+                        roleByUserId={roleByUserId}
                         upvoteCountByComment={upvoteCountByComment}
                         upvotedByMe={upvotedByMe}
                         isAdmin={canEditPosts}

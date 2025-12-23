@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 
 export type MiniProfileSubject = {
   user_id?: string | null;
@@ -13,6 +14,7 @@ export type MiniProfileSubject = {
   photo_url?: string | null;
   lifetime_gifted_total_usd?: number | null;
   vip_tier?: VipTier | null;
+  role?: RoleType;
   bio?: string | null;
   public_link?: string | null;
   instagram_link?: string | null;
@@ -190,6 +192,7 @@ export function MiniProfileModal({
                     >
                       <span className="inline-flex items-center gap-2">
                         <span className="truncate">{subject.favorited_username}</span>
+                        <RoleBadge role={subject.role ?? null} />
                         <VipBadge tier={vipTier} />
                       </span>
                     </Link>

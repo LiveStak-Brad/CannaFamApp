@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { toast } from "@/components/ui/toast";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
 import { VipBadge, VIP_TIER_COLORS, type VipTier } from "@/components/ui/vip-badge";
+import { RoleBadge, type RoleType } from "@/components/ui/role-badge";
 import { parseLifetimeUsd } from "@/lib/utils";
 import { MiniProfileModal } from "@/components/ui/mini-profile";
 
@@ -273,6 +274,7 @@ export function HostLiveClient({
       }
     >
   >({});
+  const [roleByUserId, setRoleByUserId] = useState<Record<string, RoleType>>({});
 
   const liveId = live?.id ?? "";
 
@@ -764,6 +766,22 @@ export function HostLiveClient({
         if (Object.keys(memberPatch).length) {
           setMemberByUserId((prev) => ({ ...prev, ...memberPatch }));
         }
+
+        // Fetch roles for these users
+        const { data: roleData } = await sb
+          .from("cfm_admins")
+          .select("user_id,role")
+          .in("user_id", ids);
+        if (cancelled) return;
+        const rolePatch: Record<string, RoleType> = {};
+        for (const r of (roleData ?? []) as any[]) {
+          if (r?.user_id && r?.role) {
+            rolePatch[String(r.user_id)] = r.role as RoleType;
+          }
+        }
+        if (Object.keys(rolePatch).length) {
+          setRoleByUserId((prev) => ({ ...prev, ...rolePatch }));
+        }
       } catch {
       }
     })();
@@ -1039,6 +1057,7 @@ export function HostLiveClient({
                   <div className="min-w-0">
                     <span className="inline-flex items-center gap-1 text-white/70 font-semibold">
                       {senderName}
+                      <RoleBadge role={roleByUserId[senderId] ?? null} />
                       <VipBadge tier={(senderId ? (memberByUserId[senderId] as any)?.vip_tier : null) ?? null} />:
                     </span>{" "}
                     {msg}
