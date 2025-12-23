@@ -505,6 +505,7 @@ export function GiftButton({
               if (!res.ok) {
                 const errMsg = String(json?.error ?? "Gift failed");
                 if (errMsg.toLowerCase().includes("insufficient")) {
+                  setOpen(false);
                   const go = window.confirm("You don't have enough coins. Would you like to buy more?");
                   if (go) router.push("/wallet");
                   return;

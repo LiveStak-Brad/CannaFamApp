@@ -2471,6 +2471,7 @@ export function LiveClient({
               if (!res.ok) {
                 const errMsg = String(json?.error ?? "Gift failed");
                 if (errMsg.toLowerCase().includes("insufficient")) {
+                  setGiftModalOpen(false);
                   const go = window.confirm("You don't have enough coins. Would you like to buy more?");
                   if (go) window.location.href = "/wallet";
                   return;
