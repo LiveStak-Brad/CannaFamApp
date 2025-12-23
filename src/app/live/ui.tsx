@@ -1698,7 +1698,7 @@ export function LiveClient({
         sender_user_id: authedUserId,
         message: msg,
         type,
-        metadata: metadata ?? null,
+        metadata: metadata ?? {},
       } as any;
 
       const { data: inserted, error } = await sb.from("cfm_live_chat").insert(payload).select("*").maybeSingle();
