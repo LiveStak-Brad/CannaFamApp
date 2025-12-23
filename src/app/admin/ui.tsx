@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,10 @@ import {
   removeMember,
   sendMemberInvite,
   grantDailyGiftBonus,
-  assignAward,
+  computeWeeklyAwards,
+  getCurrentWeekStartEt,
+  previewWeeklyAwardsMetrics,
+  upsertWeeklyAwardsInput,
   addAdmin,
   removeAdmin,
 } from "./actions";
@@ -170,6 +173,8 @@ export function AdminActions({
     [membersSorted],
   );
 
+  const weekDefaults = useMemo(() => currentWeekRangeISO(), []);
+  const [weekStart, setWeekStart] = useState<string>(weekDefaults.start);
   const [awardMemberId, setAwardMemberId] = useState<string>(linkedMembersSorted[0]?.id ?? "");
   const selectedAwardMember = useMemo(
     () => members.find((m) => m.id === awardMemberId) ?? null,
@@ -177,23 +182,22 @@ export function AdminActions({
   );
   const awardUserId = selectedAwardMember?.user_id ?? "";
 
-  const awardTypes = useMemo(
-    () => [
-      "🏆 MVP",
-      "🌱 Rookie",
-      "🎯 Top Sniper",
-      "💎 Top Supporter",
-      "📣 Most Shares",
-      "🔥 Most Consistent",
-    ],
-    [],
-  );
+  const [showedUp, setShowedUp] = useState(false);
+  const [helpedOthers, setHelpedOthers] = useState(false);
+  const [goodVibes, setGoodVibes] = useState(false);
+  const [problematic, setProblematic] = useState(false);
+  const [externalGiftsCoins, setExternalGiftsCoins] = useState<string>("0");
+  const [externalSnipesCoins, setExternalSnipesCoins] = useState<string>("0");
+  const [notes, setNotes] = useState<string>("");
 
-  const [awardType, setAwardType] = useState<string>(awardTypes[0] ?? "🏆 MVP");
-  const weekDefaults = useMemo(() => currentWeekRangeISO(), []);
-  const [weekStart, setWeekStart] = useState<string>(weekDefaults.start);
-  const [weekEnd, setWeekEnd] = useState<string>(weekDefaults.end);
-  const [awardNotes, setAwardNotes] = useState<string>("");
+  const [metricsRows, setMetricsRows] = useState<any[] | null>(null);
+  const [computedRows, setComputedRows] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    if (linkedMembersSorted.length && !awardMemberId) {
+      setAwardMemberId(linkedMembersSorted[0]?.id ?? "");
+    }
+  }, [awardMemberId, linkedMembersSorted]);
 
   const pendingReports = reports.filter((r) => r.status === "pending").length;
 
@@ -227,80 +231,223 @@ export function AdminActions({
       </div>
 
       {activeTab === "awards" && (
-      <Card title="Assign award">
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <div className="text-xs font-semibold text-[color:var(--muted)] mb-1">Winner</div>
-              <select
-                value={awardMemberId}
-                onChange={(e) => setAwardMemberId(e.target.value)}
-                className="w-full rounded-lg bg-[color:var(--card)] px-3 py-2 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
-              >
-                {linkedMembersSorted.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.favorited_username}
-                  </option>
-                ))}
-              </select>
+        <Card title="Weekly Awards Builder">
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Input
+                label="Week start (ET)"
+                value={weekStart}
+                onChange={(e) => setWeekStart(e.target.value)}
+                placeholder="YYYY-MM-DD"
+              />
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => {
+                    setMsg(null);
+                    startTransition(async () => {
+                      try {
+                        const res = await getCurrentWeekStartEt();
+                        setWeekStart(res.weekStart);
+                        setMsg({ tone: "success", text: "Loaded ET week start." });
+                      } catch (e) {
+                        setMsg({ tone: "error", text: e instanceof Error ? e.message : "Failed" });
+                      }
+                    });
+                  }}
+                >
+                  {pending ? "Loading..." : "Load current ET week"}
+                </Button>
+              </div>
+              <div className="flex items-end justify-end">
+                {isOwner ? (
+                  <Button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setMsg(null);
+                      startTransition(async () => {
+                        try {
+                          const res = await computeWeeklyAwards(null);
+                          setComputedRows((res as any)?.rows ?? null);
+                          setMsg({ tone: "success", text: "Awards computed." });
+                        } catch (e) {
+                          setMsg({ tone: "error", text: e instanceof Error ? e.message : "Compute failed" });
+                        }
+                      });
+                    }}
+                  >
+                    {pending ? "Computing..." : "Compute Awards (last week)"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            <div>
-              <div className="text-xs font-semibold text-[color:var(--muted)] mb-1">Category</div>
-              <select
-                value={awardType}
-                onChange={(e) => setAwardType(e.target.value)}
-                className="w-full rounded-lg bg-[color:var(--card)] px-3 py-2 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
-              >
-                {awardTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-xs font-semibold text-[color:var(--muted)] mb-1">Member</div>
+                <select
+                  value={awardMemberId}
+                  onChange={(e) => setAwardMemberId(e.target.value)}
+                  className="w-full rounded-lg bg-[color:var(--card)] px-3 py-2 text-sm text-[color:var(--foreground)] outline-none ring-1 ring-[color:var(--border)] focus:ring-[rgba(209,31,42,0.55)]"
+                >
+                  {linkedMembersSorted.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.favorited_username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending || !weekStart}
+                  onClick={() => {
+                    setMsg(null);
+                    startTransition(async () => {
+                      try {
+                        const res = await previewWeeklyAwardsMetrics(weekStart);
+                        setMetricsRows((res as any)?.rows ?? []);
+                        setMsg({ tone: "success", text: "Preview loaded." });
+                      } catch (e) {
+                        setMsg({ tone: "error", text: e instanceof Error ? e.message : "Preview failed" });
+                      }
+                    });
+                  }}
+                >
+                  {pending ? "Loading..." : "Preview week"}
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              label="Week start"
-              value={weekStart}
-              onChange={(e) => setWeekStart(e.target.value)}
-              placeholder="YYYY-MM-DD"
-            />
-            <Input
-              label="Week end"
-              value={weekEnd}
-              onChange={(e) => setWeekEnd(e.target.value)}
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-          <Button
-            type="button"
-            disabled={pending || !awardUserId || !awardType || !weekStart || !weekEnd}
-            onClick={() => {
-              setMsg(null);
-              startTransition(async () => {
-                try {
-                  const fd = new FormData();
-                  fd.set("user_id", awardUserId);
-                  fd.set("award_type", awardType);
-                  fd.set("week_start", weekStart);
-                  fd.set("week_end", weekEnd);
-                  fd.set("notes", awardNotes);
-                  const res = await assignAward(fd);
-                  setMsg({ tone: "success", text: res.message });
-                } catch (err) {
-                  setMsg({
-                    tone: "error",
-                    text: err instanceof Error ? err.message : "Assign failed",
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={showedUp} onChange={(e) => setShowedUp(e.target.checked)} />
+                Showed up
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={helpedOthers} onChange={(e) => setHelpedOthers(e.target.checked)} />
+                Helped others
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={goodVibes} onChange={(e) => setGoodVibes(e.target.checked)} />
+                Good vibes
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={problematic} onChange={(e) => setProblematic(e.target.checked)} />
+                Problematic
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="External gifts (coins)"
+                value={externalGiftsCoins}
+                onChange={(e) => setExternalGiftsCoins(e.target.value)}
+                placeholder="0"
+              />
+              <Input
+                label="External snipes (coins)"
+                value={externalSnipesCoins}
+                onChange={(e) => setExternalSnipesCoins(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+
+            <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                disabled={pending || !weekStart || !awardUserId}
+                onClick={() => {
+                  setMsg(null);
+                  startTransition(async () => {
+                    try {
+                      const fd = new FormData();
+                      fd.set("week_start", weekStart);
+                      fd.set("user_id", awardUserId);
+                      fd.set("showed_up", showedUp ? "1" : "0");
+                      fd.set("helped_others", helpedOthers ? "1" : "0");
+                      fd.set("good_vibes", goodVibes ? "1" : "0");
+                      fd.set("problematic", problematic ? "1" : "0");
+                      fd.set("external_gifts_coins", externalGiftsCoins);
+                      fd.set("external_snipes_coins", externalSnipesCoins);
+                      fd.set("notes", notes);
+                      await upsertWeeklyAwardsInput(fd);
+                      setMsg({ tone: "success", text: "Saved." });
+                    } catch (e) {
+                      setMsg({ tone: "error", text: e instanceof Error ? e.message : "Save failed" });
+                    }
                   });
-                }
-              });
-            }}
-          >
-            {pending ? "Saving..." : "Assign Award"}
-          </Button>
-        </div>
-      </Card>
+                }}
+              >
+                {pending ? "Saving..." : "Save input"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pending}
+                onClick={() => {
+                  setMetricsRows(null);
+                  setComputedRows(null);
+                }}
+              >
+                Clear preview
+              </Button>
+            </div>
+
+            {metricsRows ? (
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] p-3">
+                <div className="text-xs font-semibold text-[color:var(--muted)] mb-2">Top candidates (preview)</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { key: "mvp_score", label: "MVP" },
+                    { key: "top_supporter_score", label: "Top Supporter" },
+                    { key: "top_sniper_score", label: "Top Sniper" },
+                    { key: "chatterbox_score", label: "Chatterbox" },
+                    { key: "hype_machine_score", label: "Hype Machine" },
+                    { key: "streak_champion_score", label: "Streak Champion" },
+                  ].map((k) => {
+                    const top = [...metricsRows]
+                      .sort((a, b) => Number(b?.[k.key] ?? 0) - Number(a?.[k.key] ?? 0))
+                      .slice(0, 3);
+                    return (
+                      <div key={k.key} className="rounded-lg border border-[color:var(--border)] p-2">
+                        <div className="font-semibold">{k.label}</div>
+                        <div className="mt-1 space-y-1">
+                          {top.map((r: any) => (
+                            <div key={String(r.user_id)} className="flex items-center justify-between gap-2">
+                              <span className="truncate">{String(r.user_id).slice(0, 8)}…</span>
+                              <span className="text-[color:var(--muted)]">{Number(r?.[k.key] ?? 0).toFixed(1)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {computedRows ? (
+              <div className="rounded-xl border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] p-3">
+                <div className="text-xs font-semibold text-[color:var(--muted)] mb-2">Computed winners</div>
+                <div className="space-y-1.5 text-sm">
+                  {(computedRows ?? []).map((r: any) => (
+                    <div key={String(r.id)} className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">{String(r.award_key)}</span>
+                      <span className="text-[color:var(--muted)]">{String(r.user_id).slice(0, 8)}…</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </Card>
       )}
 
       {activeTab === "roles" && (

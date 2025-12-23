@@ -3,7 +3,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { requireAdmin, requireOwner } from "@/lib/auth";
+import { requireAdmin, requireMod, requireOwner } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { todayISODate } from "@/lib/utils";
@@ -453,6 +453,86 @@ export async function grantDailyGiftBonus(userId: string) {
       ? "Gift bonus granted (+5 points)."
       : "Already granted for this user today.",
   };
+}
+
+export async function getCurrentWeekStartEt() {
+  await requireMod();
+  const sb = await supabaseServer();
+
+  const { data, error } = await (sb as any).rpc("cfm_get_current_week_start_et");
+  if (error) throw new Error(error.message);
+  return { ok: true as const, weekStart: String(data ?? "").trim() };
+}
+
+export async function upsertWeeklyAwardsInput(formData: FormData) {
+  await requireMod();
+  const sb = await supabaseServer();
+
+  const week_start = String(formData.get("week_start") ?? "").trim();
+  const user_id = String(formData.get("user_id") ?? "").trim();
+
+  const showed_up = formData.get("showed_up");
+  const helped_others = formData.get("helped_others");
+  const good_vibes = formData.get("good_vibes");
+  const problematic = formData.get("problematic");
+
+  const external_gifts_coins_raw = String(formData.get("external_gifts_coins") ?? "").trim();
+  const external_snipes_coins_raw = String(formData.get("external_snipes_coins") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!week_start) throw new Error("week_start is required.");
+  if (!user_id) throw new Error("user_id is required.");
+
+  const external_gifts_coins = external_gifts_coins_raw ? Number(external_gifts_coins_raw) : 0;
+  const external_snipes_coins = external_snipes_coins_raw ? Number(external_snipes_coins_raw) : 0;
+
+  const { data, error } = await (sb as any).rpc("cfm_upsert_weekly_awards_input", {
+    p_week_start: week_start,
+    p_user_id: user_id,
+    p_showed_up: showed_up === null ? null : showed_up === "1" || showed_up === "true" || showed_up === "on",
+    p_helped_others: helped_others === null ? null : helped_others === "1" || helped_others === "true" || helped_others === "on",
+    p_good_vibes: good_vibes === null ? null : good_vibes === "1" || good_vibes === "true" || good_vibes === "on",
+    p_problematic: problematic === null ? null : problematic === "1" || problematic === "true" || problematic === "on",
+    p_external_gifts_coins: Number.isFinite(external_gifts_coins) ? external_gifts_coins : 0,
+    p_external_snipes_coins: Number.isFinite(external_snipes_coins) ? external_snipes_coins : 0,
+    p_notes: notes,
+  });
+  if (error) throw new Error(error.message);
+  if ((data as any)?.error) throw new Error(String((data as any)?.error));
+
+  revalidatePath("/admin");
+  return { ok: true as const };
+}
+
+export async function previewWeeklyAwardsMetrics(weekStart: string) {
+  await requireMod();
+  const sb = await supabaseServer();
+
+  const ws = String(weekStart ?? "").trim();
+  if (!ws) throw new Error("weekStart is required.");
+
+  const { data, error } = await (sb as any).rpc("cfm_weekly_awards_user_metrics", {
+    p_week_start: ws,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true as const, rows: (data ?? []) as any[] };
+}
+
+export async function computeWeeklyAwards(weekStart: string | null) {
+  await requireOwner();
+  const sb = await supabaseServer();
+
+  const ws = String(weekStart ?? "").trim() || null;
+
+  const { data, error } = await (sb as any).rpc("cfm_compute_weekly_awards", {
+    p_week_start: ws,
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin");
+  revalidatePath("/awards");
+
+  return { ok: true as const, rows: (data ?? []) as any[] };
 }
 
 export async function assignAward(formData: FormData) {

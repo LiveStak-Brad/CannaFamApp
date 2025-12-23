@@ -417,6 +417,12 @@ create table if not exists public.cfm_feed_likes (
   unique (post_id, user_id)
 );
 
+alter table public.cfm_feed_likes add column if not exists created_at timestamptz not null default now();
+
+update public.cfm_feed_likes
+set created_at = now()
+where created_at is null;
+
 -- Feed comments
 create table if not exists public.cfm_feed_comments (
   id uuid primary key default gen_random_uuid(),
@@ -3757,3 +3763,679 @@ end;
 $$;
 
 grant execute on function public.cfm_disable_push_token(text) to authenticated;
+
+create or replace function public.cfm_is_owner()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.cfm_admins a
+    where a.user_id = auth.uid()
+      and a.role = 'owner'
+  );
+$$;
+
+create or replace function public.cfm_get_current_week_start_et()
+returns date
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with t as (
+    select (timezone('America/New_York', now())::date) as d,
+           extract(dow from timezone('America/New_York', now()))::int as dow
+  )
+  select (d - (((dow + 6) % 7))::int)
+  from t;
+$$;
+
+create or replace function public.cfm_awards_week_is_open(p_week_start date)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_week_start = public.cfm_get_current_week_start_et();
+$$;
+
+create table if not exists public.weekly_awards_weeks (
+  week_start date primary key,
+  computed_at timestamptz,
+  computed_by uuid,
+  status text not null default 'open',
+  created_at timestamptz not null default now()
+);
+
+alter table public.weekly_awards_weeks
+  drop constraint if exists weekly_awards_weeks_status_check;
+alter table public.weekly_awards_weeks
+  add constraint weekly_awards_weeks_status_check
+  check (status in ('open','computed'));
+
+create table if not exists public.weekly_awards_inputs (
+  id uuid primary key default gen_random_uuid(),
+  week_start date not null,
+  user_id uuid not null references public.cfm_members(user_id),
+  showed_up boolean not null default false,
+  helped_others boolean not null default false,
+  good_vibes boolean not null default false,
+  problematic boolean not null default false,
+  external_gifts_coins int not null default 0,
+  external_snipes_coins int not null default 0,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (week_start, user_id)
+);
+
+create table if not exists public.weekly_awards_results (
+  id uuid primary key default gen_random_uuid(),
+  week_start date not null,
+  award_key text not null,
+  user_id uuid not null,
+  score numeric not null,
+  breakdown jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (week_start, award_key)
+);
+
+alter table public.weekly_awards_results
+  drop constraint if exists weekly_awards_results_award_key_check;
+alter table public.weekly_awards_results
+  add constraint weekly_awards_results_award_key_check
+  check (award_key in (
+    'mvp','top_supporter','top_sniper','rookie','chatterbox','hype_machine','streak_champion'
+  ));
+
+create index if not exists weekly_awards_inputs_week_user_idx
+  on public.weekly_awards_inputs (week_start, user_id);
+
+create index if not exists weekly_awards_results_week_idx
+  on public.weekly_awards_results (week_start);
+
+create index if not exists weekly_awards_results_award_key_idx
+  on public.weekly_awards_results (award_key);
+
+create table if not exists public.cfm_activity_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  event_type text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+revoke update, delete on public.cfm_activity_events from anon, authenticated, service_role;
+
+create or replace function public.cfm_block_activity_events_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise exception 'cfm_activity_events is insert-only';
+end;
+$$;
+
+drop trigger if exists cfm_activity_events_block_update on public.cfm_activity_events;
+create trigger cfm_activity_events_block_update
+before update on public.cfm_activity_events
+for each row
+execute function public.cfm_block_activity_events_mutation();
+
+drop trigger if exists cfm_activity_events_block_delete on public.cfm_activity_events;
+create trigger cfm_activity_events_block_delete
+before delete on public.cfm_activity_events
+for each row
+execute function public.cfm_block_activity_events_mutation();
+
+alter table public.weekly_awards_weeks enable row level security;
+alter table public.weekly_awards_inputs enable row level security;
+alter table public.weekly_awards_results enable row level security;
+alter table public.cfm_activity_events enable row level security;
+
+drop policy if exists weekly_awards_weeks_select_anyone on public.weekly_awards_weeks;
+create policy weekly_awards_weeks_select_anyone
+on public.weekly_awards_weeks
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists weekly_awards_results_select_anyone on public.weekly_awards_results;
+create policy weekly_awards_results_select_anyone
+on public.weekly_awards_results
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists weekly_awards_inputs_select_admin_or_own on public.weekly_awards_inputs;
+create policy weekly_awards_inputs_select_admin_or_own
+on public.weekly_awards_inputs
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+drop policy if exists weekly_awards_inputs_insert_admin_only on public.weekly_awards_inputs;
+create policy weekly_awards_inputs_insert_admin_only
+on public.weekly_awards_inputs
+for insert
+to authenticated
+with check (public.cfm_is_admin() and public.cfm_awards_week_is_open(week_start));
+
+drop policy if exists weekly_awards_inputs_update_admin_only on public.weekly_awards_inputs;
+create policy weekly_awards_inputs_update_admin_only
+on public.weekly_awards_inputs
+for update
+to authenticated
+using (public.cfm_is_admin() and public.cfm_awards_week_is_open(week_start))
+with check (public.cfm_is_admin() and public.cfm_awards_week_is_open(week_start));
+
+drop policy if exists activity_events_select_admin_or_own on public.cfm_activity_events;
+create policy activity_events_select_admin_or_own
+on public.cfm_activity_events
+for select
+to authenticated
+using (public.cfm_is_admin() or user_id = auth.uid());
+
+drop policy if exists activity_events_insert_own on public.cfm_activity_events;
+create policy activity_events_insert_own
+on public.cfm_activity_events
+for insert
+to authenticated
+with check (user_id = auth.uid());
+
+create or replace function public.cfm_upsert_weekly_awards_input(
+  p_week_start date,
+  p_user_id uuid,
+  p_showed_up boolean default null,
+  p_helped_others boolean default null,
+  p_good_vibes boolean default null,
+  p_problematic boolean default null,
+  p_external_gifts_coins int default null,
+  p_external_snipes_coins int default null,
+  p_notes text default null
+)
+returns json
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_week date := p_week_start;
+  v_uid uuid := p_user_id;
+begin
+  if not public.cfm_is_admin() then
+    return json_build_object('error', 'Not authorized');
+  end if;
+
+  if v_week is null then
+    return json_build_object('error', 'Missing week_start');
+  end if;
+  if v_uid is null then
+    return json_build_object('error', 'Missing user_id');
+  end if;
+
+  if not public.cfm_awards_week_is_open(v_week) then
+    return json_build_object('error', 'Week is locked');
+  end if;
+
+  insert into public.weekly_awards_inputs (
+    week_start,
+    user_id,
+    showed_up,
+    helped_others,
+    good_vibes,
+    problematic,
+    external_gifts_coins,
+    external_snipes_coins,
+    notes,
+    updated_at
+  )
+  values (
+    v_week,
+    v_uid,
+    coalesce(p_showed_up, false),
+    coalesce(p_helped_others, false),
+    coalesce(p_good_vibes, false),
+    coalesce(p_problematic, false),
+    greatest(0, coalesce(p_external_gifts_coins, 0)),
+    greatest(0, coalesce(p_external_snipes_coins, 0)),
+    nullif(btrim(coalesce(p_notes, '')), ''),
+    now()
+  )
+  on conflict (week_start, user_id)
+  do update set
+    showed_up = coalesce(p_showed_up, weekly_awards_inputs.showed_up),
+    helped_others = coalesce(p_helped_others, weekly_awards_inputs.helped_others),
+    good_vibes = coalesce(p_good_vibes, weekly_awards_inputs.good_vibes),
+    problematic = coalesce(p_problematic, weekly_awards_inputs.problematic),
+    external_gifts_coins = greatest(0, coalesce(p_external_gifts_coins, weekly_awards_inputs.external_gifts_coins)),
+    external_snipes_coins = greatest(0, coalesce(p_external_snipes_coins, weekly_awards_inputs.external_snipes_coins)),
+    notes = case
+      when p_notes is null then weekly_awards_inputs.notes
+      else nullif(btrim(p_notes), '')
+    end,
+    updated_at = now();
+
+  return json_build_object('ok', true);
+exception
+  when others then
+    return json_build_object('error', sqlerrm);
+end;
+$$;
+
+grant execute on function public.cfm_upsert_weekly_awards_input(date, uuid, boolean, boolean, boolean, boolean, int, int, text) to authenticated;
+
+create or replace function public.cfm_weekly_awards_user_metrics(
+  p_week_start date
+)
+returns table (
+  user_id uuid,
+  internal_gift_spend_coins bigint,
+  external_gifts_coins bigint,
+  external_snipes_coins bigint,
+  unique_comment_count int,
+  unique_live_chat_count int,
+  likes_given_count int,
+  share_link_visits_count int,
+  active_days_count int,
+  max_streak_in_week int,
+  streams_attended_count int,
+  showed_up boolean,
+  helped_others boolean,
+  good_vibes boolean,
+  problematic boolean,
+  mvp_score numeric,
+  top_supporter_score numeric,
+  top_sniper_score numeric,
+  chatterbox_score numeric,
+  hype_machine_score numeric,
+  streak_champion_score numeric
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.cfm_is_admin() then
+    raise exception 'not authorized';
+  end if;
+
+  return query
+  with bounds as (
+    select
+      (p_week_start::timestamp at time zone 'America/New_York') as start_ts,
+      ((p_week_start + 7)::timestamp at time zone 'America/New_York') as end_ts,
+      p_week_start as ws,
+      (p_week_start + 7) as we
+  ),
+  base as (
+    select m.user_id
+    from public.cfm_members m
+    where m.user_id is not null
+  ),
+  inputs as (
+    select
+      i.user_id,
+      i.showed_up,
+      i.helped_others,
+      i.good_vibes,
+      i.problematic,
+      coalesce(i.external_gifts_coins, 0)::bigint as external_gifts_coins,
+      coalesce(i.external_snipes_coins, 0)::bigint as external_snipes_coins
+    from public.weekly_awards_inputs i
+    join bounds b on i.week_start = b.ws
+  ),
+  gifts as (
+    select ct.user_id, coalesce(sum(ct.amount), 0)::bigint as coins
+    from public.coin_transactions ct
+    join bounds b on true
+    where ct.type = 'gift_spend'
+      and ct.direction = 'debit'
+      and ct.created_at >= b.start_ts
+      and ct.created_at < b.end_ts
+    group by ct.user_id
+  ),
+  feed_comments as (
+    select
+      c.user_id,
+      count(distinct md5(lower(btrim(c.content))))::int as unique_comments
+    from public.cfm_feed_comments c
+    join bounds b on true
+    where c.created_at >= b.start_ts
+      and c.created_at < b.end_ts
+      and length(btrim(coalesce(c.content, ''))) >= 3
+    group by c.user_id
+  ),
+  live_chat as (
+    select
+      c.sender_user_id as user_id,
+      count(distinct md5(lower(btrim(c.message))))::int as unique_msgs
+    from public.cfm_live_chat c
+    join bounds b on true
+    where c.created_at >= b.start_ts
+      and c.created_at < b.end_ts
+      and c.type = 'chat'
+      and length(btrim(coalesce(c.message, ''))) >= 3
+    group by c.sender_user_id
+  ),
+  likes as (
+    select l.user_id, count(*)::int as likes_given
+    from public.cfm_feed_likes l
+    join bounds b on true
+    where l.created_at >= b.start_ts
+      and l.created_at < b.end_ts
+      and l.user_id is not null
+    group by l.user_id
+  ),
+  shares as (
+    select v.user_id, count(*)::int as link_visits
+    from public.cfm_link_visits v
+    join bounds b on true
+    where v.created_at >= b.start_ts
+      and v.created_at < b.end_ts
+      and v.user_id is not null
+    group by v.user_id
+  ),
+  active_days as (
+    select c.user_id, count(distinct c.checkin_date)::int as days
+    from public.cfm_checkins c
+    join bounds b on true
+    where c.checkin_date >= b.ws
+      and c.checkin_date < b.we
+      and c.user_id is not null
+    group by c.user_id
+  ),
+  streaks as (
+    with d as (
+      select
+        c.user_id,
+        c.checkin_date::date as day
+      from public.cfm_checkins c
+      join bounds b on true
+      where c.checkin_date >= b.ws
+        and c.checkin_date < b.we
+        and c.user_id is not null
+      group by c.user_id, c.checkin_date
+    ),
+    grouped as (
+      select
+        user_id,
+        day,
+        (day - (row_number() over (partition by user_id order by day))::int) as grp
+      from d
+    ),
+    runs as (
+      select user_id, count(*)::int as run_len
+      from grouped
+      group by user_id, grp
+    )
+    select user_id, coalesce(max(run_len), 0)::int as max_streak
+    from runs
+    group by user_id
+  ),
+  attendance as (
+    select v.user_id, count(distinct v.live_id)::int as streams
+    from public.cfm_live_viewers v
+    join bounds b on true
+    where v.joined_at >= b.start_ts
+      and v.joined_at < b.end_ts
+      and v.user_id is not null
+    group by v.user_id
+  )
+  select
+    u.user_id,
+    coalesce(g.coins, 0)::bigint as internal_gift_spend_coins,
+    coalesce(i.external_gifts_coins, 0)::bigint as external_gifts_coins,
+    coalesce(i.external_snipes_coins, 0)::bigint as external_snipes_coins,
+    coalesce(fc.unique_comments, 0)::int as unique_comment_count,
+    coalesce(lc.unique_msgs, 0)::int as unique_live_chat_count,
+    coalesce(li.likes_given, 0)::int as likes_given_count,
+    coalesce(sh.link_visits, 0)::int as share_link_visits_count,
+    coalesce(ad.days, 0)::int as active_days_count,
+    coalesce(st.max_streak, 0)::int as max_streak_in_week,
+    coalesce(at.streams, 0)::int as streams_attended_count,
+    coalesce(i.showed_up, false) as showed_up,
+    coalesce(i.helped_others, false) as helped_others,
+    coalesce(i.good_vibes, false) as good_vibes,
+    coalesce(i.problematic, false) as problematic,
+    (
+      ((coalesce(g.coins, 0) + coalesce(i.external_gifts_coins, 0))::numeric / 100)
+      + (coalesce(fc.unique_comments, 0) + coalesce(lc.unique_msgs, 0))::numeric
+      + (coalesce(li.likes_given, 0)::numeric * 0.5)
+      + (coalesce(sh.link_visits, 0)::numeric * 2)
+      + (coalesce(ad.days, 0)::numeric * 2)
+      + (coalesce(at.streams, 0)::numeric * 1)
+      + (case when coalesce(i.showed_up, false) then 2 else 0 end)
+      + (case when coalesce(i.helped_others, false) then 2 else 0 end)
+      + (case when coalesce(i.good_vibes, false) then 1 else 0 end)
+    )
+    * (case when coalesce(i.problematic, false) then 0.3 else 1 end)
+    as mvp_score,
+    ((coalesce(g.coins, 0) + coalesce(i.external_gifts_coins, 0))::numeric
+      * (case when coalesce(i.problematic, false) then 0.3 else 1 end))
+    as top_supporter_score,
+    ((coalesce(i.external_snipes_coins, 0))::numeric
+      * (case when coalesce(i.problematic, false) then 0.3 else 1 end))
+    as top_sniper_score,
+    (((coalesce(fc.unique_comments, 0) + coalesce(lc.unique_msgs, 0))::numeric)
+      * (case when coalesce(i.problematic, false) then 0.3 else 1 end))
+    as chatterbox_score,
+    ((coalesce(li.likes_given, 0)::numeric)
+      * (case when coalesce(i.problematic, false) then 0.3 else 1 end))
+    as hype_machine_score,
+    (
+      (coalesce(ad.days, 0)::numeric * 10)
+      + (coalesce(st.max_streak, 0)::numeric * 5)
+      + (coalesce(at.streams, 0)::numeric * 2)
+    )
+    * (case when coalesce(i.problematic, false) then 0.3 else 1 end)
+    as streak_champion_score
+  from base u
+  left join inputs i on i.user_id = u.user_id
+  left join gifts g on g.user_id = u.user_id
+  left join feed_comments fc on fc.user_id = u.user_id
+  left join live_chat lc on lc.user_id = u.user_id
+  left join likes li on li.user_id = u.user_id
+  left join shares sh on sh.user_id = u.user_id
+  left join active_days ad on ad.user_id = u.user_id
+  left join streaks st on st.user_id = u.user_id
+  left join attendance at on at.user_id = u.user_id;
+end;
+$$;
+
+grant execute on function public.cfm_weekly_awards_user_metrics(date) to authenticated;
+
+create or replace function public.cfm_compute_weekly_awards(
+  p_week_start date default null
+)
+returns table (
+  id uuid,
+  week_start date,
+  award_key text,
+  user_id uuid,
+  score numeric,
+  breakdown jsonb,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  v_owner uuid := auth.uid();
+  v_current date := public.cfm_get_current_week_start_et();
+  v_week date := coalesce(p_week_start, (public.cfm_get_current_week_start_et() - 7));
+begin
+  if v_owner is null then
+    raise exception 'not authenticated';
+  end if;
+  if not public.cfm_is_owner() then
+    raise exception 'not authorized';
+  end if;
+
+  if v_week >= v_current then
+    raise exception 'week not ended';
+  end if;
+
+  if exists (
+    select 1 from public.weekly_awards_weeks w
+    where w.week_start = v_week and w.status = 'computed'
+  ) and exists (
+    select 1 from public.weekly_awards_results r where r.week_start = v_week
+  ) then
+    return query
+      select r.id, r.week_start, r.award_key, r.user_id, r.score, r.breakdown, r.created_at
+      from public.weekly_awards_results r
+      where r.week_start = v_week
+      order by r.award_key;
+    return;
+  end if;
+
+  insert into public.weekly_awards_weeks (week_start, computed_at, computed_by, status)
+  values (v_week, now(), v_owner, 'computed')
+  on conflict (week_start) do update set
+    computed_at = excluded.computed_at,
+    computed_by = excluded.computed_by,
+    status = 'computed';
+
+  delete from public.weekly_awards_results where week_start = v_week;
+
+  with metrics as (
+    select * from public.cfm_weekly_awards_user_metrics(v_week)
+  ),
+  winner_mvp as (
+    select user_id, mvp_score as score,
+           jsonb_build_object(
+             'internal_gift_spend_coins', internal_gift_spend_coins,
+             'external_gifts_coins', external_gifts_coins,
+             'external_snipes_coins', external_snipes_coins,
+             'unique_comment_count', unique_comment_count,
+             'unique_live_chat_count', unique_live_chat_count,
+             'likes_given_count', likes_given_count,
+             'share_link_visits_count', share_link_visits_count,
+             'active_days_count', active_days_count,
+             'max_streak_in_week', max_streak_in_week,
+             'streams_attended_count', streams_attended_count,
+             'showed_up', showed_up,
+             'helped_others', helped_others,
+             'good_vibes', good_vibes,
+             'problematic', problematic
+           ) as breakdown
+    from metrics
+    order by mvp_score desc, user_id asc
+    limit 1
+  ),
+  winner_supporter as (
+    select user_id, top_supporter_score as score,
+           jsonb_build_object(
+             'internal_gift_spend_coins', internal_gift_spend_coins,
+             'external_gifts_coins', external_gifts_coins,
+             'problematic', problematic
+           ) as breakdown
+    from metrics
+    order by top_supporter_score desc, user_id asc
+    limit 1
+  ),
+  winner_sniper as (
+    select user_id, top_sniper_score as score,
+           jsonb_build_object(
+             'external_snipes_coins', external_snipes_coins,
+             'problematic', problematic
+           ) as breakdown
+    from metrics
+    order by top_sniper_score desc, user_id asc
+    limit 1
+  ),
+  rookies as (
+    select m.user_id
+    from public.cfm_members m
+    where m.user_id is not null
+    order by m.created_at desc
+    limit 10
+  ),
+  winner_rookie as (
+    select me.user_id, me.mvp_score as score,
+           jsonb_build_object(
+             'eligible_pool', '10 newest accounts',
+             'mvp_score', me.mvp_score,
+             'unique_comment_count', me.unique_comment_count,
+             'unique_live_chat_count', me.unique_live_chat_count,
+             'likes_given_count', me.likes_given_count,
+             'share_link_visits_count', me.share_link_visits_count,
+             'active_days_count', me.active_days_count,
+             'streams_attended_count', me.streams_attended_count,
+             'problematic', me.problematic
+           ) as breakdown
+    from metrics me
+    join rookies r on r.user_id = me.user_id
+    order by me.mvp_score desc, me.user_id asc
+    limit 1
+  ),
+  winner_chatterbox as (
+    select user_id, chatterbox_score as score,
+           jsonb_build_object(
+             'unique_comment_count', unique_comment_count,
+             'unique_live_chat_count', unique_live_chat_count,
+             'spam_filter', 'distinct normalized messages (len>=3)',
+             'problematic', problematic
+           ) as breakdown
+    from metrics
+    order by chatterbox_score desc, user_id asc
+    limit 1
+  ),
+  winner_hype as (
+    select user_id, hype_machine_score as score,
+           jsonb_build_object(
+             'likes_given_count', likes_given_count,
+             'problematic', problematic
+           ) as breakdown
+    from metrics
+    order by hype_machine_score desc, user_id asc
+    limit 1
+  ),
+  winner_streak as (
+    select user_id, streak_champion_score as score,
+           jsonb_build_object(
+             'active_days_count', active_days_count,
+             'max_streak_in_week', max_streak_in_week,
+             'streams_attended_count', streams_attended_count,
+             'problematic', problematic
+           ) as breakdown
+    from metrics
+    order by streak_champion_score desc, user_id asc
+    limit 1
+  )
+  insert into public.weekly_awards_results (week_start, award_key, user_id, score, breakdown)
+  select v_week, 'mvp', user_id, score, breakdown from winner_mvp
+  union all
+  select v_week, 'top_supporter', user_id, score, breakdown from winner_supporter
+  union all
+  select v_week, 'top_sniper', user_id, score, breakdown from winner_sniper
+  union all
+  select v_week, 'rookie', user_id, score, breakdown from winner_rookie
+  union all
+  select v_week, 'chatterbox', user_id, score, breakdown from winner_chatterbox
+  union all
+  select v_week, 'hype_machine', user_id, score, breakdown from winner_hype
+  union all
+  select v_week, 'streak_champion', user_id, score, breakdown from winner_streak;
+
+  return query
+    select r.id, r.week_start, r.award_key, r.user_id, r.score, r.breakdown, r.created_at
+    from public.weekly_awards_results r
+    where r.week_start = v_week
+    order by r.award_key;
+end;
+$$;
+
+grant execute on function public.cfm_compute_weekly_awards(date) to authenticated;

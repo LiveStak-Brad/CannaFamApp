@@ -1,19 +1,18 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
 import { GifterRingAvatar } from "@/components/ui/gifter-ring-avatar";
-import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-type AwardRow = {
+type WeeklyAwardResultRow = {
   id: string;
+  week_start: string;
+  award_key: string;
   user_id: string;
-  award_type: string | null;
-  week_start: string | null;
-  week_end: string | null;
-  notes: string | null;
-  created_at: string | null;
+  score: number;
+  breakdown: any;
+  created_at: string;
 };
 
 type PublicMemberIdRow = {
@@ -24,24 +23,36 @@ type PublicMemberIdRow = {
   lifetime_gifted_total_usd?: number | null;
 };
 
-const CATEGORIES = [
-  "🏆 MVP",
-  "🌱 Rookie",
-  "🎯 Top Sniper",
-  "💎 Top Supporter",
-  "📣 Most Shares",
-  "🔥 Most Consistent",
+const AWARDS: Array<{ key: string; label: string }> = [
+  { key: "mvp", label: "🏆 MVP" },
+  { key: "top_supporter", label: "💎 Top Supporter" },
+  { key: "top_sniper", label: "🎯 Top Sniper" },
+  { key: "rookie", label: "🌱 Rookie of the Week" },
+  { key: "chatterbox", label: "💬 Chatterbox" },
+  { key: "hype_machine", label: "📣 Hype Machine" },
+  { key: "streak_champion", label: "🔥 Streak Champion" },
 ];
 
 export default async function AwardsPage() {
-  await requireUser();
   const sb = await supabaseServer();
 
-  const { data: awards } = await sb
-    .from("cfm_awards")
-    .select("id,user_id,award_type,week_start,week_end,notes,created_at")
-    .order("created_at", { ascending: false })
-    .limit(500);
+  const { data: latest } = await sb
+    .from("weekly_awards_results")
+    .select("week_start")
+    .order("week_start", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const latestWeekStart = String((latest as any)?.week_start ?? "").trim();
+
+  const { data: rows } = latestWeekStart
+    ? await sb
+        .from("weekly_awards_results")
+        .select("id,week_start,award_key,user_id,score,breakdown,created_at")
+        .eq("week_start", latestWeekStart)
+        .order("award_key", { ascending: true })
+        .limit(200)
+    : { data: [] as any[] };
 
   let publicByUserId = new Map<string, PublicMemberIdRow>();
   try {
@@ -66,18 +77,11 @@ export default async function AwardsPage() {
     publicByUserId = new Map();
   }
 
-  const latestByType = new Map<string, AwardRow>();
-  for (const a of (awards ?? []) as AwardRow[]) {
-    const t = String(a.award_type ?? "").trim();
-    if (!t) continue;
-    const prev = latestByType.get(t);
-    if (!prev) {
-      latestByType.set(t, a);
-      continue;
-    }
-    const aTime = a.created_at ?? "";
-    const pTime = prev.created_at ?? "";
-    if (aTime > pTime) latestByType.set(t, a);
+  const byAwardKey = new Map<string, WeeklyAwardResultRow>();
+  for (const r of (rows ?? []) as WeeklyAwardResultRow[]) {
+    const k = String((r as any)?.award_key ?? "").trim();
+    if (!k) continue;
+    byAwardKey.set(k, r);
   }
 
   return (
@@ -87,13 +91,13 @@ export default async function AwardsPage() {
 
         <Card>
           <div className="space-y-1.5">
-            {CATEGORIES.map((cat) => {
-              const win = latestByType.get(cat) ?? null;
+            {AWARDS.map((a) => {
+              const win = byAwardKey.get(a.key) ?? null;
               const profile = win ? publicByUserId.get(win.user_id) ?? null : null;
 
               return (
                 <div
-                  key={cat}
+                  key={a.key}
                   className="flex items-center gap-2.5 rounded-lg border border-[color:var(--border)] bg-[rgba(255,255,255,0.02)] px-3 py-2"
                 >
                   <div className="shrink-0">
@@ -108,7 +112,7 @@ export default async function AwardsPage() {
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold leading-tight">{cat}</div>
+                    <div className="text-sm font-bold leading-tight">{a.label}</div>
                     <div className="truncate text-xs text-[color:var(--muted)]">
                       {profile ? profile.favorited_username : win ? "Winner selected" : "Compete to win!"}
                     </div>
