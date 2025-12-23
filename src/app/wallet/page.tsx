@@ -1,8 +1,10 @@
 import { Container } from "@/components/shell/container";
 import { Card } from "@/components/ui/card";
+import { Suspense } from "react";
 import { requireUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { WalletBankClient } from "./bank";
+import { CoinsFinalizeNotice } from "../account/coins-finalize";
 
 export const runtime = "nodejs";
 
@@ -62,6 +64,10 @@ export default async function WalletPage() {
   return (
     <Container>
       <div className="space-y-2">
+        <Suspense fallback={null}>
+          <CoinsFinalizeNotice />
+        </Suspense>
+
         <div className="flex items-center justify-between">
           <h1 className="text-base font-semibold">🪙 Wallet</h1>
           <div className="text-lg font-bold">{Number(w?.balance ?? 0).toLocaleString()} coins</div>

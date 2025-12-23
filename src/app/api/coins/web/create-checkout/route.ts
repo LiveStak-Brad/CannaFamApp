@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
       allowed_bases: allowedBases.length,
     });
 
-    const successUrl = `${allowedBases[0]}/account?coins=success&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${allowedBases[0]}/account?coins=cancel&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
+    const successUrl = `${allowedBases[0]}/wallet?coins=success&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${allowedBases[0]}/wallet?coins=cancel&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
 
     const idempotencyKey = `web:coins:${randomUUID()}`;
 
