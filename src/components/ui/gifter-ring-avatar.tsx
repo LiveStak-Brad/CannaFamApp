@@ -69,18 +69,12 @@ function InnerGifterRingAvatar({
       style={ringStyle}
       aria-label={name ? `${name} gifter level ${finalDisplayLevel}` : `gifter level ${finalDisplayLevel}`}
     >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={String(name ?? "Avatar")}
-          referrerPolicy="no-referrer"
-          className="h-full w-full rounded-full object-cover object-top"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center rounded-full bg-[rgba(0,0,0,0.25)] text-xs font-semibold">
-          {initial}
-        </div>
-      )}
+      <img
+        src={imageUrl || "/no-profile-pic.png"}
+        alt={String(name ?? "Avatar")}
+        referrerPolicy="no-referrer"
+        className="h-full w-full rounded-full object-cover object-top"
+      />
 
       {showLevelBadge ? (
         <div
