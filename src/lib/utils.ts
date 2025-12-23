@@ -3,7 +3,7 @@ export function cx(...parts: Array<string | undefined | false | null>) {
 }
 
 export function todayISODate() {
-  return isoDateInTimeZone(new Date(), "America/Chicago");
+  return isoDateInTimeZone(new Date(), "America/New_York");
 }
 
 export function isoDateInTimeZone(date: Date, timeZone: string) {
@@ -71,7 +71,7 @@ function utcMillisForTimeZoneMidnight(dateStr: string, timeZone: string) {
 }
 
 export function centralDayRangeUTC(dateStr: string) {
-  const tz = "America/Chicago";
+  const tz = "America/New_York";
   const startMs = utcMillisForTimeZoneMidnight(dateStr, tz);
   const next = addDaysISODate(dateStr, 1);
   const endMs = utcMillisForTimeZoneMidnight(next, tz);

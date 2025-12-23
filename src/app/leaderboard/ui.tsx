@@ -59,10 +59,10 @@ export type GiftLeaderboardRow = {
   rank?: number;
 };
 
-function formatCoins(coins: number) {
+function formatCoinAmount(coins: number) {
   const n = Math.floor(Number(coins ?? 0));
-  if (!Number.isFinite(n) || n <= 0) return "0 coins";
-  return `${new Intl.NumberFormat("en-US").format(n)} coins`;
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return new Intl.NumberFormat("en-US").format(n);
 }
 
 export function LeaderboardClient({
@@ -242,7 +242,12 @@ export function LeaderboardClient({
                           <VipBadge tier={(rowProfile as any)?.vip_tier ?? null} />
                         </span>
                       </div>
-                      <div className="font-bold text-green-500">{formatCoins(m.total_cents)}</div>
+                      <div className="shrink-0 min-w-[92px] text-right tabular-nums">
+                        <span className="inline-flex items-center justify-end gap-1 font-bold text-green-500">
+                          <span aria-hidden>🪙</span>
+                          <span>{formatCoinAmount(m.total_cents)}</span>
+                        </span>
+                      </div>
                     </div>
                   </button>
                 );
@@ -314,14 +319,14 @@ export function LeaderboardClient({
                         <span>🔎 {m.link_visit_points ?? 0}</span>
                       ) : null}
                       {typeof m.gift_dollar_points !== "undefined" ? (
-                        <span>💰 {formatCoins(m.gift_dollar_points ?? 0)}</span>
+                        <span>🪙 {formatCoinAmount(m.gift_dollar_points ?? 0)}</span>
                       ) : null}
                       {typeof m.follow_points !== "undefined" ? (
                         <span>👥 {m.follow_points ?? 0}</span>
                       ) : null}
                     </div>
                   </div>
-                  <div className="font-bold text-lg">{m.total_points ?? 0}</div>
+                  <div className="shrink-0 min-w-[56px] text-right font-bold text-lg tabular-nums">{m.total_points ?? 0}</div>
                 </div>
               </button>
             );
