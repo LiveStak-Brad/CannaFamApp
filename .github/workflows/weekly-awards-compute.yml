@@ -2,7 +2,7 @@ name: Weekly Awards Compute
 
 on:
   schedule:
-    - cron: "17 11 * * *" # daily; will compute last completed ET week once eligible
+    - cron: "20 5 * * 1" # Mondays 05:20 UTC (~12:20am ET, DST will shift by 1h)
   workflow_dispatch: {}
 
 jobs:
@@ -34,5 +34,10 @@ jobs:
           cat resp.json
 
           if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+            # Expected when the new week hasn't started yet or the DB isn't ready.
+            # We treat 'week not ended' as a no-op success to keep this job quiet.
+            if grep -qi "week not ended" resp.json; then
+              exit 0
+            fi
             exit 1
           fi
