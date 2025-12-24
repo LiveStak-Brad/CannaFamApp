@@ -4065,7 +4065,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if not public.cfm_is_admin() then
+  if coalesce(auth.role(), '') <> 'service_role' and not public.cfm_is_admin() then
     raise exception 'not authorized';
   end if;
 
@@ -4253,6 +4253,7 @@ end;
 $$;
 
 grant execute on function public.cfm_weekly_awards_user_metrics(date) to authenticated;
+grant execute on function public.cfm_weekly_awards_user_metrics(date) to service_role;
 
 create or replace function public.cfm_compute_weekly_awards(
   p_week_start date default null
@@ -4272,15 +4273,18 @@ volatile
 set search_path = public
 as $$
 declare
+  v_role text := coalesce(auth.role(), '');
   v_owner uuid := auth.uid();
   v_current date := public.cfm_get_current_week_start_et();
   v_week date := coalesce(p_week_start, (public.cfm_get_current_week_start_et() - 7));
 begin
-  if v_owner is null then
-    raise exception 'not authenticated';
-  end if;
-  if not public.cfm_is_owner() then
-    raise exception 'not authorized';
+  if v_role <> 'service_role' then
+    if v_owner is null then
+      raise exception 'not authenticated';
+    end if;
+    if not public.cfm_is_owner() then
+      raise exception 'not authorized';
+    end if;
   end if;
 
   if v_week >= v_current then
@@ -4302,7 +4306,7 @@ begin
   end if;
 
   insert into public.weekly_awards_weeks (week_start, computed_at, computed_by, status)
-  values (v_week, now(), v_owner, 'computed')
+  values (v_week, now(), (case when v_role = 'service_role' then null else v_owner end), 'computed')
   on conflict (week_start) do update set
     computed_at = excluded.computed_at,
     computed_by = excluded.computed_by,
@@ -4439,3 +4443,4 @@ end;
 $$;
 
 grant execute on function public.cfm_compute_weekly_awards(date) to authenticated;
+grant execute on function public.cfm_compute_weekly_awards(date) to service_role;
