@@ -189,6 +189,13 @@ Deno.serve(async (req) => {
   const txs = [...uniqByTx.values()];
 
   if (!txs.length) {
+    if (!requestedTxId) {
+      return jsonResponse(200, {
+        ok: true,
+        credited_total: 0,
+        results: [],
+      });
+    }
     return jsonResponse(400, {
       ok: false,
       error: requestedTxId
