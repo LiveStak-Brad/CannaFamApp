@@ -128,11 +128,15 @@ Deno.serve(async (req) => {
     body = null;
   }
 
-  const receiptData = String(body?.receipt_data ?? "").trim();
+  const receiptDataRaw = String(body?.receipt_data ?? "");
+  const receiptData = receiptDataRaw.trim().replace(/\s+/g, "");
   const requestedTxId = String(body?.transaction_id ?? "").trim();
   const requestedProductId = String(body?.product_id ?? "").trim();
 
-  if (!receiptData) return jsonResponse(400, { ok: false, error: "Missing receipt_data" });
+  const receiptLower = receiptData.toLowerCase();
+  if (!receiptData || receiptLower === "undefined" || receiptLower === "null" || receiptData.length < 20) {
+    return jsonResponse(400, { ok: false, error: "Invalid receipt_data" });
+  }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
